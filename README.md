@@ -23,8 +23,8 @@ This milestone lets players configure a game before it begins:
   players are added, and adding stops at 10.
 - **Auto colors** — each player is automatically assigned a distinct color
   from a fixed 10-color palette; removing a player frees their color.
-- **Start Game** — hands the configured players to a placeholder game screen
-  ("Game ready", player count, and names) with a temporary way back to setup.
+- **Start Game** — hands the configured players to the game flow (see
+  Milestone 04).
 
 Cards, rounds, and actual gameplay arrive in later milestones.
 
@@ -46,6 +46,28 @@ This milestone adds the reusable card foundation for later gameplay:
 - **Out of scope** — no gameplay, player hands, dealing to players, YAMADA,
   cup mechanics, round escalation, elimination, or multiplayer. Those arrive
   in later milestones.
+
+## Milestone 04 — Two-Card Hands & Pass-and-Play
+
+This milestone turns the placeholder game screen into the pass-and-play flow:
+
+- **GameState** — created when the game starts; shuffles a fresh 52-card deck
+  and deals exactly two unique cards to every player, keyed by player id.
+  Hands stay separate from the `Player` identity model.
+- **Turn tracking** — players view their cards one at a time, in setup order;
+  the state tracks whose turn it is and whether all players have viewed.
+- **Game screen** — the current player sees their name and a "Reveal My
+  Cards" button; their cards stay hidden until revealed. After viewing,
+  "Pass to Next Player" moves to a neutral handoff screen so the phone can be
+  handed over — the next player's cards only appear after they explicitly
+  reveal them.
+- **Completion** — after the final player views their cards, a simple screen
+  confirms the initial dealing phase is complete, with a way back to setup.
+- **Privacy** — a player never sees another player's cards; the previous
+  player's cards are gone before the next player's turn begins.
+
+YAMADA, rounds, penalties, elimination, and winner logic arrive in later
+milestones.
 
 ## Prerequisites
 
@@ -104,13 +126,16 @@ lib/
   player.dart             # Player model (id, name, color)
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
-  game_start_screen.dart  # Placeholder game-start screen
+  game_start_screen.dart  # Pass-and-play flow (ready/reveal/handoff/done)
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
+  game_state.dart         # Dealt hands + pass-and-play turn state
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
+  game_state_test.dart         # Hand dealing + turn progression
+  game_start_screen_test.dart  # Pass-and-play flow + privacy behavior
 ```
