@@ -177,10 +177,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(GameStartScreen), findsOneWidget);
-      expect(find.text('Game ready'), findsOneWidget);
-      expect(find.text('Players: 2'), findsOneWidget);
+      // The game starts with the first player ready to view their cards.
+      expect(find.text('Player 1 of 2'), findsOneWidget);
       expect(find.text('Caleb'), findsOneWidget);
-      expect(find.text('Bob'), findsOneWidget);
+      expect(find.text('Reveal My Cards'), findsOneWidget);
     });
 
     testWidgets('Back to setup returns with the players preserved',
