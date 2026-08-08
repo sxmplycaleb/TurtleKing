@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/home_screen.dart';
 import 'package:turtle_king/main.dart';
+import 'package:turtle_king/player_setup_screen.dart';
 import 'package:turtle_king/turtle_art.dart';
 
 void main() {
@@ -24,14 +25,14 @@ void main() {
       );
     });
 
-    testWidgets('New Game button is tappable without breaking', (tester) async {
+    testWidgets('New Game navigates to the player setup screen', (tester) async {
       await tester.pumpWidget(const TurtleKingApp());
 
       await tester.tap(find.text('New Game'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(PlayerSetupScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
     });
   });
 }
