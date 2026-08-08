@@ -28,6 +28,25 @@ This milestone lets players configure a game before it begins:
 
 Cards, rounds, and actual gameplay arrive in later milestones.
 
+## Milestone 03 — Standard Deck & Card System
+
+This milestone adds the reusable card foundation for later gameplay:
+
+- **Standard 52-card deck** — four suits (Hearts, Diamonds, Clubs, Spades) and
+  thirteen ranks (Ace, 2–10, Jack, Queen, King), with exactly one card for
+  every suit/rank combination.
+- **Rank values** — Ace is lowest (1), King is highest (13); numeric cards use
+  their face value, Jack = 11, Queen = 12.
+- **Card model** — immutable `Card` with suit, rank, a numeric value derived
+  from the rank, and a display name like "Ace of Hearts". Cards compare by
+  value equality.
+- **Deck operations** — `shuffle()`, `dealOne()`, `deal(count)`,
+  `remainingCards`, and `reset()`. Dealing from an empty (or too-small) deck
+  throws `EmptyDeckException`.
+- **Out of scope** — no gameplay, player hands, dealing to players, YAMADA,
+  cup mechanics, round escalation, elimination, or multiplayer. Those arrive
+  in later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -86,8 +105,12 @@ lib/
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
   game_start_screen.dart  # Placeholder game-start screen
+  card.dart               # Suit, Rank, and Card model
+  deck.dart               # Standard 52-card deck (shuffle/deal/reset)
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
   player_setup_screen_test.dart# Player setup behavior
+  card_test.dart               # Suit/rank values, Card display + equality
+  deck_test.dart               # Deck creation, shuffle, dealing, reset
 ```
