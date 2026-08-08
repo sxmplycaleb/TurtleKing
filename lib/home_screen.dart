@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'player_setup_screen.dart';
 import 'turtle_art.dart';
 
 /// The Turtle King home screen.
 ///
-/// Pure branding for this milestone. The New Game button is the entry point
-/// into the game flow, which is implemented in a later milestone.
+/// Pure branding. The New Game button opens the player setup screen, the
+/// entry point into the game flow.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -35,7 +36,7 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 40),
               FilledButton(
-                onPressed: _startNewGame,
+                onPressed: () => _startNewGame(context),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 48,
@@ -52,11 +53,12 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// Entry point for starting a game.
-  ///
-  /// Game setup and flow are implemented in a later milestone; this stays a
-  /// no-op so the button is wired up without introducing dead behavior.
-  void _startNewGame() {
-    // Intentionally empty in Milestone 01.
+  /// Entry point for starting a game: opens player setup.
+  void _startNewGame(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const PlayerSetupScreen(),
+      ),
+    );
   }
 }
