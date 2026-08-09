@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'how_to_play_screen.dart';
 import 'player_setup_screen.dart';
-import 'turtle_art.dart';
 
 /// The Turtle King home screen.
 ///
@@ -14,6 +13,12 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Scale the logo with the screen width so it fits small phones and
+    // stays prominent on larger ones.
+    final logoSize = (MediaQuery.sizeOf(context).width * 0.4).clamp(
+      140.0,
+      200.0,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -21,7 +26,13 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const TurtleArt(),
+              Image.asset(
+                'assets/branding/turtle_king_emblem.png',
+                width: logoSize,
+                height: logoSize,
+                fit: BoxFit.contain,
+                semanticLabel: 'Turtle King logo',
+              ),
               const SizedBox(height: 24),
               Text(
                 'Turtle King',

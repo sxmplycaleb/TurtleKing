@@ -232,6 +232,9 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(const TurtleKingApp());
+      // Advance past the splash screen to the home screen.
+      await tester.pump(const Duration(milliseconds: 1300));
+      await tester.pumpAndSettle();
       expect(find.byType(GameStartScreen), findsNothing);
 
       await tester.tap(find.text('How to Play'));
