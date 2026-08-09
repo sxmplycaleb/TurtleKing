@@ -366,4 +366,107 @@ void main() {
       expect(find.byType(CardFace), findsNothing);
     });
   });
+
+  group('GameStartScreen multi-round', () {
+    GameState gameForTwoRounds() =>
+        GameState(players: twoPlayers(), random: Random(42), maxRounds: 2);
+
+    /// Scrolls [label] into view and taps it.
+    Future<void> tapVisible(WidgetTester tester, String label) async {
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pump();
+    }
+
+    /// Plays the current player's round action by drawing to the center.
+    Future<void> roundDraw(WidgetTester tester) async {
+      await tapVisible(tester, 'Draw to center');
+    }
+
+    /// Completes the M04 viewing phase for both players.
+    Future<void> viewRound(WidgetTester tester) async {
+      await completeTurn(tester); // Caleb views and passes.
+      await tester.tap(find.text('Continue')); // Bob takes the phone.
+      await tester.pump();
+      await completeTurn(tester); // Bob views and passes.
+      expect(find.text('All players ready'), findsOneWidget);
+    }
+
+    /// Starts the round and plays both players' turns by drawing.
+    Future<void> playRound(WidgetTester tester) async {
+      await tapVisible(tester, 'Start YAMADA Round');
+      await roundDraw(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await roundDraw(tester);
+    }
+
+    testWidgets('the round number is shown during a round', (tester) async {
+      await pumpGame(tester, gameForTwoRounds());
+      await viewRound(tester);
+      await tapVisible(tester, 'Start YAMADA Round');
+
+      expect(find.text('Round 1'), findsOneWidget);
+      expect(find.text('Player 1 of 2'), findsOneWidget);
+    });
+
+    testWidgets('a completed round shows its number and offers the next one', (
+      tester,
+    ) async {
+      await pumpGame(tester, gameForTwoRounds());
+      await viewRound(tester);
+      await playRound(tester);
+
+      expect(find.text('YAMADA round complete'), findsOneWidget);
+      expect(find.text('Round 1'), findsOneWidget);
+      expect(find.text('Start Next Round'), findsOneWidget);
+    });
+
+    testWidgets('the next round deals a fresh private hand', (tester) async {
+      final game = gameForTwoRounds();
+      await pumpGame(tester, game);
+      await viewRound(tester);
+      await playRound(tester);
+      final roundOne = game
+          .handOf(game.players[0])
+          .map((card) => card.displayName)
+          .toSet();
+
+      await tapVisible(tester, 'Start Next Round');
+
+      // Round 2 viewing begins with cards hidden.
+      expect(find.text('Round 2'), findsOneWidget);
+      expect(find.text('Player 1 of 2'), findsOneWidget);
+      expect(find.byType(CardFace), findsNothing);
+
+      await tester.tap(find.text('Reveal My Cards'));
+      await tester.pump();
+      final roundTwo = revealedLabels(tester);
+      expect(roundTwo, hasLength(2));
+      expect(roundTwo.toSet().intersection(roundOne), isEmpty);
+    });
+
+    testWidgets(
+      'the game completes after the final round and crowns the Turtle '
+      'King',
+      (tester) async {
+        await pumpGame(tester, gameForTwoRounds());
+
+        await viewRound(tester);
+        await playRound(tester); // Round 1
+        await tapVisible(tester, 'Start Next Round');
+        await viewRound(tester);
+        await playRound(tester); // Round 2
+
+        expect(find.text('Game complete'), findsOneWidget);
+        expect(find.text('Turtle Kings: Caleb, Bob'), findsOneWidget);
+        expect(find.text('Rounds played: 2'), findsOneWidget);
+        expect(find.text('Caleb: 0 captured · 0 penalty'), findsOneWidget);
+        expect(find.text('Bob: 0 captured · 0 penalty'), findsOneWidget);
+        expect(find.byType(CardFace), findsNothing);
+        expect(find.text('Start Next Round'), findsNothing);
+      },
+    );
+  });
 }

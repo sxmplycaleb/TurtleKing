@@ -151,6 +151,49 @@ This milestone layers penalties and scoring onto the YAMADA round:
   Turtle King declaration, drinking instructions, and multiplayer remain
   later milestones.
 
+## Milestone 08 — Multi-Round Game & Turtle King Determination
+
+This milestone turns the single-round M07 game into a complete multi-round
+pass-and-play game:
+
+- **Lifecycle** — a game spans up to `maxRounds` rounds (default 3,
+  configurable at game creation). Each round repeats the flow: players view
+  their fresh two-card hands privately, play the YAMADA round, and the round
+  result is recorded. `startNextRound()` prepares the next round; the game
+  completes after `maxRounds` rounds or when the deck cannot guarantee
+  another round, whichever comes first (`gameComplete`, `finalResult`).
+- **Round reset** — a new round resets per-round state only: center pile,
+  current-round captures, viewing/turn state, and hands (two fresh cards per
+  player). The single deck is never reshuffled, so a physical card is never
+  dealt twice anywhere in the game; a new round starts only while the deck
+  can guarantee it completes (two cards per player plus the initial center
+  card plus one potential draw per player).
+- **Persistent state** — cup penalties are lifetime: `penaltyCountOf`,
+  `cupFillOf`, and `cupDrinksOf` carry into every new round and are never
+  reset. Total captures accumulate via `totalCapturesOf(player)` and
+  `totalCapturesAcrossGame`; `roundResults` keeps every completed round's
+  scoring result in order.
+- **Scoring** — current-round captures stay in `captureCountOf` /
+  `roundResult`; game totals live in `totalCapturesOf` / `finalResult`.
+- **Turtle King (assumed rule)** — the repository specifies no official
+  winner rule, so the Turtle King is assumed to be the player(s) with the
+  **fewest total captures** across all rounds. Ties share the title
+  (`finalResult.turtleKings`); no hidden tie-breaker is applied. The rule is
+  isolated in `GameState`'s final-result calculation so it can be replaced
+  without touching the round engine. This is an assumption, not an official
+  rule.
+- **UI** — a round label appears once a round starts, the round-completion
+  screen offers "Start Next Round", and the final screen crowns the Turtle
+  King with each player's total captures and penalties. The pass-and-play
+  privacy contract is unchanged: every new round's hands stay hidden until
+  the phone-holder explicitly reveals them, and handoffs show zero cards.
+- **Assumptions** — `maxRounds` (3), the deck-never-reshuffles rule, the
+  early-termination guard (deck must guarantee a full round), and the
+  fewest-captures Turtle King rule are all assumptions: the repository
+  specifies no authoritative multi-round or winner rules.
+- **Out of scope** — elimination, drinking instructions, persistence, and
+  multiplayer remain later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -211,7 +254,7 @@ lib/
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
-  game_state.dart         # Hands, turn state, center pile, round, cup, scoring
+  game_state.dart         # Hands, turn state, rounds, cup, scoring, game result
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
@@ -220,4 +263,6 @@ test/
   deck_test.dart               # Deck creation, shuffle, dealing, reset
   game_state_test.dart         # Hands, turn flow, round, cup, penalties, scoring
   game_start_screen_test.dart  # Pass-and-play + round + penalty flow + privacy
+  game_state_test.dart         # Hands, rounds, cup, penalties, scoring, result
+  game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
 ```

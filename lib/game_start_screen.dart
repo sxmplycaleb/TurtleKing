@@ -137,6 +137,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
     });
   }
 
+  void _startNextRound() {
+    setState(() {
+      _game.startNextRound();
+      _showingHandoff = false;
+      _showingPenalty = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,15 +153,29 @@ class _GameStartScreenState extends State<GameStartScreen> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: switch (_stage) {
-              _Stage.ready => _readyView(context),
-              _Stage.revealed => _revealedView(context),
-              _Stage.handoff => _handoffView(context),
-              _Stage.done => _doneView(context),
-              _Stage.roundTurn => _roundTurnView(context),
-              _Stage.roundPenalty => _penaltyView(context),
-              _Stage.roundComplete => _roundCompleteView(context),
-            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_game.roundNumber > 0) ...[
+                  Text(
+                    'Round ${_game.roundNumber}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                switch (_stage) {
+                  _Stage.ready => _readyView(context),
+                  _Stage.revealed => _revealedView(context),
+                  _Stage.handoff => _handoffView(context),
+                  _Stage.done => _doneView(context),
+                  _Stage.roundTurn => _roundTurnView(context),
+                  _Stage.roundPenalty => _penaltyView(context),
+                  _Stage.roundComplete => _roundCompleteView(context),
+                },
+              ],
+            ),
           ),
         ),
       ),
@@ -461,6 +483,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
   }
 
   Widget _roundCompleteView(BuildContext context) {
+    if (_game.gameComplete) {
+      return _gameOverView(context);
+    }
     final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -483,6 +508,66 @@ class _GameStartScreenState extends State<GameStartScreen> {
         for (final player in _game.players) ...[
           Text(
             '${player.name}: ${_game.captureCountOf(player)} captured · '
+            '${_game.penaltyCountOf(player)} penalty',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 4),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _game.canStartNextRound ? _startNextRound : null,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text('Start Next Round'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Back to setup'),
+        ),
+      ],
+    );
+  }
+
+  Widget _gameOverView(BuildContext context) {
+    final theme = Theme.of(context);
+    final result = _game.finalResult!;
+    final kings = result.turtleKings.map((player) => player.name).join(', ');
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Game complete',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          result.turtleKings.length == 1
+              ? 'Turtle King: $kings'
+              : 'Turtle Kings: $kings',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Rounds played: ${result.roundsPlayed}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 16),
+        for (final player in _game.players) ...[
+          Text(
+            '${player.name}: ${result.scores[player]} captured · '
             '${_game.penaltyCountOf(player)} penalty',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge,

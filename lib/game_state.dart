@@ -61,6 +61,34 @@ class RoundResult {
   final List<Player> lowestScorers;
 }
 
+/// The final, deterministic result of a completed Turtle King game.
+///
+/// The repository specifies no official winner rule, so the Turtle King is
+/// decided by an assumed rule — the player(s) with the fewest total captures
+/// across all rounds — isolated here so the rule can be changed without
+/// touching the round engine. Ties share the title; no hidden tie-breaker is
+/// applied.
+class GameResult {
+  const GameResult({
+    required this.scores,
+    required this.turtleKings,
+    required this.topScorers,
+    required this.roundsPlayed,
+  });
+
+  /// Total captures per player across all rounds, in player order.
+  final Map<Player, int> scores;
+
+  /// The Turtle King(s): players tied for the fewest total captures.
+  final List<Player> turtleKings;
+
+  /// The players tied for the most total captures (never empty).
+  final List<Player> topScorers;
+
+  /// The number of rounds actually played.
+  final int roundsPlayed;
+}
+
 /// The pass-and-play state of a Turtle King game.
 ///
 /// Created when the game starts: a fresh deck is shuffled and exactly two
@@ -84,16 +112,28 @@ class RoundResult {
 /// point is added to the caller's cup instead. Each cup holds [cupCapacity]
 /// penalty points before it overflows. Capture counts feed the scoring API
 /// ([captureCountOf], [totalCapturedCards], [roundResult]).
+///
+/// A game spans up to [maxRounds] rounds. The deck is never reshuffled, so a
+/// physical card is never dealt twice anywhere in the game; a new round
+/// starts only while the deck can guarantee it completes ([startNextRound]).
+/// Each round resets per-round state (hands, center pile, captures, turn)
+/// and deals fresh two-card hands, while cup penalties and total captures
+/// accumulate across rounds. The game completes after [maxRounds] rounds or
+/// when the deck cannot support another one, whichever comes first, and then
+/// [finalResult] reports the deterministic outcome.
 class GameState {
   GameState({
     required List<Player> players,
     Random? random,
     int cupCapacity = 3,
+    int maxRounds = 3,
   }) : _players = List.unmodifiable(players),
        _deck = Deck(random: random),
        _captured = {for (final player in players) player.id: <Card>[]},
        _penalties = {for (final player in players) player.id: 0},
-       _cupCapacity = cupCapacity {
+       _cumulativeCaptured = {for (final player in players) player.id: 0},
+       _cupCapacity = cupCapacity,
+       _maxRounds = maxRounds {
     if (_players.length < 2) {
       throw ArgumentError.value(players, 'players', 'need at least 2 players');
     }
@@ -104,17 +144,23 @@ class GameState {
         'must be at least 1',
       );
     }
+    if (_maxRounds < 1) {
+      throw ArgumentError.value(maxRounds, 'maxRounds', 'must be at least 1');
+    }
     _deck.shuffle();
     _hands = {for (final player in _players) player.id: _deck.deal(2)};
   }
 
   final List<Player> _players;
   final Deck _deck;
-  late final Map<String, List<Card>> _hands;
+  late Map<String, List<Card>> _hands;
   final List<Card> _centerPile = [];
   final Map<String, List<Card>> _captured;
   final Map<String, int> _penalties;
+  final Map<String, int> _cumulativeCaptured;
   final int _cupCapacity;
+  final int _maxRounds;
+  final List<RoundResult> _roundResults = [];
 
   int _currentPlayerIndex = 0;
   bool _revealed = false;
@@ -122,6 +168,10 @@ class GameState {
   bool _roundStarted = false;
   int _roundPlayerIndex = 0;
   bool _roundPlayerActed = false;
+  bool _roundFinalized = false;
+  int _roundNumber = 0;
+  bool _gameComplete = false;
+  GameResult? _finalResult;
 
   /// The players in setup order.
   List<Player> get players => _players;
@@ -269,6 +319,39 @@ class GameState {
     );
   }
 
+  /// The 1-based number of the round currently being played or prepared, or 0
+  /// before the first round starts.
+  int get roundNumber => _roundNumber;
+
+  /// The number of fully completed rounds.
+  int get completedRounds => _roundResults.length;
+
+  /// The maximum number of rounds this game may play.
+  int get maxRounds => _maxRounds;
+
+  /// Whether the whole game is over: [maxRounds] rounds played or the deck
+  /// cannot support another round.
+  bool get gameComplete => _gameComplete;
+
+  /// The deterministic final result, or null until the game completes.
+  GameResult? get finalResult => _finalResult;
+
+  /// Whether a completed round may be followed by [startNextRound].
+  bool get canStartNextRound =>
+      _roundStarted && roundComplete && !_gameComplete;
+
+  /// [player]'s total captures across all completed rounds plus the current
+  /// round. Never resets.
+  int totalCapturesOf(Player player) =>
+      _cumulativeCaptured[player.id]! + captureCountOf(player);
+
+  /// The total number of captures across all players and all rounds.
+  int get totalCapturesAcrossGame =>
+      _players.fold(0, (sum, player) => sum + totalCapturesOf(player));
+
+  /// The scoring result of every completed round, in round order.
+  List<RoundResult> get roundResults => List.unmodifiable(_roundResults);
+
   /// Begins the YAMADA round after every player has viewed their cards.
   ///
   /// Deals the first center card from the remaining deck and gives the turn
@@ -288,7 +371,48 @@ class GameState {
     _roundStarted = true;
     _roundPlayerIndex = 0;
     _roundPlayerActed = false;
+    _roundFinalized = false;
+    _roundNumber = _roundResults.length + 1;
     dealToCenter();
+  }
+
+  /// Starts the next round after the current one has completed.
+  ///
+  /// Resets per-round state (center pile, captures, viewing and round turns)
+  /// and deals fresh two-card hands to every player from the same deck, then
+  /// returns to the private viewing flow for the new round. Cup penalties and
+  /// total captures accumulate across rounds and are never reset here.
+  ///
+  /// Throws [YamadaRoundException] if the current round has not completed or
+  /// the game is already complete.
+  void startNextRound() {
+    if (!_roundStarted) {
+      throw const YamadaRoundException('the YAMADA round has not started');
+    }
+    if (!roundComplete) {
+      throw const YamadaRoundException(
+        'the current YAMADA round is not complete',
+      );
+    }
+    if (_gameComplete) {
+      throw const YamadaRoundException('the game is already complete');
+    }
+    for (final player in _players) {
+      _cumulativeCaptured[player.id] =
+          _cumulativeCaptured[player.id]! + _captured[player.id]!.length;
+    }
+    _centerPile.clear();
+    for (final list in _captured.values) {
+      list.clear();
+    }
+    _currentPlayerIndex = 0;
+    _revealed = false;
+    _roundStarted = false;
+    _roundPlayerIndex = 0;
+    _roundPlayerActed = false;
+    _roundFinalized = false;
+    _roundNumber = _roundResults.length + 1;
+    _hands = {for (final player in _players) player.id: _deck.deal(2)};
   }
 
   /// [player]'s turn action: draws the top card of the deck onto the center
@@ -353,6 +477,51 @@ class GameState {
   void _advanceRoundTurn() {
     _roundPlayerActed = false;
     _roundPlayerIndex++;
+    if (roundComplete) {
+      _finalizeRoundIfComplete();
+    }
+  }
+
+  /// Records the completed round once, then completes the game when the last
+  /// possible round has been played.
+  void _finalizeRoundIfComplete() {
+    if (_roundFinalized) return;
+    _roundFinalized = true;
+    _roundResults.add(roundResult!);
+    if (_roundResults.length >= _maxRounds || !_canDealNextRound()) {
+      _gameComplete = true;
+      _finalResult = _buildFinalResult();
+    }
+  }
+
+  /// Whether the deck can guarantee a full next round completes: two cards
+  /// per player for the hands, one card for the initial center card, plus one
+  /// potential draw per player. The deck is never reshuffled, so a card dealt
+  /// in any earlier round is never reused.
+  bool _canDealNextRound() => _deck.remainingCards >= 3 * _players.length + 1;
+
+  /// Assumed Turtle King rule: the player(s) with the fewest total captures.
+  /// No official rule exists in the repository; this is isolated here so it
+  /// can be replaced without touching the round engine.
+  GameResult _buildFinalResult() {
+    final scores = {
+      for (final player in _players) player: totalCapturesOf(player),
+    };
+    final counts = scores.values.toList();
+    final maxCount = counts.reduce((a, b) => a > b ? a : b);
+    final minCount = counts.reduce((a, b) => a < b ? a : b);
+    return GameResult(
+      scores: Map.unmodifiable(scores),
+      turtleKings: [
+        for (final player in _players)
+          if (scores[player] == minCount) player,
+      ],
+      topScorers: [
+        for (final player in _players)
+          if (scores[player] == maxCount) player,
+      ],
+      roundsPlayed: _roundResults.length,
+    );
   }
 
   /// Whether [card]'s value is strictly between the values in [hand].
