@@ -16,8 +16,9 @@ void main() {
     await tester.pump();
   }
 
-  FilledButton startButton(WidgetTester tester) =>
-      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Start Game'));
+  FilledButton startButton(WidgetTester tester) => tester.widget<FilledButton>(
+    find.widgetWithText(FilledButton, 'Start Game'),
+  );
 
   group('PlayerSetupScreen', () {
     testWidgets('shows branding, player count, and limits', (tester) async {
@@ -32,8 +33,9 @@ void main() {
       );
     });
 
-    testWidgets('adds a valid player to the list and updates the count',
-        (tester) async {
+    testWidgets('adds a valid player to the list and updates the count', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       await addPlayer(tester, 'Caleb');
@@ -56,8 +58,9 @@ void main() {
       expect(find.text('  Caleb  '), findsNothing);
     });
 
-    testWidgets('rejects empty and whitespace-only names with feedback',
-        (tester) async {
+    testWidgets('rejects empty and whitespace-only names with feedback', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       await tester.enterText(find.byType(TextField), '   ');
@@ -78,8 +81,9 @@ void main() {
       expect(find.text('1 / 10'), findsOneWidget);
     });
 
-    testWidgets('removes a player and updates count and start availability',
-        (tester) async {
+    testWidgets('removes a player and updates count and start availability', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       await addPlayer(tester, 'Caleb');
@@ -95,8 +99,9 @@ void main() {
       expect(startButton(tester).onPressed, isNull);
     });
 
-    testWidgets('Start Game is disabled with fewer than two players',
-        (tester) async {
+    testWidgets('Start Game is disabled with fewer than two players', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       expect(startButton(tester).onPressed, isNull);
@@ -148,8 +153,9 @@ void main() {
       expect(colors.first, PlayerColors.palette[0]);
     });
 
-    testWidgets('reuses a freed color when a player is removed',
-        (tester) async {
+    testWidgets('reuses a freed color when a player is removed', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       await addPlayer(tester, 'Caleb');
@@ -159,16 +165,18 @@ void main() {
 
       await addPlayer(tester, 'Carol');
 
-      final avatars =
-          tester.widgetList<CircleAvatar>(find.byType(CircleAvatar)).toList();
+      final avatars = tester
+          .widgetList<CircleAvatar>(find.byType(CircleAvatar))
+          .toList();
       expect(avatars, hasLength(2));
       expect(avatars.map((a) => a.backgroundColor).toSet(), hasLength(2));
       // Carol takes Caleb's freed color, the first palette color.
       expect(avatars.last.backgroundColor, PlayerColors.palette[0]);
     });
 
-    testWidgets('Start Game navigates to the game screen with the players',
-        (tester) async {
+    testWidgets('Start Game navigates to the game screen with the players', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       await addPlayer(tester, 'Caleb');
@@ -180,11 +188,12 @@ void main() {
       // The game starts with the first player ready to view their cards.
       expect(find.text('Player 1 of 2'), findsOneWidget);
       expect(find.text('Caleb'), findsOneWidget);
-      expect(find.text('Reveal My Cards'), findsOneWidget);
+      expect(find.text('Reveal My Card'), findsOneWidget);
     });
 
-    testWidgets('Back to setup returns with the players preserved',
-        (tester) async {
+    testWidgets('Back to setup returns with the players preserved', (
+      tester,
+    ) async {
       await pumpSetupScreen(tester);
 
       await addPlayer(tester, 'Caleb');

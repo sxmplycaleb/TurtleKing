@@ -42,14 +42,15 @@ class CardFace extends StatelessWidget {
   }
 }
 
-/// The pass-and-play game flow.
+/// The pass-and-play game flow, implementing the authoritative rules:
 ///
-/// First, each player views their two cards in turn: their cards are hidden
-/// until they tap "Reveal My Cards", then "Pass to Next Player" hands the
-/// phone over via a neutral handoff screen. After the final player passes,
-/// the YAMADA round can begin: the current center card is public, each player
-/// in turn either draws onto the center pile or calls YAMADA to capture the
-/// center card when its value is between their two cards.
+/// 1. Each player privately looks at exactly one of their two cards.
+/// 2. Pouring begins: in turn, each player holds out or shouts YAMADA
+///    (admit defeat: drink the cup, get new cards, continue).
+/// 3. If everyone holds out, all hands are revealed together; the smallest
+///    hand drinks a full cup plus an extra cup.
+/// 4. Rounds repeat with a growing cup until one player remains — the
+///    Turtle King.
 class GameStartScreen extends StatefulWidget {
   const GameStartScreen({super.key, required this.game});
 
@@ -65,34 +66,34 @@ enum _Stage {
   ready,
   revealed,
   handoff,
-  done,
-  roundTurn,
-  roundPenalty,
+  pourTurn,
+  yamadaResult,
   roundComplete,
+  gameOver,
 }
 
 class _GameStartScreenState extends State<GameStartScreen> {
   /// Whether the neutral handoff screen is showing for the next player.
   bool _showingHandoff = false;
 
-  /// Whether a wrong YAMADA call is being shown to the penalized player.
-  bool _showingPenalty = false;
+  /// Whether the YAMADA drink result is being shown to the caller.
+  bool _showingYamadaResult = false;
 
-  /// The player who made the wrong YAMADA call currently on screen.
-  Player? _penalizedPlayer;
+  /// The player who just called YAMADA (drinking the cup).
+  Player? _yamadaPlayer;
 
   GameState get _game => widget.game;
 
   _Stage get _stage {
-    if (_game.gameComplete) return _Stage.roundComplete;
-    if (_game.roundStarted) {
-      if (_game.roundComplete) return _Stage.roundComplete;
-      if (_showingPenalty) return _Stage.roundPenalty;
-      if (_showingHandoff) return _Stage.handoff;
-      return _Stage.roundTurn;
-    }
-    if (_game.allPlayersViewed) return _Stage.done;
+    // A YAMADA drink result (including one that eliminates the caller and
+    // ends the game) is always shown before the game-over screen, so the
+    // caller learns why the game ended.
+    if (_showingYamadaResult) return _Stage.yamadaResult;
+    if (_game.gameComplete) return _Stage.gameOver;
+    if (_game.roundComplete) return _Stage.roundComplete;
     if (_showingHandoff) return _Stage.handoff;
+    if (_game.pouringStarted) return _Stage.pourTurn;
+    if (_game.allPlayersViewed) return _Stage.handoff;
     if (_game.currentPlayerRevealed) return _Stage.revealed;
     return _Stage.ready;
   }
@@ -104,7 +105,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
   void _pass() {
     setState(() {
       _game.passToNextPlayer();
-      _showingHandoff = !_game.allPlayersViewed;
+      // After the final viewer, pouring begins: hand the phone to player 1.
+      _showingHandoff = true;
     });
   }
 
@@ -112,31 +114,33 @@ class _GameStartScreenState extends State<GameStartScreen> {
     setState(() => _showingHandoff = false);
   }
 
-  void _startRound() {
-    setState(() => _game.startYamadaRound());
-  }
-
-  void _roundYamada() {
+  void _yamada() {
     setState(() {
-      final player = _game.roundCurrentPlayer;
-      final result = _game.callYamada(player);
-      _penalizedPlayer = result.penalized ? player : null;
-      _showingPenalty = result.penalized && !_game.roundComplete;
-      _showingHandoff = !_game.roundComplete && !_showingPenalty;
+      final player = _game.pourCurrentPlayer;
+      _game.callYamada(player);
+      _yamadaPlayer = player;
+      _showingYamadaResult = true;
+      _showingHandoff = false;
     });
   }
 
-  void _penaltyPass() {
+  void _holdOut() {
     setState(() {
-      _showingPenalty = false;
-      _showingHandoff = true;
+      _game.holdOut(_game.pourCurrentPlayer);
+      _showingYamadaResult = false;
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
   }
 
-  void _roundDraw() {
+  void _yamadaContinue() {
     setState(() {
-      _game.drawToCenter(_game.roundCurrentPlayer);
-      _showingHandoff = !_game.roundComplete;
+      final player = _yamadaPlayer;
+      _showingYamadaResult = false;
+      // If the caller was eliminated, the phone passes to the next player;
+      // their card must stay hidden until they continue.
+      if (player != null && _game.isEliminated(player) && !_game.gameComplete) {
+        _showingHandoff = true;
+      }
     });
   }
 
@@ -144,7 +148,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
     setState(() {
       _game.startNextRound();
       _showingHandoff = false;
-      _showingPenalty = false;
+      _showingYamadaResult = false;
     });
   }
 
@@ -183,7 +187,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_game.roundNumber > 0) ...[
+                if (_game.roundNumber > 0 && !_game.gameComplete) ...[
                   Text(
                     'Round ${_game.roundNumber}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -196,10 +200,10 @@ class _GameStartScreenState extends State<GameStartScreen> {
                   _Stage.ready => _readyView(context),
                   _Stage.revealed => _revealedView(context),
                   _Stage.handoff => _handoffView(context),
-                  _Stage.done => _doneView(context),
-                  _Stage.roundTurn => _roundTurnView(context),
-                  _Stage.roundPenalty => _penaltyView(context),
+                  _Stage.pourTurn => _pourTurnView(context),
+                  _Stage.yamadaResult => _yamadaResultView(context),
                   _Stage.roundComplete => _roundCompleteView(context),
+                  _Stage.gameOver => _gameOverView(context),
                 },
               ],
             ),
@@ -209,17 +213,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
-  Widget _playerHeader(
-    BuildContext context,
-    int index,
-    int total,
-    Player player,
-  ) {
+  Widget _playerHeader(BuildContext context, Player player) {
     final theme = Theme.of(context);
     return Column(
       children: [
         Text(
-          'Player ${index + 1} of $total',
+          'Player ${_game.currentPlayerIndex + 1} of ${_game.currentPlayerCount}',
           style: theme.textTheme.titleMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -244,22 +243,24 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
+  Widget _backToSetup(BuildContext context) {
+    return TextButton(
+      onPressed: () => Navigator.of(context).pop(),
+      child: const Text('Back to setup'),
+    );
+  }
+
   Widget _readyView(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _playerHeader(
-          context,
-          _game.currentPlayerIndex,
-          _game.activePlayers.length,
-          _game.currentPlayer,
-        ),
+        _playerHeader(context, _game.currentPlayer),
         const SizedBox(height: 24),
         Text(
-          'It is your turn to view your two cards. View them privately — '
-          'do not show anyone else.',
+          'You have two cards, but you may only look at ONE of them. View '
+          'it privately — do not show anyone else.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
@@ -269,45 +270,30 @@ class _GameStartScreenState extends State<GameStartScreen> {
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          child: const Text('Reveal My Cards'),
+          child: const Text('Reveal My Card'),
         ),
         const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Back to setup'),
-        ),
+        _backToSetup(context),
       ],
     );
   }
 
   Widget _revealedView(BuildContext context) {
     final theme = Theme.of(context);
-    final cards = _game.handOf(_game.currentPlayer);
+    final card = _game.visibleCardOf(_game.currentPlayer);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _playerHeader(
-          context,
-          _game.currentPlayerIndex,
-          _game.activePlayers.length,
-          _game.currentPlayer,
-        ),
+        _playerHeader(context, _game.currentPlayer),
         const SizedBox(height: 16),
         Text(
-          'Memorize your two cards, then pass the phone to the next player.',
+          'This is the only card you may look at. Memorize it, then pass '
+          'the phone to the next player.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
         const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: 16),
-              CardFace(card: cards[i]),
-            ],
-          ],
-        ),
+        CardFace(card: card),
         const SizedBox(height: 32),
         FilledButton(
           onPressed: _pass,
@@ -322,8 +308,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _handoffView(BuildContext context) {
     final theme = Theme.of(context);
-    final next = _game.roundStarted
-        ? _game.roundCurrentPlayer
+    final next = _game.pouringStarted
+        ? _game.pourCurrentPlayer
         : _game.currentPlayer;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -344,9 +330,10 @@ class _GameStartScreenState extends State<GameStartScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          _game.roundStarted
-              ? 'Their turn begins when they continue.'
-              : 'Their cards stay hidden until they choose to reveal them.',
+          _game.pouringStarted
+              ? 'The cup is on the table and water is being poured. Their '
+                    'turn begins when they continue.'
+              : 'Their card stays hidden until they choose to reveal it.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
@@ -364,105 +351,42 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
-  Widget _doneView(BuildContext context) {
+  Widget _pourTurnView(BuildContext context) {
     final theme = Theme.of(context);
+    final player = _game.pourCurrentPlayer;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _playerHeader(context, player),
+        const SizedBox(height: 16),
         Text(
-          'All players ready',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'The initial dealing phase is complete. Everyone has viewed '
-          'their two cards.',
+          'Water is being poured into the ${_game.cupSize.label} cup. If '
+          'you feel your other card is too small, shout YAMADA — or hold '
+          'out.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 32),
-        FilledButton(
-          onPressed: _startRound,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          child: const Text('Start YAMADA Round'),
         ),
         const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Back to setup'),
-        ),
-      ],
-    );
-  }
-
-  Widget _roundTurnView(BuildContext context) {
-    final theme = Theme.of(context);
-    final player = _game.roundCurrentPlayer;
-    final center = _game.currentCenterCard;
-    final cards = _game.handOf(player);
-    final captureHint = _game.canCallYamada
-        ? 'The center card is between your cards — YAMADA will capture it.'
-        : 'The center card is not between your cards — YAMADA would cost '
-              'you a penalty.';
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _playerHeader(
-          context,
-          _game.roundPlayerIndex,
-          _game.roundPlayerCount,
-          player,
-        ),
-        const SizedBox(height: 16),
         Text(
-          'Compare the center card with your two cards.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 16),
-        if (center != null) CardFace(card: center),
-        const SizedBox(height: 24),
-        Text(
-          'Your two cards',
+          'Your visible card (private):',
           style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: 16),
-              CardFace(card: cards[i]),
-            ],
-          ],
-        ),
+        CardFace(card: _game.visibleCardOf(player)),
         const SizedBox(height: 16),
         Text(
-          captureHint,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Your cup: ${_game.cupFillOf(player)}/${_game.cupCapacity}',
+          'Drinks: ${_game.drinksOf(player)} '
+          '(${_game.eliminationThreshold} drinks eliminate)',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         FilledButton(
-          onPressed: _roundYamada,
+          onPressed: _yamada,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           ),
@@ -470,34 +394,33 @@ class _GameStartScreenState extends State<GameStartScreen> {
         ),
         const SizedBox(height: 12),
         FilledButton.tonal(
-          onPressed: _game.remainingCards > 0 ? _roundDraw : null,
+          onPressed: _holdOut,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           ),
-          child: const Text('Draw to center'),
+          child: const Text('Hold out'),
         ),
         const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Back to setup'),
-        ),
+        _backToSetup(context),
       ],
     );
   }
 
-  Widget _penaltyView(BuildContext context) {
+  Widget _yamadaResultView(BuildContext context) {
     final theme = Theme.of(context);
-    final player = _penalizedPlayer;
+    final player = _yamadaPlayer;
     if (player == null) {
-      // The penalty stage is only reachable right after a wrong call.
+      // Only reachable right after a YAMADA call.
       return const SizedBox.shrink();
     }
+    final eliminated = _game.isEliminated(player);
+    final gameOver = _game.gameComplete;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Wrong YAMADA call',
+          'YAMADA!',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
@@ -505,19 +428,17 @@ class _GameStartScreenState extends State<GameStartScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          '${player.name} called YAMADA, but the center card is not between '
-          'their two cards.',
+          '${player.name} admitted defeat and drank the water in the cup.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyLarge,
         ),
         const SizedBox(height: 8),
         Text(
-          'Nothing was captured. A penalty was added to ${player.name}\'s '
-          'cup: ${_game.cupFillOf(player)}/${_game.cupCapacity}.',
+          'Lifetime drinks: ${_game.drinksOf(player)}',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
-        if (_game.isEliminated(player)) ...[
+        if (eliminated) ...[
           const SizedBox(height: 12),
           Text(
             '${player.name} has been eliminated!',
@@ -527,44 +448,107 @@ class _GameStartScreenState extends State<GameStartScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+        ] else ...[
+          const SizedBox(height: 12),
+          Text(
+            'New cards were dealt. Look at your new visible card, then '
+            'continue.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+        if (gameOver) ...[
+          const SizedBox(height: 12),
+          Text(
+            'The game is over!',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
         const SizedBox(height: 32),
         FilledButton(
-          onPressed: _penaltyPass,
+          onPressed: _yamadaContinue,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          child: const Text('Pass the phone'),
+          child: const Text('Continue'),
         ),
       ],
     );
   }
 
   Widget _roundCompleteView(BuildContext context) {
-    if (_game.gameComplete) {
-      return _gameOverView(context);
-    }
     final theme = Theme.of(context);
+    final result = _game.roundResult!;
+    final yamadaCalled = result.calledYamada.values.any((called) => called);
     final eliminatedThisRound = _game.eliminationHistory
         .where((record) => record.round == _game.roundNumber)
         .toList();
+    final summaryPlayers = yamadaCalled ? _game.players : _game.revealedPlayers;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'YAMADA round complete',
+          'Round ${_game.roundNumber} complete',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 12),
-        Text(
-          'Every player has taken their turn. Cards captured:',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
-        ),
+        const SizedBox(height: 8),
+        if (yamadaCalled)
+          Text(
+            'YAMADA was called — the round ended without a reveal.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          )
+        else
+          Text(
+            'Everyone held out — all cards are revealed together!',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+        const SizedBox(height: 16),
+        if (!yamadaCalled) ...[
+          for (final player in _game.revealedPlayers) ...[
+            Text(
+              player.name,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < _game.handOf(player).length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  CardFace(card: _game.handOf(player)[i]),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          Text(
+            result.smallestHands.length == 1
+                ? 'Smallest hand: '
+                      '${result.smallestHands.first.name} — drinks a full '
+                      'cup and an extra cup for holding out.'
+                : 'Smallest hands: '
+                      '${result.smallestHands.map((p) => p.name).join(', ')} '
+                      '— each drinks a full cup and an extra cup for holding '
+                      'out.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         if (eliminatedThisRound.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
@@ -578,28 +562,36 @@ class _GameStartScreenState extends State<GameStartScreen> {
           ),
         ],
         const SizedBox(height: 16),
-        for (final player in _game.players) ...[
+        for (final player in summaryPlayers) ...[
           Text(
-            '${player.name}: ${_game.captureCountOf(player)} captured · '
-            '${_game.penaltyCountOf(player)} penalty',
+            '${player.name}: ${_game.roundDrinksOf(player)} drink(s) this '
+            'round · ${_game.drinksOf(player)} lifetime'
+            '${_game.calledYamadaThisRound(player) ? ' · YAMADA' : ''}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge,
+            style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 4),
         ],
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: _game.canStartNextRound ? _startNextRound : null,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+        if (_game.canStartNextRound) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Next round cup: ${_game.cupSize.label}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-          child: const Text('Start Next Round'),
-        ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _startNextRound,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: const Text('Start Next Round'),
+          ),
+        ],
         const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Back to setup'),
-        ),
+        _backToSetup(context),
       ],
     );
   }
@@ -607,7 +599,6 @@ class _GameStartScreenState extends State<GameStartScreen> {
   Widget _gameOverView(BuildContext context) {
     final theme = Theme.of(context);
     final result = _game.finalResult!;
-    final kings = result.turtleKings.map((player) => player.name).join(', ');
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -620,15 +611,22 @@ class _GameStartScreenState extends State<GameStartScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          result.turtleKings.length == 1
-              ? 'Turtle King: $kings'
-              : 'Turtle Kings: $kings',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
+        if (result.turtleKings.length == 1)
+          Text(
+            'Turtle King: ${result.turtleKings.first.name}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          )
+        else
+          Text(
+            'No Turtle King — every player was eliminated.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
         const SizedBox(height: 4),
         Text(
           'Rounds played: ${result.roundsPlayed}',
@@ -638,16 +636,18 @@ class _GameStartScreenState extends State<GameStartScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          'Finalists: ${result.finalists.map((player) => player.name).join(', ')}',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
-        ),
-        if (result.eliminated.isNotEmpty) ...[
+        if (result.finalists.isNotEmpty) ...[
+          Text(
+            'Finalists: ${result.finalists.map((p) => p.name).join(', ')}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
           const SizedBox(height: 4),
+        ],
+        if (result.eliminated.isNotEmpty) ...[
           Text(
             'Eliminated: '
-            '${result.eliminated.map((player) => player.name).join(', ')}',
+            '${result.eliminated.map((p) => p.name).join(', ')}',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.error,
@@ -657,8 +657,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 16),
         for (final player in _game.players) ...[
           Text(
-            '${player.name}: ${result.scores[player]} captured · '
-            '${_game.penaltyCountOf(player)} penalty',
+            '${player.name}: ${result.drinks[player]} drink(s)',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge,
           ),

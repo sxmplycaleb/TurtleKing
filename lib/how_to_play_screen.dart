@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// How to play the game as implemented through Milestone 09.
+/// How to play Turtle King per the authoritative rules.
 ///
 /// Pure documentation/UI: the screen is stateless, takes no [GameState], and
 /// never mutates gameplay state. Every statement here describes behavior that
-/// is actually implemented — and the rules the repository does not specify
-/// authoritatively are clearly labeled as current project rules/assumptions
-/// in the "Current Project Rules" section.
+/// is actually implemented. Where the authoritative rules are silent, the
+/// implemented choice is clearly labeled as a project rule/assumption in the
+/// "Current Project Rules" section.
 class HowToPlayScreen extends StatelessWidget {
   const HowToPlayScreen({super.key});
 
@@ -23,12 +23,11 @@ class HowToPlayScreen extends StatelessWidget {
               _Section(
                 title: 'The Goal',
                 body:
-                    'Turtle King is a pass-and-play card game for one phone. '
-                    'Players take turns looking at their own two cards and '
-                    'trying to capture cards from the center pile. At the end '
-                    'of the game, the player with the fewest captured cards '
-                    'becomes the Turtle King. (The winning rule is a current '
-                    'project rule — see "Current Project Rules" below.)',
+                    'Turtle King is a game that cannot be stopped: hold out '
+                    'until the end. Players take turns on a single phone, '
+                    'deciding whether to admit defeat or hold out while a '
+                    'water cup is being poured. The last player remaining on '
+                    'the field wins the crown and becomes the Turtle King.',
               ),
               _Section(
                 title: 'Setting Up',
@@ -41,124 +40,127 @@ class HowToPlayScreen extends StatelessWidget {
               _Section(
                 title: 'Your Two Cards',
                 body:
-                    'Each player receives two private cards. Your cards are '
-                    'only for you — never show them to anyone else. The app '
-                    'reveals your cards only when it is your turn to look at '
-                    'them, and hides them again before the phone changes '
-                    'hands.',
+                    'Each player is dealt two cards — but you may only look '
+                    'at ONE of them. Your second card stays hidden from '
+                    'everyone, including you, until the group reveal. The '
+                    'app shows you only your one visible card, privately, and '
+                    'hides it again before the phone changes hands.',
               ),
               _Section(
                 title: 'Pass the Phone',
                 body:
-                    'On your turn: reveal your two cards, look at them, then '
-                    'take your action. When you are done, the app shows a '
-                    'neutral "pass the phone" screen with no cards on it. '
-                    'Hand the phone to the next player. Nothing appears '
-                    'automatically — they must tap Continue before their own '
-                    'cards are revealed.',
+                    'On your turn: reveal your one visible card, look at it, '
+                    'then pass the phone. The app shows a neutral "pass the '
+                    'phone" screen with no cards on it. Hand the phone to the '
+                    'next player. Nothing appears automatically — they must '
+                    'tap Continue before their own card is revealed.',
               ),
               _Section(
-                title: 'The Center Pile',
+                title: 'The Pouring Cup',
                 body:
-                    'The game has a face-up center pile in the middle of the '
-                    'screen. Cards drawn during the round are added to the top '
-                    'of the pile. The top card is the current center card — '
-                    'the one players compare against. When a player captures '
-                    'the current center card, it leaves the pile.',
+                    'After everyone has looked at their card, a water cup is '
+                    'placed on the table and water begins to be poured. In '
+                    'turn, each player decides what to do while the water '
+                    'rises: hold out, or shout YAMADA.',
               ),
               _Section(
                 title: 'YAMADA',
                 body:
-                    'On your turn you may call YAMADA to capture the current '
-                    'center card — but only when its value is strictly between '
-                    'the values of your two cards.',
+                    'If you feel your other (hidden) card is too small, you '
+                    'can shout "Yamada!" — this means you admit defeat. You '
+                    'drink the water currently in the cup, you are dealt two '
+                    'new cards (and look at one of them), and the game '
+                    'continues.',
+              ),
+              _Section(
+                title: 'Hold Out',
+                body:
+                    'If you do not shout YAMADA, you hold out. If every '
+                    'player holds out without shouting, the cup is filled and '
+                    'all players reveal their cards together.',
+              ),
+              _Section(
+                title: 'The Reveal',
+                body:
+                    'When everyone holds out, all hands are revealed at once. '
+                    'The player with the smallest cards must drink a full cup '
+                    'of water. Because they held out until the end with the '
+                    'smallest cards, they must also drink an extra cup of '
+                    'water.',
                 bullets: [
                   'Card values: Ace = 1, number cards = their number, '
                       'Jack = 11, Queen = 12, King = 13.',
-                  '"Strictly between" means the center card must be greater '
-                      'than one of your cards and less than the other. It can '
-                      'never equal either of them.',
+                  '"Smallest" means the lowest total value of the two cards. '
+                      'If players tie for the smallest, all tied players '
+                      'drink.',
                 ],
                 example:
-                    'Example: with cards valued 3 and 9, the center values 4, '
-                    '6, and 8 qualify — but 3, 9, and 10 do not.',
+                    'Example: a 3 and a 7 total 10 — smaller than a 4 and a '
+                    '9, which total 13.',
               ),
               _Section(
-                title: 'Draw to the Center',
+                title: 'Cup Sizes',
                 body:
-                    'Instead of calling YAMADA, you may draw the next card '
-                    'from the remaining deck and place it on top of the center '
-                    'pile. Your turn then ends and the next player takes '
-                    'over.',
+                    'The cup grows as the game goes on. The first round uses '
+                    'a normal cup. Because no player admitted defeat in the '
+                    'first round, the second round switches to a large cup; '
+                    'if nobody admits defeat in the second round either, the '
+                    'third round switches to an extra-large cup.',
               ),
               _Section(
-                title: 'Wrong YAMADA Calls',
+                title: 'Drinking Counts',
                 body:
-                    'Calling YAMADA when the center card is not strictly '
-                    'between your cards is allowed, but it is penalized: the '
-                    'center card is not captured and stays on the pile, and '
-                    'you receive one penalty point. Your turn still ends and '
-                    'play moves on.',
-              ),
-              _Section(
-                title: 'Penalty Cups',
-                body:
-                    'Penalty points fill your cup. The cup holds 3 penalty '
-                    'points by default; when it fills up, one full cup is '
-                    'counted and the cup empties. Penalties add up over the '
-                    'whole game, and the number of full cups you have '
-                    'collected never resets between rounds. The cup is an '
-                    'abstract penalty counter — it is not connected to '
-                    'alcohol.',
+                    'Every drink counts: a YAMADA drink, a full-cup penalty, '
+                    'and the extra holding-out cup are each one drinking '
+                    'event. A player who accumulates six drinking events is '
+                    'directly eliminated on the spot.',
               ),
               _Section(
                 title: 'Multiple Rounds',
                 body:
-                    'A game can last several rounds. Each new round deals '
-                    'fresh two-card hands to the players still in the game. '
-                    'The same deck is used for the whole game and is not '
-                    'reshuffled between rounds. Penalty cups and lifetime '
-                    'capture totals carry over. The game ends when the '
-                    'configured number of rounds is reached, when the deck '
-                    'can no longer support another round, or when fewer than '
-                    'two active players remain.',
+                    'After a round ends, the players still standing receive '
+                    'fresh two-card hands and a new round begins — the cup '
+                    'size carries over. When the deck runs low it is shuffled '
+                    'back to a full 52 cards so the game can continue.',
               ),
               _Section(
                 title: 'Elimination',
                 body:
-                    'Players can be eliminated from the game. Current project '
-                    'rule: a player is eliminated when the number of full '
-                    'cups they have collected reaches the elimination '
-                    'threshold (2 full cups by default). Eliminated players '
-                    'no longer receive hands, do not take turns, and cannot '
-                    'act. Their captures and penalties still count in the '
-                    'final results. If fewer than two active players remain, '
+                    'A player who reaches six drinking events is eliminated '
+                    'immediately. Eliminated players no longer receive hands, '
+                    'do not take turns, and cannot act. Their history stays '
+                    'in the results. If fewer than two active players remain, '
                     'the game ends.',
               ),
               _Section(
                 title: 'Turtle King',
                 body:
-                    'At the end of the game, the Turtle King is the player '
-                    'with the fewest total captures. Multiple players can '
-                    'share the title when they tie — there is no hidden '
-                    'tie-breaker. This is the current project rule, not an '
-                    'official Turtle King rule.',
+                    'The last player remaining on the field wins the crown '
+                    'and becomes the Turtle King of the game. If every '
+                    'remaining player is eliminated by the same event, no '
+                    'Turtle King is declared.',
               ),
               _Section(
                 title: 'Current Project Rules',
                 body:
-                    'The repository does not include an official Turtle King '
-                    'ruleset, so the game currently implements the following '
-                    'rules. They are project assumptions, not official '
-                    'rules, and may change in future versions.',
+                    'The authoritative rules above are implemented as '
+                    'written. Where the rules are silent, the game currently '
+                    'uses these project rules/assumptions:',
                 bullets: [
-                  'A wrong YAMADA call costs 1 penalty point.',
-                  'The default cup capacity is 3 penalty points.',
-                  'The default elimination threshold is 2 full cups.',
-                  'The Turtle King is the player(s) with the fewest '
-                      'cumulative captures.',
-                  'Ties share the title; there is no tie-breaker.',
-                  'The deck is not reshuffled between rounds.',
+                  '"Smallest cards" means the lowest total value of the two '
+                      'cards; tied players share the penalty.',
+                  'A YAMADA drink, a full-cup penalty, and the extra '
+                      'holding-out cup each count as one drinking event.',
+                  'The cup grows one step (normal → large → extra-large) '
+                      'after each round with no YAMADA, and stays the same '
+                      'after a round with YAMADA.',
+                  'The deck is reshuffled when it runs low, so the game can '
+                      'continue.',
+                  'Each new YAMADA hand shows the player one (the first) of '
+                      'their two new cards.',
+                  'A round ends once every active player has held out in a '
+                      'row; if YAMADA was called, no reveal happens and the '
+                      'round just completes.',
                 ],
                 highlighted: true,
               ),

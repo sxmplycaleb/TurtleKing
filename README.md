@@ -3,6 +3,70 @@
 Turtle King is a pass-and-play card game for friends, built with Flutter for
 Android and iOS.
 
+## Gameplay — Authoritative Rules (current implementation)
+
+The game is implemented directly from the authoritative Turtle King rules:
+
+> This is a game that cannot be stopped, to see who can hold out until the
+> end.
+
+- **Two cards, one visible** — each player is dealt two cards but may only
+  look at **one** of them. The second card stays hidden (even from its
+  owner) until the group reveal. The pass-and-play flow hands the phone
+  around; each player reveals their one visible card privately, then passes
+  through a neutral handoff with zero cards on screen.
+- **The pouring cup** — after everyone has viewed, a water cup is placed and
+  water begins to be poured. In turn, each active player holds out or shouts
+  **YAMADA**.
+- **YAMADA = admit defeat** — calling YAMADA means the player admits defeat:
+  they drink the water currently in the cup, are dealt two new cards (and
+  look at one of them), and continue the game. The round is not revealed.
+- **Everyone holds out → reveal** — if all players hold out without
+  shouting, all hands are revealed together and the player with the
+  **smallest** cards drinks a **full cup**, plus an **extra cup** because
+  they held out with the smallest cards. Ties share the penalty.
+- **Cup sizes** — the cup starts normal; because no player admitted defeat
+  in round one, round two switches to a **large** cup, and round three to an
+  **extra-large** cup (a round with YAMADA keeps the current size).
+- **Six drinks = elimination** — each drink (YAMADA, full-cup penalty, extra
+  cup) counts as one drinking event. A player who accumulates **six**
+  drinking events is directly eliminated on the spot; eliminated players
+  receive no hands, take no turns, and cannot act.
+- **Turtle King** — the last player remaining on the field wins the crown
+  and becomes the Turtle King. If every remaining player is eliminated by
+  the same event, no Turtle King is declared.
+- **Deterministic** — `GameState` accepts an injected `Random`; with the
+  same players, seed, and actions the outcome is identical.
+
+Card values are Ace = 1, number cards = their number, Jack = 11, Queen = 12,
+King = 13, and "smallest" means the lowest total of a player's two cards.
+
+### Assumptions (the rules are silent)
+
+The authoritative rules leave a few details open; the game implements them
+as clearly-labeled project rules (also listed on the How to Play screen):
+
+- "Smallest" = lowest total hand value; tied players all drink.
+- A YAMADA drink, the full-cup penalty, and the extra cup each count as one
+  drinking event.
+- The cup grows one step after every round with no YAMADA and stays the
+  same after a round with YAMADA.
+- When the deck runs low it is reset to a full 52-card deck (shuffled) so
+  the game can continue.
+- Each new YAMADA hand shows the player the first of their two new cards.
+- A round ends once every active player has held out in a row; if YAMADA
+  was called during the round, no reveal happens and the round simply
+  completes with the YAMADA drinks recorded.
+
+### Superseded provisional mechanics
+
+Milestones 05–09 below document *provisional* mechanics that were designed
+before the authoritative rules were adopted and have since been **removed**
+from the implementation: a face-up center pile, draw-to-center turns,
+strictly-between YAMADA captures, wrong-call penalties, cup-capacity/penalty
+counters, fewest-captures Turtle King determination, and a 2-full-cup
+elimination threshold. They remain in this README only as historical
+milestone records and are marked as superseded.
 
 ## Milestone 01 — Project Foundation
 
@@ -71,6 +135,10 @@ milestones.
 
 ## Milestone 05 — Center Pile
 
+> ⚠️ **Superseded** — the center pile described below no longer exists in
+> the implementation. The authoritative rules have no center pile; rounds
+> revolve around the pouring cup instead. Kept as a historical record.
+
 This milestone adds the model seam for shared gameplay, without gameplay
 rules yet:
 
@@ -88,6 +156,11 @@ rules yet:
   foundation.
 
 ## Milestone 06 — YAMADA Round Mechanics
+
+> ⚠️ **Superseded** — the strictly-between capture mechanics described below
+> were replaced by the authoritative rules: YAMADA now means *admitting
+> defeat* (drink the cup, get new cards, continue). Kept as a historical
+> record.
 
 This milestone implements the YAMADA round on top of the center pile:
 
@@ -118,6 +191,11 @@ This milestone implements the YAMADA round on top of the center pile:
   determination, round escalation, and multiplayer remain later milestones.
 
 ## Milestone 07 — Cup/Penalty Mechanics & Captured-Pile Scoring
+
+> ⚠️ **Superseded** — the penalty-cup counters and captured-pile scoring
+> described below were removed when the authoritative rules were adopted
+> (the current cup is a pouring cup with the smallest-hand penalty, and
+> scoring is by drinking events). Kept as a historical record.
 
 This milestone layers penalties and scoring onto the YAMADA round:
 
@@ -152,6 +230,12 @@ This milestone layers penalties and scoring onto the YAMADA round:
   later milestones.
 
 ## Milestone 08 — Multi-Round Game & Turtle King Determination
+
+> ⚠️ **Superseded** — `maxRounds`, the never-reshuffle rule, and the
+> fewest-total-captures Turtle King rule described below were replaced by
+> the authoritative rules: the game continues until one player remains, the
+> deck is reset when it runs low, and the Turtle King is the last player
+> standing. Kept as a historical record.
 
 This milestone turns the single-round M07 game into a complete multi-round
 pass-and-play game:
@@ -195,6 +279,11 @@ pass-and-play game:
   remain later milestones.
 
 ## Milestone 09 — Elimination & End-of-Game Escalation
+
+> ⚠️ **Superseded** — elimination is now governed by the authoritative rule:
+> **six drinking events** eliminate a player on the spot (the cup-count
+> trigger and 2-full-cup default described below were removed). Kept as a
+> historical record.
 
 This milestone adds elimination on top of the multi-round game:
 
@@ -252,33 +341,33 @@ This milestone adds elimination on top of the multi-round game:
 ## Milestone 10 — How to Play & Rules Documentation
 
 This milestone adds a dedicated **How to Play** screen that documents the
-rules actually implemented through Milestone 09:
+rules implemented in the game:
 
 - **Screen** — `lib/how_to_play_screen.dart` renders the full rules as a
   scrollable, mobile-friendly page with a clear title and accessible back
   navigation. It is pure documentation: a stateless widget that takes no
   `GameState`, never mutates gameplay state, and contains no private card
   information.
-- **Navigation** — a "How to Play" button on the home screen opens the rules
-  from the app shell, so the rules are reachable without starting a game.
-  Back returns to the home screen; the game flow is unchanged.
+- **Navigation** — a "How to Play" action on the home screen opens the rules
+  from the app shell (and the game screen's app bar reuses the same screen
+  in-game). Back returns where you came from; the game flow is unchanged.
 - **Topics covered** — The Goal; Setting Up (2–10 players, single phone);
-  Your Two Cards (private two-card hands); Pass the Phone (neutral handoff,
-  explicit Continue); The Center Pile; YAMADA (strictly-between comparison
-  with the Ace=1 … King=13 values and a worked example); Draw to the Center;
-  Wrong YAMADA Calls (legal-but-penalized, +1 penalty, card stays); Penalty
-  Cups (abstract counter, default capacity 3, overflow); Multiple Rounds
-  (no reshuffle, persistent cups/totals); Elimination (current project
-  rule, default threshold 2 full cups); Turtle King (current project rule,
-  fewest captures, ties allowed); and a highlighted **Current Project
-  Rules** section.
+  Your Two Cards (two cards dealt, only one visible); Pass the Phone
+  (neutral handoff, explicit Continue); The Pouring Cup; YAMADA (admit
+  defeat — drink the cup, new cards, continue); Hold Out; The Reveal
+  (simultaneous reveal, smallest hand drinks a full cup plus an extra cup,
+  with Ace=1 … King=13 values and a worked example); Cup Sizes (normal →
+  large → extra-large); Drinking Counts (six drinks = elimination);
+  Multiple Rounds (fresh hands, cup size carries over, deck reset when
+  low); Elimination (six drinking events, on the spot); Turtle King (last
+  player remaining); and a highlighted **Current Project Rules** section.
 - **Assumptions** — the screen explicitly labels the rules the repository
   does not specify authoritatively as *current project rules / project
-  assumptions*: wrong YAMADA call = 1 penalty, default cup capacity = 3,
-  default elimination threshold = 2 full cups, Turtle King = fewest
-  cumulative captures, ties allowed with no tie-breaker, and no deck
-  reshuffle between rounds. None are presented as official Turtle King
-  rules.
+  assumptions*: smallest = lowest total hand value with tied players
+  sharing the penalty; each drink counts as one drinking event; the cup
+  grows one step after rounds with no YAMADA; the deck resets when low; and
+  each new YAMADA hand shows the first of two new cards. None are presented
+  as official Turtle King rules.
 - **Out of scope** — no gameplay mechanics were added or changed; drinking
   instructions, persistence, and multiplayer remain later milestones.
 
@@ -297,18 +386,15 @@ gameplay mechanics:
   that opens `lib/round_history_screen.dart`, a pure presentation layer over
   data `GameState` already records. There is no second history store.
 - **Data sources** — rounds come from `GameState.roundResults` in
-  chronological order; per-round captures from `RoundResult.scores`;
+  chronological order; per-round drinking events and YAMADA calls from
+  `RoundResult` (`drinks`, `calledYamada`, `smallestHands`, `cupSize`);
   eliminations from `GameState.eliminationHistory` matched by round number.
-  Per-round penalties are recorded when a round completes: `RoundResult` now
-  carries an immutable `penalties` map (the delta of the lifetime
-  `penaltyCountOf` against earlier rounds), because per-round penalties
-  cannot be reconstructed reliably from the lifetime counter after later
-  rounds. Recorded results are fixed snapshots, so later rounds can never
+  Recorded results are fixed snapshots, so later rounds can never
   retroactively rewrite earlier history.
-- **History content** — each completed round shows its number, every
-  player's capture and penalty counts for that round (zero captures and
-  ties included), and anyone eliminated during it. An empty history shows a
-  defensive "No completed rounds yet." message.
+- **History content** — each completed round shows its number and cup size,
+  every player's drinks for that round (zero-drink players and YAMADA calls
+  included), the smallest-hand penalty, and anyone eliminated during it. An
+  empty history shows a defensive "No completed rounds yet." message.
 - **Privacy** — history and rules show only player names and counts. No
   card widget, card identity, or hand information ever appears; the
   pass-and-play privacy contract is unchanged.
@@ -344,7 +430,10 @@ touching any gameplay:
   derivative from the source artwork, including the measured crop bounds
   (the emblem ring spans x 11..1010, y 100..890; the TURTLE/KING shield
   starts at y ≈ 895, so the emblem crop stops at y 890) and the sampled
-  navy `#0B263C`.
+  navy `#0B263C`. The emblem content is scaled to 84% of its canvas so the
+  ring and fanned cards keep safe-area breathing room; the adaptive
+  foreground then draws the padded emblem at 70% of the 108 dp canvas, so
+  the artwork lands at ≈59% — inside the 66 dp Android safe zone.
 - **Accessibility & responsiveness** — the home emblem scales with screen
   width (`screenWidth * 0.4`, clamped 140–200 px) and exposes a semantic
   label (`"Turtle King logo"`); the splash artwork uses `BoxFit.contain` so
