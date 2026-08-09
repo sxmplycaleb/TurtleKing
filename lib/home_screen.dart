@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'how_to_play_screen.dart';
 import 'player_setup_screen.dart';
 import 'turtle_art.dart';
 
@@ -24,8 +25,9 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 24),
               Text(
                 'Turtle King',
-                style: theme.textTheme.displaySmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -46,6 +48,18 @@ class HomeScreen extends StatelessWidget {
                 ),
                 child: const Text('New Game'),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () => _openHowToPlay(context),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 48,
+                    vertical: 16,
+                  ),
+                  textStyle: theme.textTheme.titleMedium,
+                ),
+                child: const Text('How to Play'),
+              ),
             ],
           ),
         ),
@@ -55,10 +69,16 @@ class HomeScreen extends StatelessWidget {
 
   /// Entry point for starting a game: opens player setup.
   void _startNewGame(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const PlayerSetupScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const PlayerSetupScreen()));
+  }
+
+  /// Opens the rules screen. Purely informational: no game state is
+  /// created or mutated.
+  void _openHowToPlay(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const HowToPlayScreen()));
   }
 }
