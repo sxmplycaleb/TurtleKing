@@ -261,6 +261,8 @@ test/
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
+  game_state_test.dart         # Hands, turn flow, round, cup, penalties, scoring
+  game_start_screen_test.dart  # Pass-and-play + round + penalty flow + privacy
   game_state_test.dart         # Hands, rounds, cup, penalties, scoring, result
   game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
 ```
