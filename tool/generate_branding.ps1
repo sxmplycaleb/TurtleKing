@@ -35,21 +35,34 @@ Write-Host ("source: {0}x{1}" -f $src.Width, $src.Height)
 $navy = [System.Drawing.Color]::FromArgb(255, 0x0B, 0x26, 0x3C)
 Write-Host ("navy background: #{0:X2}{1:X2}{2:X2}" -f $navy.R, $navy.G, $navy.B)
 
-# ---- 1. Emblem: crop the emblem circle region (no banner) and center it
-#         on a 1024x1024 transparent canvas.
+# ---- 1. Emblem: crop the complete emblem circle region (no banner) and
+#         scale it to 84% inside a 1024x1024 transparent canvas.
 # Ring bounds (measured): x 11..1010, y 100..890. Cards poke past the ring to
-# the artwork edges (x 0..1023), so crop the full width. TURTLE/KING shield
-# starts at y ~895+, so the crop stops at y 890.
-$emblemRaw = New-Object System.Drawing.Bitmap(1024, 808, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+# the artwork edges (x 0..1023), so the crop takes the full width. The
+# TURTLE/KING shield starts at y ~895+, so the crop stops at y 890.
+#
+# SAFE-AREA: the content is scaled to 84% of the canvas, leaving ~8% margin
+# left/right and ~17% top/bottom so the ring and fanned cards are never flush
+# against the canvas edge. Downstream scales assume this padding:
+#   - legacy/iOS icon base draws the emblem at 88%  -> content at ~74%
+#   - Android adaptive foreground draws it at 70%   -> content at ~59% of the
+#     108dp canvas, inside the 66dp safe zone.
+$emblemContentScale = 0.84
+$emblemRaw = New-Object System.Drawing.Bitmap(1024, 809, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $g = [System.Drawing.Graphics]::FromImage($emblemRaw)
 $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$g.DrawImage($src, (New-Object System.Drawing.Rectangle(0, 0, 1024, 808)),
-             (New-Object System.Drawing.Rectangle(0, 82, 1024, 808)), [System.Drawing.GraphicsUnit]::Pixel)
+$g.DrawImage($src, (New-Object System.Drawing.Rectangle(0, 0, 1024, 809)),
+             (New-Object System.Drawing.Rectangle(0, 82, 1024, 809)), [System.Drawing.GraphicsUnit]::Pixel)
 $g.Dispose()
 $emblem = New-Object System.Drawing.Bitmap(1024, 1024, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $g = [System.Drawing.Graphics]::FromImage($emblem)
 $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$g.DrawImage($emblemRaw, (New-Object System.Drawing.Rectangle(0, 108, 1024, 808)))
+$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+$cw = [int](1024 * $emblemContentScale)
+$ch = [int](809 * $emblemContentScale)
+$cx = [int]((1024 - $cw) / 2)
+$cy = [int]((1024 - $ch) / 2)
+$g.DrawImage($emblemRaw, (New-Object System.Drawing.Rectangle($cx, $cy, $cw, $ch)))
 $g.Dispose()
 $emblemRaw.Dispose()
 Save-Png $emblem 'assets/branding/turtle_king_emblem.png'
@@ -85,16 +98,20 @@ foreach ($dir in $mipDensities.Keys) {
   $res.Dispose()
 }
 
-# ---- 4. Android adaptive icon foreground (transparent, emblem at 61%) ----
+# ---- 4. Android adaptive icon foreground (transparent canvas, emblem at
+#         70%). With the emblem's built-in 84% padding, the artwork lands at
+#         70% * 84% = ~59% of the 108dp canvas - inside the 66dp safe zone -
+#         while the emblem itself reads as a comfortable 70% of the canvas.
 $fgCanvas = @{ 'mipmap-mdpi' = 108; 'mipmap-hdpi' = 162; 'mipmap-xhdpi' = 216
                'mipmap-xxhdpi' = 324; 'mipmap-xxxhdpi' = 432 }
+$fgScale = 0.70
 foreach ($dir in $fgCanvas.Keys) {
   $canvas = $fgCanvas[$dir]
   $fg = New-Object System.Drawing.Bitmap($canvas, $canvas, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   $g = [System.Drawing.Graphics]::FromImage($fg)
   $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-  $sz = [int]($canvas * 0.61)
+  $sz = [int]($canvas * $fgScale)
   $p = [int]((($canvas - $sz) / 2))
   $g.DrawImage($emblem, (New-Object System.Drawing.Rectangle($p, $p, $sz, $sz)))
   $g.Dispose()
