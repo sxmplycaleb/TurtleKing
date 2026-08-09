@@ -61,6 +61,32 @@ class RoundResult {
   final List<Player> lowestScorers;
 }
 
+/// Why a player was eliminated from the game.
+enum EliminationReason {
+  /// The player's lifetime cup overflowed enough to reach the configured
+  /// elimination threshold.
+  cupOverflow,
+}
+
+/// A record of a single elimination: who was eliminated, in which round, and
+/// why.
+class EliminationRecord {
+  const EliminationRecord({
+    required this.player,
+    required this.round,
+    required this.reason,
+  });
+
+  /// The eliminated player.
+  final Player player;
+
+  /// The 1-based round in which the elimination happened.
+  final int round;
+
+  /// Why the player was eliminated.
+  final EliminationReason reason;
+}
+
 /// The final, deterministic result of a completed Turtle King game.
 ///
 /// The repository specifies no official winner rule, so the Turtle King is
@@ -74,6 +100,9 @@ class GameResult {
     required this.turtleKings,
     required this.topScorers,
     required this.roundsPlayed,
+    required this.finalists,
+    required this.eliminated,
+    required this.eliminations,
   });
 
   /// Total captures per player across all rounds, in player order.
@@ -87,6 +116,15 @@ class GameResult {
 
   /// The number of rounds actually played.
   final int roundsPlayed;
+
+  /// The players still active when the game ended, in setup order.
+  final List<Player> finalists;
+
+  /// Every eliminated player, in elimination order.
+  final List<Player> eliminated;
+
+  /// The full elimination history, in elimination order.
+  final List<EliminationRecord> eliminations;
 }
 
 /// The pass-and-play state of a Turtle King game.
@@ -127,12 +165,15 @@ class GameState {
     Random? random,
     int cupCapacity = 3,
     int maxRounds = 3,
+    int eliminationThreshold = 2,
   }) : _players = List.unmodifiable(players),
        _deck = Deck(random: random),
        _captured = {for (final player in players) player.id: <Card>[]},
        _penalties = {for (final player in players) player.id: 0},
        _cumulativeCaptured = {for (final player in players) player.id: 0},
        _cupCapacity = cupCapacity,
+       _maxRounds = maxRounds,
+       _eliminationThreshold = eliminationThreshold {
        _maxRounds = maxRounds {
     if (_players.length < 2) {
       throw ArgumentError.value(players, 'players', 'need at least 2 players');
@@ -147,6 +188,16 @@ class GameState {
     if (_maxRounds < 1) {
       throw ArgumentError.value(maxRounds, 'maxRounds', 'must be at least 1');
     }
+    if (_eliminationThreshold < 1) {
+      throw ArgumentError.value(
+        eliminationThreshold,
+        'eliminationThreshold',
+        'must be at least 1',
+      );
+    }
+    _deck.shuffle();
+    _hands = {for (final player in _players) player.id: _deck.deal(2)};
+    _viewingPlayers = List.of(_players);
     _deck.shuffle();
     _hands = {for (final player in _players) player.id: _deck.deal(2)};
   }
@@ -160,6 +211,13 @@ class GameState {
   final Map<String, int> _cumulativeCaptured;
   final int _cupCapacity;
   final int _maxRounds;
+  final int _eliminationThreshold;
+  final List<RoundResult> _roundResults = [];
+  final Set<String> _eliminatedIds = {};
+  final List<EliminationRecord> _eliminations = [];
+
+  late List<Player> _viewingPlayers;
+  late List<Player> _roundOrder;
   final List<RoundResult> _roundResults = [];
 
   int _currentPlayerIndex = 0;
@@ -176,20 +234,48 @@ class GameState {
   /// The players in setup order.
   List<Player> get players => _players;
 
+  /// Whether [player] has been eliminated from the game.
+  bool isEliminated(Player player) => _eliminatedIds.contains(player.id);
+
+  /// The players still in the game, in setup order.
+  List<Player> get activePlayers => [
+    for (final player in _players)
+      if (!isEliminated(player)) player,
+  ];
+
+  /// The players eliminated so far, in elimination order.
+  List<Player> get eliminatedPlayers => [
+    for (final record in _eliminations) record.player,
+  ];
+
+  /// The number of players still in the game.
+  int get activePlayerCount => activePlayers.length;
+
+  /// The full elimination history, in elimination order.
+  List<EliminationRecord> get eliminationHistory =>
+      List.unmodifiable(_eliminations);
+
+  /// How many full cups a player must have drunk to be eliminated.
+  int get eliminationThreshold => _eliminationThreshold;
+
+  /// Whether [player] has a hand this round (false once eliminated).
+  bool hasHand(Player player) => _hands.containsKey(player.id);
+
   /// Cards remaining in the deck after the initial deal and any center draws.
   int get remainingCards => _deck.remainingCards;
 
-  /// Index into [players] of the player whose turn it is to view their cards.
+  /// Index into the players viewing this round of the player whose turn it
+  /// is to view their cards.
   int get currentPlayerIndex => _currentPlayerIndex;
 
   /// The player whose turn it is to view their cards.
-  Player get currentPlayer => _players[_currentPlayerIndex];
+  Player get currentPlayer => _viewingPlayers[_currentPlayerIndex];
 
   /// Whether the current player has revealed their two cards.
   bool get currentPlayerRevealed => _revealed;
 
-  /// Whether every player has completed their viewing turn.
-  bool get allPlayersViewed => _currentPlayerIndex >= _players.length;
+  /// Whether every player who received a hand this round has viewed it.
+  bool get allPlayersViewed => _currentPlayerIndex >= _viewingPlayers.length;
 
   /// The two cards dealt to [player], in deal order.
   List<Card> handOf(Player player) => _hands[player.id]!;
@@ -233,18 +319,22 @@ class GameState {
   /// Whether the YAMADA round has started.
   bool get roundStarted => _roundStarted;
 
-  /// Whether the YAMADA round has finished: every player has acted once.
+  /// Whether the YAMADA round has finished: every player who received a hand
+  /// this round has acted once.
   bool get roundComplete =>
-      _roundStarted && _roundPlayerIndex >= _players.length;
+      _roundStarted && _roundPlayerIndex >= _roundOrder.length;
 
-  /// Index into [players] of the player whose YAMADA turn it is.
+  /// Index into the round's turn order of the player whose YAMADA turn it is.
   int get roundPlayerIndex => _roundPlayerIndex;
+
+  /// How many players take turns in the current round.
+  int get roundPlayerCount => _roundOrder.length;
 
   /// The player whose YAMADA turn it is.
   ///
   /// Only valid while the round is in progress; once [roundComplete] is true
-  /// there is no current player.
-  Player get roundCurrentPlayer => _players[_roundPlayerIndex];
+  /// there is no current player. Never an eliminated player.
+  Player get roundCurrentPlayer => _roundOrder[_roundPlayerIndex];
 
   /// Whether the current round player has already completed their action.
   ///
@@ -360,6 +450,9 @@ class GameState {
   /// Throws [YamadaRoundException] if the round has already started or if any
   /// player has not yet viewed their cards.
   void startYamadaRound() {
+    if (_gameComplete) {
+      throw const YamadaRoundException('the game is already complete');
+    }
     if (!allPlayersViewed) {
       throw const YamadaRoundException(
         'all players must view their cards before the YAMADA round starts',
@@ -373,6 +466,7 @@ class GameState {
     _roundPlayerActed = false;
     _roundFinalized = false;
     _roundNumber = _roundResults.length + 1;
+    _roundOrder = activePlayers;
     dealToCenter();
   }
 
@@ -412,7 +506,8 @@ class GameState {
     _roundPlayerActed = false;
     _roundFinalized = false;
     _roundNumber = _roundResults.length + 1;
-    _hands = {for (final player in _players) player.id: _deck.deal(2)};
+    _viewingPlayers = activePlayers;
+    _hands = {for (final player in activePlayers) player.id: _deck.deal(2)};
   }
 
   /// [player]'s turn action: draws the top card of the deck onto the center
@@ -464,6 +559,12 @@ class GameState {
     if (roundComplete) {
       throw const YamadaRoundException('the YAMADA round is already complete');
     }
+    if (_gameComplete) {
+      throw const YamadaRoundException('the game is already complete');
+    }
+    if (isEliminated(player)) {
+      throw YamadaRoundException('${player.name} has been eliminated');
+    }
     if (_roundPlayerActed) {
       throw const YamadaRoundException(
         'the current player has already acted this turn',
@@ -480,15 +581,56 @@ class GameState {
     if (roundComplete) {
       _finalizeRoundIfComplete();
     }
+    _evaluateEliminations();
+    _maybeCompleteGame();
   }
 
-  /// Records the completed round once, then completes the game when the last
-  /// possible round has been played.
+  /// Records the completed round's result exactly once.
   void _finalizeRoundIfComplete() {
     if (_roundFinalized) return;
     _roundFinalized = true;
     _roundResults.add(roundResult!);
-    if (_roundResults.length >= _maxRounds || !_canDealNextRound()) {
+  }
+
+  /// Marks every player whose lifetime cup drinks have reached the
+  /// elimination threshold as eliminated. Runs after each round action, so an
+  /// elimination never interrupts an action halfway through.
+  void _evaluateEliminations() {
+    for (final player in List.of(activePlayers)) {
+      if (cupDrinksOf(player) >= _eliminationThreshold) {
+        _eliminate(player);
+      }
+    }
+  }
+
+  void _eliminate(Player player) {
+    if (isEliminated(player)) return;
+    _eliminatedIds.add(player.id);
+    _eliminations.add(
+      EliminationRecord(
+        player: player,
+        round: _roundNumber,
+        reason: EliminationReason.cupOverflow,
+      ),
+    );
+  }
+
+  /// Completes the game, once, when it is over: the last possible round has
+  /// been played ([maxRounds] or the deck cannot support another round) or
+  /// fewer than two active players remain.
+  ///
+  /// The round-based checks apply only once the current round has completed;
+  /// the deck must always be able to finish the round in progress. The
+  /// active-player check may end the game mid-round, right after the action
+  /// that eliminated the second-to-last player.
+  void _maybeCompleteGame() {
+    if (_gameComplete) return;
+    final roundEnded = roundComplete;
+    final ended =
+        activePlayerCount < 2 ||
+        (roundEnded && _roundResults.length >= _maxRounds) ||
+        (roundEnded && !_canDealNextRound());
+    if (ended) {
       _gameComplete = true;
       _finalResult = _buildFinalResult();
     }
@@ -521,6 +663,9 @@ class GameState {
           if (scores[player] == maxCount) player,
       ],
       roundsPlayed: _roundResults.length,
+      finalists: List.unmodifiable(activePlayers),
+      eliminated: List.unmodifiable(eliminatedPlayers),
+      eliminations: List.unmodifiable(_eliminations),
     );
   }
 

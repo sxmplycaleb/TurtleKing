@@ -1416,4 +1416,318 @@ void main() {
       },
     );
   });
+
+  group('GameState elimination state', () {
+    test('no player is eliminated on a new game', () {
+      final game = GameState(players: makePlayers(3), random: Random(1));
+      expect(game.eliminatedPlayers, isEmpty);
+      expect(game.eliminationHistory, isEmpty);
+      expect(game.activePlayerCount, 3);
+      expect(game.activePlayers, game.players);
+      for (final player in game.players) {
+        expect(game.isEliminated(player), isFalse);
+      }
+    });
+
+    test('the default elimination threshold is two full cups', () {
+      final game = GameState(players: makePlayers(2), random: Random(1));
+      expect(game.eliminationThreshold, 2);
+    });
+
+    test('a custom elimination threshold is honored', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        eliminationThreshold: 4,
+      );
+      expect(game.eliminationThreshold, 4);
+    });
+
+    test('rejects an invalid elimination threshold', () {
+      expect(
+        () => GameState(players: makePlayers(2), eliminationThreshold: 0),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('GameState elimination', () {
+    /// Plays the private viewing phase for every active player.
+    void viewAll(GameState game) {
+      for (var i = 0; i < game.activePlayers.length; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      expect(game.allPlayersViewed, isTrue);
+    }
+
+    /// Seed 1, 3 players, 1-slot cups, threshold 2: player 0 wrong-calls in
+    /// round 1 and round 2, reaching two full cups (the threshold) on the
+    /// round-2 action.
+    GameState eliminatedGame() => GameState(
+      players: makePlayers(3),
+      random: Random(1),
+      cupCapacity: 1,
+      eliminationThreshold: 2,
+    );
+
+    /// Round 1 of [eliminatedGame]: player 0 wrong-calls, players 1 and 2
+    /// draw. Completes the round.
+    void playRoundOne(GameState game) {
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // wrong call, one full cup
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+      expect(game.roundComplete, isTrue);
+    }
+
+    /// Starts round 2 and has player 0 wrong-call, which fills their second
+    /// cup and eliminates them mid-round.
+    void eliminatePlayerZero(GameState game) {
+      game.startNextRound();
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // wrong call, second full cup
+      expect(game.isEliminated(game.players[0]), isTrue);
+    }
+
+    test(
+      'a player reaching the threshold is eliminated after their action',
+      () {
+        final game = eliminatedGame();
+        playRoundOne(game);
+        expect(game.eliminatedPlayers, isEmpty);
+        expect(game.penaltyCountOf(game.players[0]), 1);
+        expect(game.cupDrinksOf(game.players[0]), 1); // below threshold
+
+        eliminatePlayerZero(game);
+
+        expect(game.penaltyCountOf(game.players[0]), 2);
+        expect(game.cupDrinksOf(game.players[0]), 2);
+        expect(game.isEliminated(game.players[0]), isTrue);
+        expect(game.activePlayerCount, 2);
+        // The elimination never interrupts an action halfway through and does
+        // not end the game while the round is still playable.
+        expect(game.roundComplete, isFalse);
+        expect(game.gameComplete, isFalse);
+        expect(game.roundCurrentPlayer, game.players[1]);
+      },
+    );
+
+    test('elimination happens exactly once and records who, when, and why', () {
+      final game = eliminatedGame();
+      playRoundOne(game);
+      eliminatePlayerZero(game);
+      // The rest of the round plays out.
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+      expect(game.roundComplete, isTrue);
+
+      expect(game.eliminationHistory, hasLength(1));
+      final record = game.eliminationHistory.single;
+      expect(record.player, game.players[0]);
+      expect(record.round, 2);
+      expect(record.reason, EliminationReason.cupOverflow);
+      expect(game.eliminatedPlayers, [game.players[0]]);
+    });
+
+    test('an eliminated player cannot act and rejected actions leave the '
+        'state unchanged', () {
+      final game = eliminatedGame();
+      playRoundOne(game);
+      eliminatePlayerZero(game);
+      final pileBefore = game.centerPile;
+      final remainingBefore = game.remainingCards;
+      final penaltiesBefore = game.penaltyCountOf(game.players[0]);
+
+      expect(
+        () => game.callYamada(game.players[0]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(
+        () => game.drawToCenter(game.players[0]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(game.centerPile, pileBefore);
+      expect(game.remainingCards, remainingBefore);
+      expect(game.penaltyCountOf(game.players[0]), penaltiesBefore);
+      expect(game.roundPlayerIndex, 1); // still player 1's turn
+    });
+
+    test('turn progression skips eliminated players and the current player '
+        'is always active', () {
+      final game = eliminatedGame();
+      playRoundOne(game);
+      eliminatePlayerZero(game);
+
+      expect(game.roundCurrentPlayer, game.players[1]);
+      game.drawToCenter(game.players[1]);
+      expect(game.roundCurrentPlayer, game.players[2]);
+      game.drawToCenter(game.players[2]);
+      expect(game.roundComplete, isTrue);
+      // The eliminated player never received a turn after elimination.
+      expect(game.roundPlayerIndex, 3);
+    });
+
+    test('the next round deals to active players only and resets per-round '
+        'state', () {
+      final game = eliminatedGame();
+      playRoundOne(game);
+      eliminatePlayerZero(game);
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+
+      game.startNextRound();
+      viewAll(game);
+      game.startYamadaRound();
+
+      expect(game.roundPlayerCount, 2);
+      expect(game.roundCurrentPlayer, game.players[1]);
+      expect(game.hasHand(game.players[0]), isFalse);
+      expect(game.hasHand(game.players[1]), isTrue);
+      expect(game.hasHand(game.players[2]), isTrue);
+      expect(game.handOf(game.players[1]), hasLength(2));
+      expect(game.handOf(game.players[2]), hasLength(2));
+
+      // All round-3 cards come from the same deck, never re-dealt.
+      final allRoundCards = [
+        ...game.handOf(game.players[1]),
+        ...game.handOf(game.players[2]),
+        game.currentCenterCard!,
+      ];
+      expect(allRoundCards.toSet(), hasLength(allRoundCards.length));
+
+      // Deck accounting: rounds 1-2 each consumed 6 hands + 1 center + 2
+      // draws (wrong calls draw no card), and round 3 has dealt 4 hands +
+      // 1 center so far: 9 + 9 + 5 = 23 cards.
+      expect(game.remainingCards, 52 - 23);
+    });
+
+    test('an eliminated player\'s history stays intact', () {
+      final game = eliminatedGame();
+      playRoundOne(game);
+      eliminatePlayerZero(game);
+      final captures = game.totalCapturesOf(game.players[0]);
+      final penalties = game.penaltyCountOf(game.players[0]);
+      final drinks = game.cupDrinksOf(game.players[0]);
+
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+      game.startNextRound();
+      viewAll(game);
+      game.startYamadaRound();
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+      expect(game.gameComplete, isTrue);
+
+      // Nothing was deleted or reset for the eliminated player.
+      expect(game.totalCapturesOf(game.players[0]), captures);
+      expect(game.penaltyCountOf(game.players[0]), penalties);
+      expect(game.cupDrinksOf(game.players[0]), drinks);
+      expect(game.finalResult!.scores[game.players[0]], captures);
+    });
+
+    test('the game ends when fewer than two active players remain', () {
+      // Seed 1, 2 players, 1-slot cups, threshold 1: player 0's wrong call in
+      // round 1 fills their cup, eliminates them, and leaves one player.
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        cupCapacity: 1,
+        eliminationThreshold: 1,
+      );
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+
+      expect(game.isEliminated(game.players[0]), isTrue);
+      expect(game.activePlayerCount, 1);
+      expect(game.gameComplete, isTrue);
+      expect(game.finalResult, isNotNull);
+      expect(game.canStartNextRound, isFalse);
+      // No further rounds or actions are accepted.
+      expect(() => game.startNextRound(), throwsA(isA<YamadaRoundException>()));
+      expect(
+        () => game.startYamadaRound(),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(
+        () => game.callYamada(game.players[1]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+    });
+
+    test('the final result exposes elimination and finalist data', () {
+      final game = eliminatedGame();
+      playRoundOne(game);
+      eliminatePlayerZero(game);
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+      game.startNextRound();
+      viewAll(game);
+      game.startYamadaRound();
+      game.drawToCenter(game.players[1]);
+      game.drawToCenter(game.players[2]);
+      expect(game.gameComplete, isTrue);
+
+      final result = game.finalResult!;
+      expect(result.finalists, [game.players[1], game.players[2]]);
+      expect(result.eliminated, [game.players[0]]);
+      expect(result.eliminations.single.round, 2);
+      expect(result.eliminations.single.player, game.players[0]);
+      expect(result.roundsPlayed, 3);
+      // Nobody captured in this seed, so every player ties for fewest
+      // captures — including the eliminated player, whose history still
+      // counts under the assumed Turtle King rule.
+      expect(result.scores.values.toList(), [0, 0, 0]);
+      expect(result.turtleKings, hasLength(3));
+    });
+
+    test('deterministic seeded games produce identical elimination sequences '
+        'and final results', () {
+      GameState play() {
+        final game = eliminatedGame();
+        playRoundOne(game);
+        eliminatePlayerZero(game);
+        game.drawToCenter(game.players[1]);
+        game.drawToCenter(game.players[2]);
+        game.startNextRound();
+        viewAll(game);
+        game.startYamadaRound();
+        game.drawToCenter(game.players[1]);
+        game.drawToCenter(game.players[2]);
+        return game;
+      }
+
+      final first = play();
+      final second = play();
+
+      List<String> names(List<Player> players) =>
+          players.map((player) => player.name).toList();
+      expect(
+        second.eliminationHistory.map((record) => record.round).toList(),
+        first.eliminationHistory.map((record) => record.round).toList(),
+      );
+      expect(names(second.eliminatedPlayers), names(first.eliminatedPlayers));
+      expect(names(second.activePlayers), names(first.activePlayers));
+      expect(
+        second.finalResult!.scores.values.toList(),
+        first.finalResult!.scores.values.toList(),
+      );
+      expect(
+        names(second.finalResult!.finalists),
+        names(first.finalResult!.finalists),
+      );
+      expect(
+        names(second.finalResult!.turtleKings),
+        names(first.finalResult!.turtleKings),
+      );
+      expect(second.remainingCards, first.remainingCards);
+      expect(
+        second.penaltyCountOf(second.players[0]),
+        first.penaltyCountOf(first.players[0]),
+      );
+    });
+  });
 }

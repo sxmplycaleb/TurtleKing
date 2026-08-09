@@ -254,7 +254,7 @@ lib/
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
-  game_state.dart         # Hands, turn state, rounds, cup, scoring, game result
+  game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette

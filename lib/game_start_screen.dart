@@ -82,6 +82,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
   GameState get _game => widget.game;
 
   _Stage get _stage {
+    if (_game.gameComplete) return _Stage.roundComplete;
     if (_game.roundStarted) {
       if (_game.roundComplete) return _Stage.roundComplete;
       if (_showingPenalty) return _Stage.roundPenalty;
@@ -182,12 +183,17 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
-  Widget _playerHeader(BuildContext context, int index, Player player) {
+  Widget _playerHeader(
+    BuildContext context,
+    int index,
+    int total,
+    Player player,
+  ) {
     final theme = Theme.of(context);
     return Column(
       children: [
         Text(
-          'Player ${index + 1} of ${_game.players.length}',
+          'Player ${index + 1} of $total',
           style: theme.textTheme.titleMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -218,6 +224,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _playerHeader(
+          context,
+          _game.currentPlayerIndex,
+          _game.activePlayers.length,
+          _game.currentPlayer,
+        ),
         _playerHeader(context, _game.currentPlayerIndex, _game.currentPlayer),
         const SizedBox(height: 24),
         Text(
@@ -249,6 +261,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        _playerHeader(
+          context,
+          _game.currentPlayerIndex,
+          _game.activePlayers.length,
+          _game.currentPlayer,
+        ),
         _playerHeader(context, _game.currentPlayerIndex, _game.currentPlayer),
         const SizedBox(height: 16),
         Text(
@@ -371,7 +389,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _playerHeader(context, _game.roundPlayerIndex, player),
+        _playerHeader(
+          context,
+          _game.roundPlayerIndex,
+          _game.roundPlayerCount,
+          player,
+        ),
         const SizedBox(height: 16),
         Text(
           'Compare the center card with your two cards.',
@@ -470,6 +493,17 @@ class _GameStartScreenState extends State<GameStartScreen> {
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
+        if (_game.isEliminated(player)) ...[
+          const SizedBox(height: 12),
+          Text(
+            '${player.name} has been eliminated!',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
         const SizedBox(height: 32),
         FilledButton(
           onPressed: _penaltyPass,
@@ -487,6 +521,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
       return _gameOverView(context);
     }
     final theme = Theme.of(context);
+    final eliminatedThisRound = _game.eliminationHistory
+        .where((record) => record.round == _game.roundNumber)
+        .toList();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -504,6 +541,95 @@ class _GameStartScreenState extends State<GameStartScreen> {
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
+        if (eliminatedThisRound.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Eliminated: '
+            '${eliminatedThisRound.map((record) => record.player.name).join(', ')}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        for (final player in _game.players) ...[
+          Text(
+            '${player.name}: ${_game.captureCountOf(player)} captured · '
+            '${_game.penaltyCountOf(player)} penalty',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 4),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _game.canStartNextRound ? _startNextRound : null,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text('Start Next Round'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Back to setup'),
+        ),
+      ],
+    );
+  }
+
+  Widget _gameOverView(BuildContext context) {
+    final theme = Theme.of(context);
+    final result = _game.finalResult!;
+    final kings = result.turtleKings.map((player) => player.name).join(', ');
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Game complete',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          result.turtleKings.length == 1
+              ? 'Turtle King: $kings'
+              : 'Turtle Kings: $kings',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Rounds played: ${result.roundsPlayed}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Finalists: ${result.finalists.map((player) => player.name).join(', ')}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium,
+        ),
+        if (result.eliminated.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Eliminated: '
+            '${result.eliminated.map((player) => player.name).join(', ')}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         for (final player in _game.players) ...[
           Text(
