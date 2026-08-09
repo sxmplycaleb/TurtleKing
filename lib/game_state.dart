@@ -47,12 +47,22 @@ class YamadaResult {
 class RoundResult {
   const RoundResult({
     required this.scores,
+    required this.penalties,
     required this.highestScorers,
     required this.lowestScorers,
   });
 
   /// Capture counts per player, in player order.
   final Map<Player, int> scores;
+
+  /// Penalty points awarded to each player during this round, in player
+  /// order.
+  ///
+  /// Recorded as immutable historical data when the round completes.
+  /// [GameState.penaltyCountOf] is a lifetime counter, so per-round
+  /// penalties are the delta between the lifetime count at this round's end
+  /// and the penalties already recorded for earlier rounds.
+  final Map<Player, int> penalties;
 
   /// The players tied for the most captures (never empty).
   final List<Player> highestScorers;
@@ -233,6 +243,12 @@ class GameState {
   bool _gameComplete = false;
   GameResult? _finalResult;
 
+  /// The frozen result of the completed round, set exactly once when the
+  /// round finalizes. Kept so [roundResult] stays stable: recomputing the
+  /// per-round penalty delta after the round is recorded would see the
+  /// round's own penalties as already accounted and return zero.
+  RoundResult? _finalizedRoundResult;
+
   /// The players in setup order.
   List<Player> get players => _players;
 
@@ -392,14 +408,35 @@ class GameState {
   /// completes. Never changes after completion.
   RoundResult? get roundResult {
     if (!roundComplete) return null;
+    return _finalizedRoundResult ?? _buildRoundResult();
+  }
+
+  /// Builds the completed round's result.
+  ///
+  /// Earlier rounds already recorded their share of the lifetime penalty
+  /// count; this round's share is the remainder. Called exactly once, at
+  /// finalization, before this round joins [_roundResults], so the delta is
+  /// correct and the returned value is a fixed snapshot that later rounds
+  /// can never rewrite.
+  RoundResult _buildRoundResult() {
     final scores = {
       for (final player in _players) player: _captured[player.id]!.length,
+    };
+    final penalties = {
+      for (final player in _players)
+        player:
+            _penalties[player.id]! -
+            _roundResults.fold(
+              0,
+              (sum, result) => sum + (result.penalties[player] ?? 0),
+            ),
     };
     final counts = scores.values.toList();
     final maxCount = counts.reduce((a, b) => a > b ? a : b);
     final minCount = counts.reduce((a, b) => a < b ? a : b);
     return RoundResult(
       scores: Map.unmodifiable(scores),
+      penalties: Map.unmodifiable(penalties),
       highestScorers: [
         for (final player in _players)
           if (scores[player] == maxCount) player,
@@ -591,7 +628,9 @@ class GameState {
   void _finalizeRoundIfComplete() {
     if (_roundFinalized) return;
     _roundFinalized = true;
-    _roundResults.add(roundResult!);
+    final result = _buildRoundResult();
+    _finalizedRoundResult = result;
+    _roundResults.add(result);
   }
 
   /// Marks every player whose lifetime cup drinks have reached the

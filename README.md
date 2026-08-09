@@ -282,6 +282,40 @@ rules actually implemented through Milestone 09:
 - **Out of scope** — no gameplay mechanics were added or changed; drinking
   instructions, persistence, and multiplayer remain later milestones.
 
+## Milestone 11 — In-Game Rules Reference & Round History
+
+This milestone makes the rules available *during* a game and adds a
+read-only round history to the final result screen, without touching any
+gameplay mechanics:
+
+- **In-game rules reference** — the game screen's app bar gains a "How to
+  Play" action that pushes the *same* stateless `HowToPlayScreen` used from
+  the home screen. Opening it creates no `GameState`, resets nothing, and
+  returning lands on the exact same stage with identical state (the neutral
+  handoff stays neutral and the next player's cards stay hidden).
+- **Round history** — the final game screen gains a "Round History" button
+  that opens `lib/round_history_screen.dart`, a pure presentation layer over
+  data `GameState` already records. There is no second history store.
+- **Data sources** — rounds come from `GameState.roundResults` in
+  chronological order; per-round captures from `RoundResult.scores`;
+  eliminations from `GameState.eliminationHistory` matched by round number.
+  Per-round penalties are recorded when a round completes: `RoundResult` now
+  carries an immutable `penalties` map (the delta of the lifetime
+  `penaltyCountOf` against earlier rounds), because per-round penalties
+  cannot be reconstructed reliably from the lifetime counter after later
+  rounds. Recorded results are fixed snapshots, so later rounds can never
+  retroactively rewrite earlier history.
+- **History content** — each completed round shows its number, every
+  player's capture and penalty counts for that round (zero captures and
+  ties included), and anyone eliminated during it. An empty history shows a
+  defensive "No completed rounds yet." message.
+- **Privacy** — history and rules show only player names and counts. No
+  card widget, card identity, or hand information ever appears; the
+  pass-and-play privacy contract is unchanged.
+- **Out of scope** — no gameplay rules, scoring, elimination, cup, deck, or
+  round-progression behavior changed; persistence and multiplayer remain
+  later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -341,6 +375,7 @@ lib/
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
+  round_history_screen.dart # Read-only round-by-round history
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result
@@ -353,4 +388,5 @@ test/
   game_state_test.dart         # Hands, rounds, cup, scoring, elimination, result
   game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
   how_to_play_screen_test.dart # How to Play content, scrolling, navigation
+  round_history_screen_test.dart# Round history content, privacy, scrolling
 ```

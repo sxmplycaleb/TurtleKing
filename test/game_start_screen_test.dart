@@ -5,8 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
+import 'package:turtle_king/how_to_play_screen.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
+import 'package:turtle_king/round_history_screen.dart';
 
 void main() {
   List<Player> twoPlayers() => [
@@ -590,6 +592,163 @@ void main() {
         expect(find.text('Caleb: 0 captured · 1 penalty'), findsOneWidget);
         expect(find.text('Bob: 0 captured · 0 penalty'), findsOneWidget);
         expect(find.byType(CardFace), findsNothing);
+      },
+    );
+  });
+
+  group('GameStartScreen in-game rules', () {
+    /// A snapshot of every observable gameplay value, for proving that
+    /// opening the rules changes nothing.
+    Map<String, Object?> snapshot(GameState game) => {
+      'remainingCards': game.remainingCards,
+      'roundStarted': game.roundStarted,
+      'roundComplete': game.roundComplete,
+      'currentPlayerIndex': game.currentPlayerIndex,
+      'currentPlayer': game.currentPlayer.id,
+      'currentPlayerRevealed': game.currentPlayerRevealed,
+      'allPlayersViewed': game.allPlayersViewed,
+      'roundPlayerIndex': game.roundPlayerIndex,
+      'centerPile': game.centerPile,
+      'gameComplete': game.gameComplete,
+    };
+
+    testWidgets('a How to Play action is available during gameplay', (
+      tester,
+    ) async {
+      await pumpGame(tester, gameForTwo());
+
+      expect(find.byTooltip('How to Play'), findsOneWidget);
+    });
+
+    testWidgets(
+      'opening the rules shows the shared HowToPlayScreen with no private '
+      'cards',
+      (tester) async {
+        final game = gameForTwo();
+        await pumpGame(tester, game);
+
+        await tester.tap(find.byTooltip('How to Play'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(HowToPlayScreen), findsOneWidget);
+        expect(find.text('How to Play'), findsOneWidget);
+        // The rules screen never shows card widgets or card identities.
+        expect(find.byType(CardFace), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'returning from the rules lands on the same stage with unchanged '
+      'state',
+      (tester) async {
+        final game = gameForTwo();
+        await pumpGame(tester, game);
+        final before = snapshot(game);
+
+        await tester.tap(find.byTooltip('How to Play'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+
+        // Back on the exact same ready view, nothing advanced.
+        expect(find.text('Reveal My Cards'), findsOneWidget);
+        expect(find.byType(HowToPlayScreen), findsNothing);
+        expect(snapshot(game), before);
+      },
+    );
+
+    testWidgets('rules can be opened mid-turn without advancing the turn', (
+      tester,
+    ) async {
+      final game = gameForTwo();
+      await pumpGame(tester, game);
+      await tester.tap(find.text('Reveal My Cards'));
+      await tester.pump();
+      expect(find.text('Pass to Next Player'), findsOneWidget);
+      final before = snapshot(game);
+      final handBefore = game
+          .handOf(game.players[0])
+          .map((card) => card.displayName)
+          .toList();
+
+      await tester.tap(find.byTooltip('How to Play'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      // Still the revealed stage with the same private cards.
+      expect(find.text('Pass to Next Player'), findsOneWidget);
+      expect(revealedLabels(tester), handBefore);
+      expect(snapshot(game), before);
+    });
+
+    testWidgets(
+      'rules can be opened during the neutral handoff without revealing the '
+      'next player\'s cards',
+      (tester) async {
+        final game = gameForTwo();
+        await pumpGame(tester, game);
+        await completeTurn(tester); // Caleb views and passes.
+        expect(find.text('Pass the phone'), findsOneWidget);
+        expect(find.byType(CardFace), findsNothing);
+        final before = snapshot(game);
+
+        await tester.tap(find.byTooltip('How to Play'));
+        await tester.pumpAndSettle();
+        expect(find.byType(HowToPlayScreen), findsOneWidget);
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+
+        // Still the neutral handoff with zero cards for the next player.
+        expect(find.text('Pass the phone'), findsOneWidget);
+        expect(find.text('Hand the phone to Bob.'), findsOneWidget);
+        expect(find.byType(CardFace), findsNothing);
+        expect(snapshot(game), before);
+      },
+    );
+  });
+
+  group('GameStartScreen round history', () {
+    GameState gameForTwoRounds() =>
+        GameState(players: twoPlayers(), random: Random(22), maxRounds: 2);
+
+    testWidgets(
+      'the final screen offers Round History and opens the read-only view',
+      (tester) async {
+        final game = gameForTwoRounds();
+        await pumpGame(tester, game);
+
+        // Play both rounds with the established helpers.
+        for (var round = 0; round < 2; round++) {
+          for (var i = 0; i < 2; i++) {
+            await completeTurn(tester);
+            if (i < 1) {
+              await tester.tap(find.text('Continue'));
+              await tester.pump();
+            }
+          }
+          await tapVisible(tester, 'Start YAMADA Round');
+          await tapVisible(tester, 'YAMADA!'); // Caleb captures.
+          await tester.tap(find.text('Continue'));
+          await tester.pump();
+          await tapVisible(tester, 'Draw to center'); // Bob draws.
+          if (!game.gameComplete) {
+            await tapVisible(tester, 'Start Next Round');
+          }
+        }
+        expect(find.text('Game complete'), findsOneWidget);
+        expect(find.text('Round History'), findsOneWidget);
+
+        await tapVisible(tester, 'Round History');
+        await tester.pumpAndSettle();
+        expect(find.byType(RoundHistoryScreen), findsOneWidget);
+        expect(find.text('Round History'), findsOneWidget);
+        expect(find.byType(CardFace), findsNothing);
+
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(RoundHistoryScreen), findsNothing);
+        expect(find.text('Game complete'), findsOneWidget);
       },
     );
   });

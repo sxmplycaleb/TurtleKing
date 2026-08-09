@@ -2,7 +2,9 @@ import 'package:flutter/material.dart' hide Card;
 
 import 'card.dart';
 import 'game_state.dart';
+import 'how_to_play_screen.dart';
 import 'player.dart';
+import 'round_history_screen.dart';
 
 /// A face-up view of a single [Card], sized for a phone screen.
 class CardFace extends StatelessWidget {
@@ -146,10 +148,34 @@ class _GameStartScreenState extends State<GameStartScreen> {
     });
   }
 
+  /// Opens the shared rules screen. Pure presentation: the game state is
+  /// untouched and returning lands on the exact same stage.
+  void _openHowToPlay() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const HowToPlayScreen()));
+  }
+
+  /// Opens the read-only round history for the current game.
+  void _openRoundHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => RoundHistoryScreen(game: _game)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Turtle King')),
+      appBar: AppBar(
+        title: const Text('Turtle King'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu_book_outlined),
+            tooltip: 'How to Play',
+            onPressed: _openHowToPlay,
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -639,6 +665,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
           const SizedBox(height: 4),
         ],
         const SizedBox(height: 24),
+        OutlinedButton(
+          onPressed: _openRoundHistory,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text('Round History'),
+        ),
+        const SizedBox(height: 8),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
           style: FilledButton.styleFrom(

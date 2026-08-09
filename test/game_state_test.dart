@@ -1730,4 +1730,138 @@ void main() {
       );
     });
   });
+
+  group('GameState round penalty history', () {
+    void viewAll(GameState game) {
+      for (var i = 0; i < game.activePlayers.length; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      expect(game.allPlayersViewed, isTrue);
+    }
+
+    test(
+      'a completed round records each player\'s penalties for that round',
+      () {
+        // Seed 1: neither player can capture the initial center card, so both
+        // wrong-call and each receive one penalty.
+        final game = GameState(players: makePlayers(2), random: Random(1));
+        viewAll(game);
+        game.startYamadaRound();
+        game.callYamada(game.players[0]);
+        game.callYamada(game.players[1]);
+        expect(game.roundComplete, isTrue);
+
+        final result = game.roundResult!;
+        expect(result.penalties[game.players[0]], 1);
+        expect(result.penalties[game.players[1]], 1);
+        expect(result.scores[game.players[0]], 0); // penalties, not captures
+      },
+    );
+
+    test('a round with no penalties records zero for every player', () {
+      // Seed 22: player 0 captures, player 1 draws — nobody is penalized.
+      final game = GameState(players: makePlayers(2), random: Random(22));
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      expect(game.roundComplete, isTrue);
+
+      final result = game.roundResult!;
+      expect(result.penalties[game.players[0]], 0);
+      expect(result.penalties[game.players[1]], 0);
+    });
+
+    test('per-round penalties are deltas, not lifetime totals', () {
+      // Seed 3: player 0 wrong-calls in round 1 and round 2, player 1
+      // wrong-calls in round 1 only.
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(3),
+        maxRounds: 2,
+      );
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.callYamada(game.players[1]);
+      expect(game.roundResult!.penalties[game.players[0]], 1);
+
+      game.startNextRound();
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // wrong again
+      game.drawToCenter(game.players[1]);
+      expect(game.roundComplete, isTrue);
+
+      expect(game.penaltyCountOf(game.players[0]), 2); // lifetime
+      final roundOne = game.roundResults[0];
+      final roundTwo = game.roundResults[1];
+      // Round 1 keeps its own single penalty; round 2 records the second
+      // one, not the lifetime total.
+      expect(roundOne.penalties[game.players[0]], 1);
+      expect(roundTwo.penalties[game.players[0]], 1);
+      expect(roundOne.penalties[game.players[1]], 1);
+      expect(roundTwo.penalties[game.players[1]], 0);
+    });
+
+    test('later rounds cannot retroactively rewrite earlier round history', () {
+      // Same seed 3 scenario; the stored round-1 result is a fixed snapshot
+      // even after round 2 adds more lifetime penalties.
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(3),
+        maxRounds: 2,
+      );
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.callYamada(game.players[1]);
+      final roundOneSnapshot = game.roundResults.single;
+
+      game.startNextRound();
+      viewAll(game);
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      expect(roundOneSnapshot.penalties[game.players[0]], 1);
+      expect(game.roundResults[0].penalties[game.players[0]], 1);
+      expect(game.roundResults[0].scores, roundOneSnapshot.scores);
+    });
+
+    test('the recorded history is deterministic for a seeded game', () {
+      GameState play() {
+        final game = GameState(
+          players: makePlayers(2),
+          random: Random(3),
+          maxRounds: 2,
+        );
+        for (var round = 0; round < 2; round++) {
+          viewAll(game);
+          game.startYamadaRound();
+          game.callYamada(game.players[0]);
+          game.drawToCenter(game.players[1]);
+          if (!game.gameComplete) {
+            game.startNextRound();
+          }
+        }
+        return game;
+      }
+
+      final first = play();
+      final second = play();
+      expect(second.roundResults, hasLength(2));
+      for (var i = 0; i < 2; i++) {
+        expect(
+          second.roundResults[i].penalties.values.toList(),
+          first.roundResults[i].penalties.values.toList(),
+        );
+        expect(
+          second.roundResults[i].scores.values.toList(),
+          first.roundResults[i].scores.values.toList(),
+        );
+      }
+    });
+  });
 }
