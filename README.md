@@ -117,6 +117,40 @@ This milestone implements the YAMADA round on top of the center pile:
   in the drinking game costs a drink), elimination, winner/Turtle King
   determination, round escalation, and multiplayer remain later milestones.
 
+## Milestone 07 — Cup/Penalty Mechanics & Captured-Pile Scoring
+
+This milestone layers penalties and scoring onto the YAMADA round:
+
+- **Wrong YAMADA calls** — calling YAMADA when the center card's value is not
+  strictly between your two cards is now a legal action rather than an
+  exception: nothing is captured, the center card stays in place, one penalty
+  point is added to your cup, and the turn advances. `callYamada` returns a
+  `YamadaResult` describing whether the call captured or was penalized.
+- **Cup model** — each player's cup holds up to `cupCapacity` penalty points
+  (default 3, configurable at game creation). When a penalty would overflow
+  the cup, the cup empties and the full-cup count (`cupDrinksOf`) increases;
+  the lifetime penalty count (`penaltyCountOf`) never decreases. The cup is
+  pure-Dart state on `GameState`.
+- **Scoring** — `captureCountOf(player)` and `totalCapturedCards` expose the
+  captured-pile counts. Once the round completes, `roundResult` returns a
+  deterministic `RoundResult` with per-player scores and the tied highest and
+  lowest scorers.
+- **No winner rule** — the real game's Turtle King determination is not
+  specified, so the result exposes scores and explicit ties
+  (`highestScorers`/`lowestScorers`) without declaring a winner or applying a
+  hidden tie-breaker.
+- **UI** — the YAMADA button is always available; the screen hints whether
+  the call will capture or cost a penalty, a wrong call shows a penalty
+  screen with the caller's cup state before the neutral handoff, and the
+  completion screen lists each player's captures and penalties.
+- **Assumptions** — the default cup capacity and the "wrong call = 1 penalty
+  point" rule are assumptions (the repository specifies no authoritative
+  YAMADA rules); they are isolated behind the cup API so they can be adjusted
+  without touching the round engine.
+- **Out of scope** — multiple rounds, round escalation, elimination, winner/
+  Turtle King declaration, drinking instructions, and multiplayer remain
+  later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -177,15 +211,13 @@ lib/
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
-  game_state.dart         # Hands, turn state, and center pile
-  game_state.dart         # Dealt hands + pass-and-play turn state
+  game_state.dart         # Hands, turn state, center pile, round, cup, scoring
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
-  game_state_test.dart         # Hand dealing, turn flow, center pile
-  game_state_test.dart         # Hand dealing + turn progression
-  game_start_screen_test.dart  # Pass-and-play flow + privacy behavior
+  game_state_test.dart         # Hands, turn flow, round, cup, penalties, scoring
+  game_start_screen_test.dart  # Pass-and-play + round + penalty flow + privacy
 ```
