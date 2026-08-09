@@ -191,63 +191,8 @@ pass-and-play game:
   early-termination guard (deck must guarantee a full round), and the
   fewest-captures Turtle King rule are all assumptions: the repository
   specifies no authoritative multi-round or winner rules.
-- **Out of scope** — drinking instructions, persistence, and multiplayer
-  remain later milestones.
-
-## Milestone 09 — Elimination & End-of-Game Escalation
-
-This milestone adds elimination on top of the multi-round game:
-
-- **Elimination model** — every player starts active. `isEliminated(player)`,
-  `activePlayers`, `eliminatedPlayers`, `activePlayerCount`, and
-  `eliminationHistory` expose the state; eliminated players keep their
-  player object and full history (captures, penalties, cup drinks, scores).
-- **Trigger (assumed rule)** — the repository specifies no authoritative
-  elimination rule, so the assumed trigger is the lifetime cup count:
-  a player whose `cupDrinksOf(player)` reaches the configurable
-  `eliminationThreshold` (default **2** full cups) is eliminated. The
-  threshold is validated at construction (`>= 1`, `ArgumentError`
-  otherwise). Like the Turtle King rule, this is an assumption, not an
-  official rule.
-- **Timing** — eliminations are evaluated only *after* a completed round
-  action: the capture/penalty resolves, the turn advances, then any player
-  who reached the threshold is eliminated. An elimination never interrupts
-  an action halfway through, and validation stays atomic — a rejected
-  action mutates nothing.
-- **Eliminated players do not participate** — they receive no new hands
-  (`hasHand` is false), never become the current viewer or round player,
-  and cannot act (`callYamada` / `drawToCenter` throw
-  `YamadaRoundException`). Turn order is built from `activePlayers`, so
-  `roundCurrentPlayer` is never eliminated and rounds complete based on the
-  active players.
-- **Multi-round integration** — `startNextRound()` deals fresh two-card
-  hands to active players only, from the same never-reshuffled deck; card
-  uniqueness and `remainingCards` accounting are preserved.
-- **Game termination** — the game ends when the configured `maxRounds` is
-  reached, the deck cannot guarantee another round, or **fewer than two
-  active players remain**, whichever comes first (checked in that order).
-  When only one player is left the game ends immediately — even mid-round
-  — so the remaining player never plays a meaningless turn.
-- **Elimination history** — each elimination is recorded as an immutable
-  `EliminationRecord` (player, 1-based round, `EliminationReason`), kept in
-  `eliminationHistory` in elimination order.
-- **Final result** — `GameResult` now also exposes `finalists` (players
-  still active at the end), `eliminated`, and `eliminations`. The assumed
-  fewest-total-captures Turtle King rule is unchanged and still counts
-  every player's lifetime captures — including eliminated players', whose
-  history must not be deleted — so an eliminated player can share the title
-  on a tie. Ties remain explicit; no hidden tie-breaker.
-- **UI** — the penalty screen announces an elimination ("X has been
-  eliminated!"), round completion lists who was eliminated that round, and
-  the final screen shows Game complete, Turtle King(s), finalists,
-  eliminated players, and lifetime capture/penalty counts. No private card
-  identities ever appear on handoff, penalty, or result screens.
-- **Assumptions** — the cup-based trigger and default threshold of 2, the
-  fewer-than-two-active-players end condition, and elimination eligibility
-  under the Turtle King rule are all assumptions; the repository specifies
-  no official elimination rules.
-- **Out of scope** — drinking instructions, persistence, and multiplayer
-  remain later milestones.
+- **Out of scope** — elimination, drinking instructions, persistence, and
+  multiplayer remain later milestones.
 
 ## Prerequisites
 
@@ -316,6 +261,8 @@ test/
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
-  game_state_test.dart         # Hands, rounds, cup, scoring, elimination, result
+  game_state_test.dart         # Hands, turn flow, round, cup, penalties, scoring
+  game_start_screen_test.dart  # Pass-and-play + round + penalty flow + privacy
+  game_state_test.dart         # Hands, rounds, cup, penalties, scoring, result
   game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
 ```

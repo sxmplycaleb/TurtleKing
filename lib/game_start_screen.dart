@@ -230,6 +230,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           _game.activePlayers.length,
           _game.currentPlayer,
         ),
+        _playerHeader(context, _game.currentPlayerIndex, _game.currentPlayer),
         const SizedBox(height: 24),
         Text(
           'It is your turn to view your two cards. View them privately — '
@@ -266,6 +267,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           _game.activePlayers.length,
           _game.currentPlayer,
         ),
+        _playerHeader(context, _game.currentPlayerIndex, _game.currentPlayer),
         const SizedBox(height: 16),
         Text(
           'Memorize your two cards, then pass the phone to the next player.',
@@ -628,6 +630,66 @@ class _GameStartScreenState extends State<GameStartScreen> {
             ),
           ),
         ],
+        const SizedBox(height: 16),
+        for (final player in _game.players) ...[
+          Text(
+            '${player.name}: ${_game.captureCountOf(player)} captured · '
+            '${_game.penaltyCountOf(player)} penalty',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 4),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _game.canStartNextRound ? _startNextRound : null,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text('Start Next Round'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Back to setup'),
+        ),
+      ],
+    );
+  }
+
+  Widget _gameOverView(BuildContext context) {
+    final theme = Theme.of(context);
+    final result = _game.finalResult!;
+    final kings = result.turtleKings.map((player) => player.name).join(', ');
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Game complete',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          result.turtleKings.length == 1
+              ? 'Turtle King: $kings'
+              : 'Turtle Kings: $kings',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Rounds played: ${result.roundsPlayed}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 16),
         for (final player in _game.players) ...[
           Text(

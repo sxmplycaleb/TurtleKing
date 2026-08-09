@@ -155,16 +155,10 @@ class GameResult {
 /// physical card is never dealt twice anywhere in the game; a new round
 /// starts only while the deck can guarantee it completes ([startNextRound]).
 /// Each round resets per-round state (hands, center pile, captures, turn)
-/// and deals fresh two-card hands to active players only, while cup penalties
-/// and total captures accumulate across rounds.
-///
-/// A player whose lifetime cup drinks ([cupDrinksOf]) reach the configured
-/// [eliminationThreshold] (default 2) is eliminated after the action that
-/// caused it. Eliminated players keep their history but never receive hands,
-/// turns, or actions again. The game completes when [maxRounds] rounds are
-/// played, the deck cannot support another round, or fewer than two active
-/// players remain, whichever comes first, and then [finalResult] reports the
-/// deterministic outcome including elimination data.
+/// and deals fresh two-card hands, while cup penalties and total captures
+/// accumulate across rounds. The game completes after [maxRounds] rounds or
+/// when the deck cannot support another one, whichever comes first, and then
+/// [finalResult] reports the deterministic outcome.
 class GameState {
   GameState({
     required List<Player> players,
@@ -180,6 +174,7 @@ class GameState {
        _cupCapacity = cupCapacity,
        _maxRounds = maxRounds,
        _eliminationThreshold = eliminationThreshold {
+       _maxRounds = maxRounds {
     if (_players.length < 2) {
       throw ArgumentError.value(players, 'players', 'need at least 2 players');
     }
@@ -203,6 +198,8 @@ class GameState {
     _deck.shuffle();
     _hands = {for (final player in _players) player.id: _deck.deal(2)};
     _viewingPlayers = List.of(_players);
+    _deck.shuffle();
+    _hands = {for (final player in _players) player.id: _deck.deal(2)};
   }
 
   final List<Player> _players;
@@ -221,6 +218,7 @@ class GameState {
 
   late List<Player> _viewingPlayers;
   late List<Player> _roundOrder;
+  final List<RoundResult> _roundResults = [];
 
   int _currentPlayerIndex = 0;
   bool _revealed = false;
@@ -639,15 +637,14 @@ class GameState {
   }
 
   /// Whether the deck can guarantee a full next round completes: two cards
-  /// per active player for the hands, one card for the initial center card,
-  /// plus one potential draw per active player. The deck is never reshuffled,
-  /// so a card dealt in any earlier round is never reused.
-  bool _canDealNextRound() => _deck.remainingCards >= 3 * activePlayerCount + 1;
+  /// per player for the hands, one card for the initial center card, plus one
+  /// potential draw per player. The deck is never reshuffled, so a card dealt
+  /// in any earlier round is never reused.
+  bool _canDealNextRound() => _deck.remainingCards >= 3 * _players.length + 1;
 
   /// Assumed Turtle King rule: the player(s) with the fewest total captures.
   /// No official rule exists in the repository; this is isolated here so it
-  /// can be replaced without touching the round engine. Eliminated players'
-  /// lifetime captures still count.
+  /// can be replaced without touching the round engine.
   GameResult _buildFinalResult() {
     final scores = {
       for (final player in _players) player: totalCapturesOf(player),
