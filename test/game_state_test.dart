@@ -10,13 +10,27 @@ import 'package:turtle_king/player_colors.dart';
 
 void main() {
   List<Player> makePlayers(int count) => [
-        for (var i = 1; i <= count; i++)
-          Player(
-            id: 'player-$i',
-            name: 'Player $i',
-            color: PlayerColors.palette[i - 1],
-          ),
-      ];
+    for (var i = 1; i <= count; i++)
+      Player(
+        id: 'player-$i',
+        name: 'Player $i',
+        color: PlayerColors.palette[i - 1],
+      ),
+  ];
+
+  /// A game where every player has already viewed their two cards.
+  GameState readyGame(int playerCount, int seed) {
+    final game = GameState(
+      players: makePlayers(playerCount),
+      random: Random(seed),
+    );
+    for (var i = 0; i < playerCount; i++) {
+      game.revealCurrentPlayer();
+      game.passToNextPlayer();
+    }
+    expect(game.allPlayersViewed, isTrue);
+    return game;
+  }
 
   group('GameState dealing', () {
     test('every player receives exactly two cards', () {
@@ -61,10 +75,7 @@ void main() {
     });
 
     test('rejects fewer than two players', () {
-      expect(
-        () => GameState(players: makePlayers(1)),
-        throwsArgumentError,
-      );
+      expect(() => GameState(players: makePlayers(1)), throwsArgumentError);
     });
   });
 
@@ -165,8 +176,7 @@ void main() {
     test('dealing to the center leaves player hands unchanged', () {
       final game = GameState(players: makePlayers(4), random: Random(1));
       final handsBefore = {
-        for (final player in game.players)
-          player.id: [...game.handOf(player)],
+        for (final player in game.players) player.id: [...game.handOf(player)],
       };
 
       game.dealToCenter();
@@ -226,20 +236,6 @@ void main() {
   });
 
   group('GameState YAMADA round', () {
-    /// A game where every player has already viewed their two cards.
-    GameState readyGame(int playerCount, int seed) {
-      final game = GameState(
-        players: makePlayers(playerCount),
-        random: Random(seed),
-      );
-      for (var i = 0; i < playerCount; i++) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      expect(game.allPlayersViewed, isTrue);
-      return game;
-    }
-
     test('the round has not started on a new game', () {
       final game = GameState(players: makePlayers(2), random: Random(1));
       expect(game.roundStarted, isFalse);
@@ -288,20 +284,22 @@ void main() {
       expect(first.currentCenterCard, second.currentCenterCard);
     });
 
-    test('the initial center card comes from the original deck, never a hand',
-        () {
-      const seed = 7;
-      final game = readyGame(3, seed)..startYamadaRound();
-      final deck = Deck(random: Random(seed))..shuffle();
-      deck.deal(2 * game.players.length);
-      expect(game.currentCenterCard, deck.dealOne());
+    test(
+      'the initial center card comes from the original deck, never a hand',
+      () {
+        const seed = 7;
+        final game = readyGame(3, seed)..startYamadaRound();
+        final deck = Deck(random: Random(seed))..shuffle();
+        deck.deal(2 * game.players.length);
+        expect(game.currentCenterCard, deck.dealOne());
 
-      final handCards = {
-        for (final player in game.players) ...game.handOf(player),
-      };
-      expect(handCards, isNot(contains(game.currentCenterCard)));
-      expect({...handCards, game.currentCenterCard!}, hasLength(7));
-    });
+        final handCards = {
+          for (final player in game.players) ...game.handOf(player),
+        };
+        expect(handCards, isNot(contains(game.currentCenterCard)));
+        expect({...handCards, game.currentCenterCard!}, hasLength(7));
+      },
+    );
 
     test('canCallYamada is true only when the center card is between the '
         "player's cards", () {
@@ -336,9 +334,10 @@ void main() {
       final center = game.currentCenterCard!;
       expect(game.canCallYamada, isTrue);
 
-      final captured = game.callYamada(game.players[0]);
+      final result = game.callYamada(game.players[0]);
 
-      expect(captured, center);
+      expect(result.penalized, isFalse);
+      expect(result.card, center);
       expect(game.capturedCardsOf(game.players[0]), [center]);
       expect(game.capturedCardsOf(game.players[1]), isEmpty);
       expect(game.centerPile, isEmpty);
@@ -349,20 +348,20 @@ void main() {
       expect(game.currentPlayerActed, isFalse);
     });
 
-    test('callYamada is rejected when the center card is not between the '
-        "player's cards", () {
-      // Player 0 holds Queen and Jack; center is 3.
+    test('a wrong YAMADA call applies a penalty and captures nothing', () {
+      // Player 0 holds Queen and Jack; center is 3, so the call is wrong.
       final game = readyGame(2, 1)..startYamadaRound();
       expect(game.canCallYamada, isFalse);
 
-      expect(
-        () => game.callYamada(game.players[0]),
-        throwsA(isA<YamadaRoundException>()),
-      );
-      // The rejected action leaves the state unchanged.
-      expect(game.centerPile, hasLength(1));
+      final result = game.callYamada(game.players[0]);
+
+      expect(result.penalized, isTrue);
+      expect(result.card, isNull);
       expect(game.capturedCardsOf(game.players[0]), isEmpty);
-      expect(game.roundPlayerIndex, 0);
+      expect(game.centerPile, hasLength(1)); // the center card stays put
+      expect(game.currentCenterCard, isNotNull);
+      expect(game.penaltyCountOf(game.players[0]), 1);
+      expect(game.roundPlayerIndex, 1);
       expect(game.remainingCards, 47);
     });
 
@@ -428,20 +427,22 @@ void main() {
       expect(game.remainingCards, remainingBefore);
     });
 
-    test('acting before the round starts is rejected without mutating state',
-        () {
-      final game = GameState(players: makePlayers(2), random: Random(1));
-      expect(
-        () => game.drawToCenter(game.players[0]),
-        throwsA(isA<YamadaRoundException>()),
-      );
-      expect(
-        () => game.callYamada(game.players[0]),
-        throwsA(isA<YamadaRoundException>()),
-      );
-      expect(game.centerPile, isEmpty);
-      expect(game.remainingCards, 48);
-    });
+    test(
+      'acting before the round starts is rejected without mutating state',
+      () {
+        final game = GameState(players: makePlayers(2), random: Random(1));
+        expect(
+          () => game.drawToCenter(game.players[0]),
+          throwsA(isA<YamadaRoundException>()),
+        );
+        expect(
+          () => game.callYamada(game.players[0]),
+          throwsA(isA<YamadaRoundException>()),
+        );
+        expect(game.centerPile, isEmpty);
+        expect(game.remainingCards, 48);
+      },
+    );
 
     test('acting when it is not the player\'s turn is rejected without '
         'mutating state', () {
@@ -519,5 +520,900 @@ void main() {
       expect(second.remainingCards, first.remainingCards);
       expect(second.roundComplete, isTrue);
     });
+  });
+
+  group('GameState scoring', () {
+    test('new players have zero captures', () {
+      final game = GameState(players: makePlayers(3), random: Random(1));
+      for (final player in game.players) {
+        expect(game.capturedCardsOf(player), isEmpty);
+        expect(game.captureCountOf(player), 0);
+      }
+      expect(game.totalCapturedCards, 0);
+    });
+
+    test('each capture counts one point for the capturing player', () {
+      final game = readyGame(2, 2)..startYamadaRound(); // 9/Ace vs 8.
+      game.callYamada(game.players[0]);
+
+      expect(game.captureCountOf(game.players[0]), 1);
+      expect(game.captureCountOf(game.players[1]), 0);
+      expect(game.totalCapturedCards, 1);
+    });
+
+    test('scores are independent and total correctly across players', () {
+      // Seed 3: p0 captures 3 of Spades, p1 draws, p2 captures Jack of
+      // Spades — two captures from two different players in one round.
+      final game = readyGame(3, 3)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.callYamada(game.players[2]);
+
+      expect(game.captureCountOf(game.players[0]), 1);
+      expect(game.captureCountOf(game.players[1]), 0);
+      expect(game.captureCountOf(game.players[2]), 1);
+      expect(game.totalCapturedCards, 2);
+    });
+
+    test('scoring never changes player hands', () {
+      final game = readyGame(3, 3)..startYamadaRound();
+      final handsBefore = {
+        for (final player in game.players) player.id: [...game.handOf(player)],
+      };
+
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.callYamada(game.players[2]);
+      expect(
+        game.captureCountOf(game.players[0]) +
+            game.captureCountOf(game.players[2]),
+        2,
+      );
+
+      for (final player in game.players) {
+        expect(game.handOf(player), handsBefore[player.id]);
+      }
+    });
+
+    test('captured cards never duplicate a hand, the pile, or a capture', () {
+      final game = readyGame(3, 3)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.callYamada(game.players[2]);
+
+      final allCards = [
+        for (final player in game.players) ...game.handOf(player),
+        ...game.centerPile,
+        for (final player in game.players) ...game.capturedCardsOf(player),
+      ];
+      expect(allCards.toSet(), hasLength(allCards.length));
+    });
+  });
+
+  group('GameState cup and penalties', () {
+    test('a valid YAMADA call applies no penalty', () {
+      final game = readyGame(2, 2)..startYamadaRound();
+      game.callYamada(game.players[0]);
+
+      expect(game.penaltyCountOf(game.players[0]), 0);
+      expect(game.cupFillOf(game.players[0]), 0);
+      expect(game.cupDrinksOf(game.players[0]), 0);
+    });
+
+    test('a wrong YAMADA call adds one penalty to the caller\'s cup', () {
+      final game = readyGame(2, 1)..startYamadaRound(); // Queen/Jack vs 3.
+      game.callYamada(game.players[0]);
+
+      expect(game.penaltyCountOf(game.players[0]), 1);
+      expect(game.cupFillOf(game.players[0]), 1);
+      expect(game.cupDrinksOf(game.players[0]), 0);
+      expect(game.penaltyCountOf(game.players[1]), 0);
+    });
+
+    test('penalties accumulate independently across players', () {
+      // Seed 1: neither player can capture the initial center card.
+      final game = readyGame(2, 1)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.callYamada(game.players[1]);
+
+      expect(game.penaltyCountOf(game.players[0]), 1);
+      expect(game.penaltyCountOf(game.players[1]), 1);
+      expect(game.roundComplete, isTrue);
+    });
+
+    test('a penalized call never moves the center card', () {
+      final game = readyGame(2, 1)..startYamadaRound();
+      final center = game.currentCenterCard!;
+
+      game.callYamada(game.players[0]);
+
+      expect(game.centerPile, [center]);
+      expect(game.currentCenterCard, center);
+      expect(game.capturedCardsOf(game.players[0]), isEmpty);
+    });
+
+    test('invalid API calls leave penalty state unchanged', () {
+      final game = readyGame(2, 1)..startYamadaRound();
+      expect(
+        () => game.callYamada(game.players[1]), // not the current player
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(
+        () => game.drawToCenter(game.players[1]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(game.penaltyCountOf(game.players[0]), 0);
+      expect(game.penaltyCountOf(game.players[1]), 0);
+      expect(game.cupFillOf(game.players[0]), 0);
+    });
+
+    test('a full cup overflows and empties while the total keeps counting', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        cupCapacity: 1,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+
+      game.callYamada(game.players[0]); // One penalty fills the 1-slot cup.
+
+      expect(game.penaltyCountOf(game.players[0]), 1);
+      expect(game.cupFillOf(game.players[0]), 0); // overflowed and emptied
+      expect(game.cupDrinksOf(game.players[0]), 1); // one full cup drunk
+      expect(game.cupCapacity, 1);
+    });
+
+    test('rejects an invalid cup capacity', () {
+      expect(
+        () => GameState(players: makePlayers(2), cupCapacity: 0),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('GameState round result', () {
+    test('roundResult is null until the round completes', () {
+      final game = readyGame(2, 2)..startYamadaRound();
+      expect(game.roundResult, isNull);
+      game.callYamada(game.players[0]);
+      expect(game.roundResult, isNull);
+    });
+
+    test('the completed round exposes final capture counts', () {
+      final game = readyGame(2, 2)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      expect(game.roundComplete, isTrue);
+
+      final result = game.roundResult!;
+      expect(result.scores, {game.players[0]: 1, game.players[1]: 0});
+      expect(game.totalCapturedCards, 1);
+    });
+
+    test('the result exposes a unique highest scorer', () {
+      final game = readyGame(2, 2)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      final result = game.roundResult!;
+      expect(result.highestScorers, [game.players[0]]);
+      expect(result.lowestScorers, [game.players[1]]);
+    });
+
+    test('the result exposes tied scorers without a hidden tie-breaker', () {
+      // Seed 3: p0 and p2 each capture one card; p1 captures none.
+      final game = readyGame(3, 3)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.callYamada(game.players[2]);
+
+      final result = game.roundResult!;
+      expect(result.highestScorers, [game.players[0], game.players[2]]);
+      expect(result.lowestScorers, [game.players[1]]);
+    });
+
+    test('no further actions are allowed once the round completes', () {
+      final game = readyGame(2, 1)..startYamadaRound();
+      game.drawToCenter(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      expect(game.roundComplete, isTrue);
+
+      expect(
+        () => game.callYamada(game.players[0]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(
+        () => game.drawToCenter(game.players[1]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(game.roundResult, isNotNull);
+    });
+
+    test('the result stays stable after completion', () {
+      final game = readyGame(2, 2)..startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      final first = game.roundResult!;
+      final second = game.roundResult!;
+      expect(second.scores, first.scores);
+      expect(second.highestScorers, first.highestScorers);
+      expect(second.lowestScorers, first.lowestScorers);
+    });
+  });
+
+  group('GameState penalty determinism', () {
+    test('a full round with penalties and captures is deterministic', () {
+      GameState play(int seed) {
+        final game = readyGame(2, seed)..startYamadaRound();
+        game.callYamada(game.players[0]); // seed 1: wrong call
+        game.callYamada(game.players[1]); // seed 1: wrong call
+        return game;
+      }
+
+      final first = play(1);
+      final second = play(1);
+
+      expect(second.penaltyCountOf(second.players[0]), 1);
+      expect(second.penaltyCountOf(second.players[1]), 1);
+      expect(
+        second.penaltyCountOf(second.players[0]),
+        first.penaltyCountOf(first.players[0]),
+      );
+      expect(second.centerPile, first.centerPile);
+      expect(
+        second.capturedCardsOf(second.players[0]),
+        first.capturedCardsOf(first.players[0]),
+      );
+      expect(second.remainingCards, first.remainingCards);
+      // Players compare by identity, so compare the score values in order.
+      expect(
+        second.roundResult!.scores.values.toList(),
+        first.roundResult!.scores.values.toList(),
+      );
+    });
+  });
+
+  group('GameState multi-round', () {
+    /// Completes the private viewing phase for every player.
+    void viewAll(GameState game) {
+      for (var i = 0; i < game.players.length; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      expect(game.allPlayersViewed, isTrue);
+    }
+
+    /// Plays one full round: [acts][i] is true for a capture, false for a
+    /// draw. Requires the round to already be started.
+    void playRound(GameState game, List<bool> acts) {
+      for (var i = 0; i < game.players.length; i++) {
+        if (acts[i]) {
+          game.callYamada(game.players[i]);
+        } else {
+          game.drawToCenter(game.players[i]);
+        }
+      }
+      expect(game.roundComplete, isTrue);
+    }
+
+    /// Views, starts, and plays round 1 for seed 22: player 0 captures the
+    /// initial center card, player 1 draws.
+    void playSeed22Round1(GameState game) {
+      viewAll(game);
+      game.startYamadaRound();
+      playRound(game, [true, false]);
+    }
+
+    test('a fresh game has no rounds and is not complete', () {
+      final game = GameState(players: makePlayers(2), random: Random(1));
+      expect(game.roundNumber, 0);
+      expect(game.completedRounds, 0);
+      expect(game.maxRounds, 3);
+      expect(game.gameComplete, isFalse);
+      expect(game.finalResult, isNull);
+      expect(game.canStartNextRound, isFalse);
+      expect(game.roundResults, isEmpty);
+      expect(game.totalCapturesAcrossGame, 0);
+      for (final player in game.players) {
+        expect(game.totalCapturesOf(player), 0);
+      }
+    });
+
+    test('rejects an invalid maxRounds', () {
+      expect(
+        () => GameState(players: makePlayers(2), maxRounds: 0),
+        throwsArgumentError,
+      );
+    });
+
+    test('starting the first round sets the round number to one', () {
+      final game = readyGame(2, 2);
+      expect(game.roundNumber, 0);
+      game.startYamadaRound();
+      expect(game.roundNumber, 1);
+    });
+
+    test('a completed round is recorded and the game stays open', () {
+      final game = GameState(players: makePlayers(2), random: Random(2));
+      playSeed22Round1(game);
+
+      expect(game.roundNumber, 1);
+      expect(game.completedRounds, 1);
+      expect(game.roundResults, hasLength(1));
+      expect(game.gameComplete, isFalse);
+      expect(game.canStartNextRound, isTrue);
+    });
+
+    test('startNextRound deals fresh hands and resets per-round state', () {
+      const seed = 22;
+      final game = GameState(players: makePlayers(2), random: Random(seed));
+      playSeed22Round1(game);
+      final roundOneHands = {
+        for (final player in game.players) player.id: [...game.handOf(player)],
+      };
+
+      game.startNextRound();
+
+      // The deck is never reshuffled: the new hands are the next cards of the
+      // same seeded deal, never the previous round's hands.
+      final deck = Deck(random: Random(seed))..shuffle();
+      deck.deal(4); // round 1 hands
+      deck.dealOne(); // round 1 center
+      deck.dealOne(); // round 1 draw
+      final expectedRoundTwo = [deck.deal(2), deck.deal(2)];
+      for (var i = 0; i < 2; i++) {
+        final player = game.players[i];
+        expect(game.handOf(player), isNot(roundOneHands[player.id]));
+        expect(game.handOf(player), expectedRoundTwo[i]);
+      }
+
+      expect(game.roundNumber, 2);
+      expect(game.completedRounds, 1);
+      expect(game.allPlayersViewed, isFalse);
+      expect(game.currentPlayerIndex, 0);
+      expect(game.currentPlayer, game.players[0]);
+      expect(game.roundStarted, isFalse);
+      expect(game.centerPile, isEmpty);
+      for (final player in game.players) {
+        expect(game.capturedCardsOf(player), isEmpty);
+        expect(game.captureCountOf(player), 0);
+      }
+    });
+
+    test('startNextRound before the round completes is rejected', () {
+      final game = readyGame(2, 2)..startYamadaRound();
+      final centerBefore = game.centerPile;
+
+      expect(() => game.startNextRound(), throwsA(isA<YamadaRoundException>()));
+      expect(game.centerPile, centerBefore);
+      expect(game.roundNumber, 1);
+    });
+
+    test('startNextRound before any round has started is rejected', () {
+      final game = readyGame(2, 2);
+      expect(() => game.startNextRound(), throwsA(isA<YamadaRoundException>()));
+    });
+
+    test('a new round restarts the private viewing flow', () {
+      final game = GameState(players: makePlayers(2), random: Random(22));
+      playSeed22Round1(game);
+      game.startNextRound();
+
+      expect(game.allPlayersViewed, isFalse);
+      game.revealCurrentPlayer();
+      expect(game.currentPlayerRevealed, isTrue);
+      game.passToNextPlayer();
+      expect(game.currentPlayer, game.players[1]);
+      expect(game.currentPlayerRevealed, isFalse);
+    });
+
+    test(
+      'a second round plays to completion and ends the game at maxRounds',
+      () {
+        final game = GameState(
+          players: makePlayers(2),
+          random: Random(22),
+          maxRounds: 2,
+        );
+        playSeed22Round1(game);
+        game.startNextRound();
+        viewAll(game);
+        game.startYamadaRound();
+        expect(game.roundNumber, 2);
+        playRound(game, [true, false]);
+
+        expect(game.completedRounds, 2);
+        expect(game.gameComplete, isTrue);
+        expect(game.canStartNextRound, isFalse);
+        expect(game.finalResult, isNotNull);
+        expect(game.finalResult!.roundsPlayed, 2);
+      },
+    );
+  });
+
+  group('GameState cumulative scoring', () {
+    test('total captures accumulate across rounds', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      // Round 1: player 0 captures, player 1 draws.
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      expect(game.totalCapturesOf(game.players[0]), 1);
+      expect(game.totalCapturesOf(game.players[1]), 0);
+      expect(game.totalCapturesAcrossGame, 1);
+
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // player 0 captures again
+      game.drawToCenter(game.players[1]);
+
+      expect(game.totalCapturesOf(game.players[0]), 2);
+      expect(game.totalCapturesOf(game.players[1]), 0);
+      expect(game.totalCapturesAcrossGame, 2);
+    });
+
+    test('current-round scores stay separate from cumulative totals', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+
+      // Round 2 has not scored yet: current captures are zero while the
+      // cumulative total still reflects round 1.
+      expect(game.captureCountOf(game.players[0]), 0);
+      expect(game.totalCapturedCards, 0);
+      expect(game.totalCapturesOf(game.players[0]), 1);
+      expect(game.totalCapturesAcrossGame, 1);
+    });
+
+    test('previous round results remain in the round history', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      final roundOne = game.roundResult!;
+
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.drawToCenter(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      expect(game.roundResults, hasLength(2));
+      expect(
+        game.roundResults[0].scores.values.toList(),
+        roundOne.scores.values.toList(),
+      );
+    });
+
+    test('scoring never mutates hands across rounds', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.startNextRound();
+      final roundTwo = {
+        for (final player in game.players) player.id: [...game.handOf(player)],
+      };
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      for (final player in game.players) {
+        expect(game.handOf(player), roundTwo[player.id]);
+      }
+      expect(game.totalCapturesAcrossGame, 2);
+    });
+  });
+
+  group('GameState cup persistence', () {
+    test('penalties and cup state persist across rounds', () {
+      // Seed 3: neither player can capture the round-1 center card, and
+      // player 0 cannot capture the round-2 center card either.
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(3),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // wrong call
+      game.callYamada(game.players[1]); // wrong call
+      expect(game.penaltyCountOf(game.players[0]), 1);
+
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // wrong call again
+
+      // Nothing reset: penalties are lifetime.
+      expect(game.penaltyCountOf(game.players[0]), 2);
+      expect(game.cupFillOf(game.players[0]), 2); // 2 % 3
+      expect(game.cupDrinksOf(game.players[0]), 0);
+      expect(game.penaltyCountOf(game.players[1]), 1);
+    });
+
+    test('cup capacity still applies across rounds', () {
+      // Seed 3: wrong calls in both rounds (see the persistence test above).
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(3),
+        cupCapacity: 2,
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.callYamada(game.players[1]);
+      // One penalty per player in round 1: the 2-slot cup is half full.
+      expect(game.penaltyCountOf(game.players[0]), 1);
+      expect(game.cupFillOf(game.players[0]), 1);
+      expect(game.cupDrinksOf(game.players[0]), 0);
+
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]); // player 0's second penalty
+      game.drawToCenter(game.players[1]);
+
+      // The second penalty fills the cup: it overflows and empties while
+      // the lifetime count keeps rising.
+      expect(game.penaltyCountOf(game.players[0]), 2);
+      expect(game.cupFillOf(game.players[0]), 0);
+      expect(game.cupDrinksOf(game.players[0]), 1);
+      expect(game.gameComplete, isTrue);
+    });
+  });
+
+  group('GameState game completion', () {
+    test('the game completes after maxRounds', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      expect(game.gameComplete, isFalse);
+
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      expect(game.gameComplete, isTrue);
+      expect(game.finalResult!.roundsPlayed, 2);
+    });
+
+    test('the game ends early when the deck cannot support another round', () {
+      // 10 players all draw: round 1 consumes 20 hands + 1 center + 10
+      // draws = 31 cards, leaving 21 — too few to guarantee a second round.
+      final game = GameState(
+        players: makePlayers(10),
+        random: Random(1),
+        maxRounds: 5,
+      );
+      for (var i = 0; i < 10; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      for (final player in game.players) {
+        game.drawToCenter(player);
+      }
+
+      expect(game.roundComplete, isTrue);
+      expect(game.gameComplete, isTrue);
+      expect(game.finalResult!.roundsPlayed, 1);
+      expect(game.canStartNextRound, isFalse);
+      expect(() => game.startNextRound(), throwsA(isA<YamadaRoundException>()));
+    });
+
+    test('no further actions are allowed after the game completes', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(2),
+        maxRounds: 1,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      expect(game.gameComplete, isTrue);
+
+      expect(
+        () => game.callYamada(game.players[0]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(
+        () => game.drawToCenter(game.players[1]),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(() => game.startNextRound(), throwsA(isA<YamadaRoundException>()));
+    });
+  });
+
+  group('GameState Turtle King', () {
+    test(
+      'the assumed rule crowns the player with the fewest total captures',
+      () {
+        // Seed 22: player 0 captures in both rounds (2 total), player 1 never.
+        final game = GameState(
+          players: makePlayers(2),
+          random: Random(22),
+          maxRounds: 2,
+        );
+        for (var i = 0; i < 2; i++) {
+          game.revealCurrentPlayer();
+          game.passToNextPlayer();
+        }
+        game.startYamadaRound();
+        game.callYamada(game.players[0]);
+        game.drawToCenter(game.players[1]);
+        game.startNextRound();
+        for (var i = 0; i < 2; i++) {
+          game.revealCurrentPlayer();
+          game.passToNextPlayer();
+        }
+        game.startYamadaRound();
+        game.callYamada(game.players[0]);
+        game.drawToCenter(game.players[1]);
+
+        final result = game.finalResult!;
+        expect(result.scores.values.toList(), [2, 0]);
+        expect(result.turtleKings, [game.players[1]]);
+        expect(result.topScorers, [game.players[0]]);
+        expect(result.roundsPlayed, 2);
+      },
+    );
+
+    test('tied scorers share the Turtle King title', () {
+      // Seed 13: player 0 captures round 1, player 1 captures round 2.
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(13),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.drawToCenter(game.players[0]);
+      game.callYamada(game.players[1]);
+
+      final result = game.finalResult!;
+      expect(result.scores.values.toList(), [1, 1]);
+      expect(result.turtleKings, [game.players[0], game.players[1]]);
+      expect(result.topScorers, [game.players[0], game.players[1]]);
+    });
+
+    test('no premature result before the game completes', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      expect(game.gameComplete, isFalse);
+      expect(game.finalResult, isNull);
+    });
+
+    test('the final result is stable after completion', () {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(22),
+        maxRounds: 2,
+      );
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      game.startYamadaRound();
+      game.callYamada(game.players[0]);
+      game.drawToCenter(game.players[1]);
+
+      final first = game.finalResult!;
+      final second = game.finalResult!;
+      expect(second.scores.values.toList(), first.scores.values.toList());
+      expect(second.turtleKings, first.turtleKings);
+      expect(second.roundsPlayed, first.roundsPlayed);
+    });
+  });
+
+  group('GameState card integrity across rounds', () {
+    test('no physical card is ever dealt twice across rounds', () {
+      const seed = 22;
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(seed),
+        maxRounds: 2,
+      );
+      // Every card the deck ever deals, in order: 4 hands + 1 center + 1
+      // draw in round 1, then 4 hands + 1 center + 2 draws in round 2.
+      final deckDealt = <Card>[];
+
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      deckDealt.addAll([
+        ...game.handOf(game.players[0]),
+        ...game.handOf(game.players[1]),
+      ]);
+      game.startYamadaRound();
+      deckDealt.add(game.currentCenterCard!);
+      game.callYamada(game.players[0]); // capture: no deck card consumed
+      deckDealt.add(game.drawToCenter(game.players[1]));
+
+      game.startNextRound();
+      for (var i = 0; i < 2; i++) {
+        game.revealCurrentPlayer();
+        game.passToNextPlayer();
+      }
+      deckDealt.addAll([
+        ...game.handOf(game.players[0]),
+        ...game.handOf(game.players[1]),
+      ]);
+      game.startYamadaRound();
+      deckDealt.add(game.currentCenterCard!);
+      deckDealt.add(game.drawToCenter(game.players[0]));
+      deckDealt.add(game.drawToCenter(game.players[1]));
+
+      expect(deckDealt, hasLength(13));
+      expect(deckDealt.toSet(), hasLength(13)); // never re-dealt
+      expect(game.remainingCards, 52 - 13);
+    });
+
+    test(
+      'deterministic seeded games produce identical multi-round results',
+      () {
+        GameState play() {
+          final game = GameState(
+            players: makePlayers(2),
+            random: Random(22),
+            maxRounds: 2,
+          );
+          for (var round = 0; round < 2; round++) {
+            for (var i = 0; i < 2; i++) {
+              game.revealCurrentPlayer();
+              game.passToNextPlayer();
+            }
+            game.startYamadaRound();
+            game.callYamada(game.players[0]);
+            game.drawToCenter(game.players[1]);
+            if (!game.gameComplete) {
+              game.startNextRound();
+            }
+          }
+          return game;
+        }
+
+        final first = play();
+        final second = play();
+
+        expect(second.gameComplete, isTrue);
+        expect(
+          second.finalResult!.scores.values.toList(),
+          first.finalResult!.scores.values.toList(),
+        );
+        // Players compare by identity, so compare names across games.
+        List<String> kingNames(GameResult result) =>
+            result.turtleKings.map((player) => player.name).toList();
+        expect(kingNames(second.finalResult!), kingNames(first.finalResult!));
+        expect(
+          second.finalResult!.roundsPlayed,
+          first.finalResult!.roundsPlayed,
+        );
+        expect(second.remainingCards, first.remainingCards);
+        expect(second.totalCapturesAcrossGame, first.totalCapturesAcrossGame);
+        expect(
+          second.penaltyCountOf(second.players[0]),
+          first.penaltyCountOf(first.players[0]),
+        );
+      },
+    );
   });
 }
