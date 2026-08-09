@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'game_start_screen.dart';
+import 'game_state.dart';
 import 'player.dart';
 import 'player_colors.dart';
 
@@ -85,9 +86,10 @@ class _PlayerSetupScreenState extends State<PlayerSetupScreen> {
     if (!_canStartGame) {
       return;
     }
+    final game = GameState(players: List.unmodifiable(_players));
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => GameStartScreen(players: List.unmodifiable(_players)),
+        builder: (_) => GameStartScreen(game: game),
       ),
     );
   }
