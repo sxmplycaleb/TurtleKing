@@ -177,13 +177,15 @@ lib/
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
-  game_state.dart         # Hands, turn state, center pile, YAMADA round
+  game_state.dart         # Hands, turn state, and center pile
+  game_state.dart         # Dealt hands + pass-and-play turn state
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
-  game_state_test.dart         # Hands, turn flow, center pile, YAMADA round
-  game_start_screen_test.dart  # Pass-and-play + YAMADA round flow + privacy
+  game_state_test.dart         # Hand dealing, turn flow, center pile
+  game_state_test.dart         # Hand dealing + turn progression
+  game_start_screen_test.dart  # Pass-and-play flow + privacy behavior
 ```
