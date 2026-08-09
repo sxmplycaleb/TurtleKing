@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'home_screen.dart';
+import 'splash_screen.dart';
 import 'theme.dart';
 
 void main() {
@@ -16,7 +16,7 @@ class TurtleKingApp extends StatelessWidget {
     return MaterialApp(
       title: 'Turtle King',
       theme: buildTheme(),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }

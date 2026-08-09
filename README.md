@@ -316,6 +316,45 @@ gameplay mechanics:
   round-progression behavior changed; persistence and multiplayer remain
   later milestones.
 
+## Milestone 12 — Branding: Launch Screen, Launcher Icon & Homepage Logo
+
+This milestone turns the Turtle King generated artwork into a coherent
+application identity — one visual identity, three presentations — without
+touching any gameplay:
+
+- **Full artwork** (`assets/branding/turtle_king_splash.png`, 1024×1536) —
+  the emblem circle (crowned turtle, sunglasses, ermine cape, fanned cards)
+  plus the TURTLE/KING banner. It powers the **app launch experience**: a
+  Flutter-side `SplashScreen` (`lib/splash_screen.dart`) shows it centered
+  on the navy brand color `#0B263C` for ~1.2 s, then fades into the home
+  screen. The native launch screens are branded too: Android
+  `launch_background.xml` draws the artwork on navy (with an Android 12+
+  system-splash override in `values-v31/styles.xml`), and the iOS
+  `LaunchScreen.storyboard` aspect-fits the same artwork on navy.
+- **Simplified emblem** (`assets/branding/turtle_king_emblem.png`) — the
+  emblem circle only (no banner), centered on a transparent square. It is
+  the **home screen brand mark** (sized responsively and paired with the
+  "Turtle King" title) and the base for the **launcher icon**: the emblem is
+  composited at 88% on the navy field (`assets/branding/turtle_king_icon.png`),
+  then exported to every Android mipmap density (legacy `ic_launcher.png`
+  plus adaptive `ic_launcher_foreground.png`/`ic_launcher_background`) and
+  every iOS AppIcon slot. The default Flutter launcher icon is fully
+  replaced.
+- **Derivation pipeline** — `tool/generate_branding.ps1` regenerates every
+  derivative from the source artwork, including the measured crop bounds
+  (the emblem ring spans x 11..1010, y 100..890; the TURTLE/KING shield
+  starts at y ≈ 895, so the emblem crop stops at y 890) and the sampled
+  navy `#0B263C`.
+- **Accessibility & responsiveness** — the home emblem scales with screen
+  width (`screenWidth * 0.4`, clamped 140–200 px) and exposes a semantic
+  label (`"Turtle King logo"`); the splash artwork uses `BoxFit.contain` so
+  it is never stretched or distorted on any screen size.
+- **No gameplay impact** — the splash is purely presentational: no
+  `GameState` is created or mutated, no game starts during launch, and the
+  New Game / How to Play navigation is unchanged.
+- **Out of scope** — gameplay rules, privacy, and `GameState` are untouched;
+  persistence and multiplayer remain later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -366,11 +405,11 @@ flutter build ios
 
 ```
 lib/
-  main.dart               # App entry point
+  main.dart               # App entry point (splash -> home)
   theme.dart              # Shared visual theme
-  home_screen.dart        # Home screen (branding + New Game + How to Play)
+  splash_screen.dart      # Branded launch screen (full artwork -> home)
+  home_screen.dart        # Home screen (emblem brand mark + New Game + How to Play)
   how_to_play_screen.dart # Rules documentation (How to Play screen)
-  turtle_art.dart         # Turtle mascot illustration (CustomPaint)
   player.dart             # Player model (id, name, color)
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
@@ -379,8 +418,14 @@ lib/
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result
+assets/
+  branding/               # Turtle King artwork (splash, emblem, icon)
+tool/
+  generate_branding.ps1   # Regenerates all branding derivatives
 test/
   home_screen_test.dart        # Home screen branding + navigation
+  splash_screen_test.dart      # Launch screen artwork + transition
+  branding_config_test.dart    # Native icon/splash configuration
   player_test.dart             # Player model + color palette
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
