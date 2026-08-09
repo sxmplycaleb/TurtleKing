@@ -117,6 +117,138 @@ This milestone implements the YAMADA round on top of the center pile:
   in the drinking game costs a drink), elimination, winner/Turtle King
   determination, round escalation, and multiplayer remain later milestones.
 
+## Milestone 07 — Cup/Penalty Mechanics & Captured-Pile Scoring
+
+This milestone layers penalties and scoring onto the YAMADA round:
+
+- **Wrong YAMADA calls** — calling YAMADA when the center card's value is not
+  strictly between your two cards is now a legal action rather than an
+  exception: nothing is captured, the center card stays in place, one penalty
+  point is added to your cup, and the turn advances. `callYamada` returns a
+  `YamadaResult` describing whether the call captured or was penalized.
+- **Cup model** — each player's cup holds up to `cupCapacity` penalty points
+  (default 3, configurable at game creation). When a penalty would overflow
+  the cup, the cup empties and the full-cup count (`cupDrinksOf`) increases;
+  the lifetime penalty count (`penaltyCountOf`) never decreases. The cup is
+  pure-Dart state on `GameState`.
+- **Scoring** — `captureCountOf(player)` and `totalCapturedCards` expose the
+  captured-pile counts. Once the round completes, `roundResult` returns a
+  deterministic `RoundResult` with per-player scores and the tied highest and
+  lowest scorers.
+- **No winner rule** — the real game's Turtle King determination is not
+  specified, so the result exposes scores and explicit ties
+  (`highestScorers`/`lowestScorers`) without declaring a winner or applying a
+  hidden tie-breaker.
+- **UI** — the YAMADA button is always available; the screen hints whether
+  the call will capture or cost a penalty, a wrong call shows a penalty
+  screen with the caller's cup state before the neutral handoff, and the
+  completion screen lists each player's captures and penalties.
+- **Assumptions** — the default cup capacity and the "wrong call = 1 penalty
+  point" rule are assumptions (the repository specifies no authoritative
+  YAMADA rules); they are isolated behind the cup API so they can be adjusted
+  without touching the round engine.
+- **Out of scope** — multiple rounds, round escalation, elimination, winner/
+  Turtle King declaration, drinking instructions, and multiplayer remain
+  later milestones.
+
+## Milestone 08 — Multi-Round Game & Turtle King Determination
+
+This milestone turns the single-round M07 game into a complete multi-round
+pass-and-play game:
+
+- **Lifecycle** — a game spans up to `maxRounds` rounds (default 3,
+  configurable at game creation). Each round repeats the flow: players view
+  their fresh two-card hands privately, play the YAMADA round, and the round
+  result is recorded. `startNextRound()` prepares the next round; the game
+  completes after `maxRounds` rounds or when the deck cannot guarantee
+  another round, whichever comes first (`gameComplete`, `finalResult`).
+- **Round reset** — a new round resets per-round state only: center pile,
+  current-round captures, viewing/turn state, and hands (two fresh cards per
+  player). The single deck is never reshuffled, so a physical card is never
+  dealt twice anywhere in the game; a new round starts only while the deck
+  can guarantee it completes (two cards per player plus the initial center
+  card plus one potential draw per player).
+- **Persistent state** — cup penalties are lifetime: `penaltyCountOf`,
+  `cupFillOf`, and `cupDrinksOf` carry into every new round and are never
+  reset. Total captures accumulate via `totalCapturesOf(player)` and
+  `totalCapturesAcrossGame`; `roundResults` keeps every completed round's
+  scoring result in order.
+- **Scoring** — current-round captures stay in `captureCountOf` /
+  `roundResult`; game totals live in `totalCapturesOf` / `finalResult`.
+- **Turtle King (assumed rule)** — the repository specifies no official
+  winner rule, so the Turtle King is assumed to be the player(s) with the
+  **fewest total captures** across all rounds. Ties share the title
+  (`finalResult.turtleKings`); no hidden tie-breaker is applied. The rule is
+  isolated in `GameState`'s final-result calculation so it can be replaced
+  without touching the round engine. This is an assumption, not an official
+  rule.
+- **UI** — a round label appears once a round starts, the round-completion
+  screen offers "Start Next Round", and the final screen crowns the Turtle
+  King with each player's total captures and penalties. The pass-and-play
+  privacy contract is unchanged: every new round's hands stay hidden until
+  the phone-holder explicitly reveals them, and handoffs show zero cards.
+- **Assumptions** — `maxRounds` (3), the deck-never-reshuffles rule, the
+  early-termination guard (deck must guarantee a full round), and the
+  fewest-captures Turtle King rule are all assumptions: the repository
+  specifies no authoritative multi-round or winner rules.
+- **Out of scope** — drinking instructions, persistence, and multiplayer
+  remain later milestones.
+
+## Milestone 09 — Elimination & End-of-Game Escalation
+
+This milestone adds elimination on top of the multi-round game:
+
+- **Elimination model** — every player starts active. `isEliminated(player)`,
+  `activePlayers`, `eliminatedPlayers`, `activePlayerCount`, and
+  `eliminationHistory` expose the state; eliminated players keep their
+  player object and full history (captures, penalties, cup drinks, scores).
+- **Trigger (assumed rule)** — the repository specifies no authoritative
+  elimination rule, so the assumed trigger is the lifetime cup count:
+  a player whose `cupDrinksOf(player)` reaches the configurable
+  `eliminationThreshold` (default **2** full cups) is eliminated. The
+  threshold is validated at construction (`>= 1`, `ArgumentError`
+  otherwise). Like the Turtle King rule, this is an assumption, not an
+  official rule.
+- **Timing** — eliminations are evaluated only *after* a completed round
+  action: the capture/penalty resolves, the turn advances, then any player
+  who reached the threshold is eliminated. An elimination never interrupts
+  an action halfway through, and validation stays atomic — a rejected
+  action mutates nothing.
+- **Eliminated players do not participate** — they receive no new hands
+  (`hasHand` is false), never become the current viewer or round player,
+  and cannot act (`callYamada` / `drawToCenter` throw
+  `YamadaRoundException`). Turn order is built from `activePlayers`, so
+  `roundCurrentPlayer` is never eliminated and rounds complete based on the
+  active players.
+- **Multi-round integration** — `startNextRound()` deals fresh two-card
+  hands to active players only, from the same never-reshuffled deck; card
+  uniqueness and `remainingCards` accounting are preserved.
+- **Game termination** — the game ends when the configured `maxRounds` is
+  reached, the deck cannot guarantee another round, or **fewer than two
+  active players remain**, whichever comes first (checked in that order).
+  When only one player is left the game ends immediately — even mid-round
+  — so the remaining player never plays a meaningless turn.
+- **Elimination history** — each elimination is recorded as an immutable
+  `EliminationRecord` (player, 1-based round, `EliminationReason`), kept in
+  `eliminationHistory` in elimination order.
+- **Final result** — `GameResult` now also exposes `finalists` (players
+  still active at the end), `eliminated`, and `eliminations`. The assumed
+  fewest-total-captures Turtle King rule is unchanged and still counts
+  every player's lifetime captures — including eliminated players', whose
+  history must not be deleted — so an eliminated player can share the title
+  on a tie. Ties remain explicit; no hidden tie-breaker.
+- **UI** — the penalty screen announces an elimination ("X has been
+  eliminated!"), round completion lists who was eliminated that round, and
+  the final screen shows Game complete, Turtle King(s), finalists,
+  eliminated players, and lifetime capture/penalty counts. No private card
+  identities ever appear on handoff, penalty, or result screens.
+- **Assumptions** — the cup-based trigger and default threshold of 2, the
+  fewer-than-two-active-players end condition, and elimination eligibility
+  under the Turtle King rule are all assumptions; the repository specifies
+  no official elimination rules.
+- **Out of scope** — drinking instructions, persistence, and multiplayer
+  remain later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -177,15 +309,13 @@ lib/
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
-  game_state.dart         # Hands, turn state, and center pile
-  game_state.dart         # Dealt hands + pass-and-play turn state
+  game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
   player_setup_screen_test.dart# Player setup behavior
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
-  game_state_test.dart         # Hand dealing, turn flow, center pile
-  game_state_test.dart         # Hand dealing + turn progression
-  game_start_screen_test.dart  # Pass-and-play flow + privacy behavior
+  game_state_test.dart         # Hands, rounds, cup, scoring, elimination, result
+  game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
 ```

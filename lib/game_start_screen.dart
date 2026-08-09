@@ -59,17 +59,33 @@ class GameStartScreen extends StatefulWidget {
 }
 
 /// One stage of the flow shown on the game screen.
-enum _Stage { ready, revealed, handoff, done, roundTurn, roundComplete }
+enum _Stage {
+  ready,
+  revealed,
+  handoff,
+  done,
+  roundTurn,
+  roundPenalty,
+  roundComplete,
+}
 
 class _GameStartScreenState extends State<GameStartScreen> {
   /// Whether the neutral handoff screen is showing for the next player.
   bool _showingHandoff = false;
 
+  /// Whether a wrong YAMADA call is being shown to the penalized player.
+  bool _showingPenalty = false;
+
+  /// The player who made the wrong YAMADA call currently on screen.
+  Player? _penalizedPlayer;
+
   GameState get _game => widget.game;
 
   _Stage get _stage {
+    if (_game.gameComplete) return _Stage.roundComplete;
     if (_game.roundStarted) {
       if (_game.roundComplete) return _Stage.roundComplete;
+      if (_showingPenalty) return _Stage.roundPenalty;
       if (_showingHandoff) return _Stage.handoff;
       return _Stage.roundTurn;
     }
@@ -100,8 +116,18 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   void _roundYamada() {
     setState(() {
-      _game.callYamada(_game.roundCurrentPlayer);
-      _showingHandoff = !_game.roundComplete;
+      final player = _game.roundCurrentPlayer;
+      final result = _game.callYamada(player);
+      _penalizedPlayer = result.penalized ? player : null;
+      _showingPenalty = result.penalized && !_game.roundComplete;
+      _showingHandoff = !_game.roundComplete && !_showingPenalty;
+    });
+  }
+
+  void _penaltyPass() {
+    setState(() {
+      _showingPenalty = false;
+      _showingHandoff = true;
     });
   }
 
@@ -109,6 +135,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
     setState(() {
       _game.drawToCenter(_game.roundCurrentPlayer);
       _showingHandoff = !_game.roundComplete;
+    });
+  }
+
+  void _startNextRound() {
+    setState(() {
+      _game.startNextRound();
+      _showingHandoff = false;
+      _showingPenalty = false;
     });
   }
 
@@ -120,26 +154,46 @@ class _GameStartScreenState extends State<GameStartScreen> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: switch (_stage) {
-              _Stage.ready => _readyView(context),
-              _Stage.revealed => _revealedView(context),
-              _Stage.handoff => _handoffView(context),
-              _Stage.done => _doneView(context),
-              _Stage.roundTurn => _roundTurnView(context),
-              _Stage.roundComplete => _roundCompleteView(context),
-            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_game.roundNumber > 0) ...[
+                  Text(
+                    'Round ${_game.roundNumber}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                switch (_stage) {
+                  _Stage.ready => _readyView(context),
+                  _Stage.revealed => _revealedView(context),
+                  _Stage.handoff => _handoffView(context),
+                  _Stage.done => _doneView(context),
+                  _Stage.roundTurn => _roundTurnView(context),
+                  _Stage.roundPenalty => _penaltyView(context),
+                  _Stage.roundComplete => _roundCompleteView(context),
+                },
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _playerHeader(BuildContext context, int index, Player player) {
+  Widget _playerHeader(
+    BuildContext context,
+    int index,
+    int total,
+    Player player,
+  ) {
     final theme = Theme.of(context);
     return Column(
       children: [
         Text(
-          'Player ${index + 1} of ${_game.players.length}',
+          'Player ${index + 1} of $total',
           style: theme.textTheme.titleMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -153,8 +207,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
             Flexible(
               child: Text(
                 player.name,
-                style: theme.textTheme.headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -172,6 +227,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         _playerHeader(
           context,
           _game.currentPlayerIndex,
+          _game.activePlayers.length,
           _game.currentPlayer,
         ),
         const SizedBox(height: 24),
@@ -207,6 +263,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         _playerHeader(
           context,
           _game.currentPlayerIndex,
+          _game.activePlayers.length,
           _game.currentPlayer,
         ),
         const SizedBox(height: 16),
@@ -249,8 +306,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'Pass the phone',
           textAlign: TextAlign.center,
-          style: theme.textTheme.headlineMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 12),
         Text(
@@ -289,8 +347,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'All players ready',
           textAlign: TextAlign.center,
-          style: theme.textTheme.headlineMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 12),
         Text(
@@ -321,10 +380,19 @@ class _GameStartScreenState extends State<GameStartScreen> {
     final player = _game.roundCurrentPlayer;
     final center = _game.currentCenterCard;
     final cards = _game.handOf(player);
+    final captureHint = _game.canCallYamada
+        ? 'The center card is between your cards — YAMADA will capture it.'
+        : 'The center card is not between your cards — YAMADA would cost '
+              'you a penalty.';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _playerHeader(context, _game.roundPlayerIndex, player),
+        _playerHeader(
+          context,
+          _game.roundPlayerIndex,
+          _game.roundPlayerCount,
+          player,
+        ),
         const SizedBox(height: 16),
         Text(
           'Compare the center card with your two cards.',
@@ -350,9 +418,25 @@ class _GameStartScreenState extends State<GameStartScreen> {
             ],
           ],
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 16),
+        Text(
+          captureHint,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Your cup: ${_game.cupFillOf(player)}/${_game.cupCapacity}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 16),
         FilledButton(
-          onPressed: _game.canCallYamada ? _roundYamada : null,
+          onPressed: _roundYamada,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           ),
@@ -375,8 +459,69 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
-  Widget _roundCompleteView(BuildContext context) {
+  Widget _penaltyView(BuildContext context) {
     final theme = Theme.of(context);
+    final player = _penalizedPlayer;
+    if (player == null) {
+      // The penalty stage is only reachable right after a wrong call.
+      return const SizedBox.shrink();
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Wrong YAMADA call',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '${player.name} called YAMADA, but the center card is not between '
+          'their two cards.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Nothing was captured. A penalty was added to ${player.name}\'s '
+          'cup: ${_game.cupFillOf(player)}/${_game.cupCapacity}.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium,
+        ),
+        if (_game.isEliminated(player)) ...[
+          const SizedBox(height: 12),
+          Text(
+            '${player.name} has been eliminated!',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+        const SizedBox(height: 32),
+        FilledButton(
+          onPressed: _penaltyPass,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text('Pass the phone'),
+        ),
+      ],
+    );
+  }
+
+  Widget _roundCompleteView(BuildContext context) {
+    if (_game.gameComplete) {
+      return _gameOverView(context);
+    }
+    final theme = Theme.of(context);
+    final eliminatedThisRound = _game.eliminationHistory
+        .where((record) => record.round == _game.roundNumber)
+        .toList();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -384,8 +529,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'YAMADA round complete',
           textAlign: TextAlign.center,
-          style: theme.textTheme.headlineMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 12),
         Text(
@@ -393,10 +539,100 @@ class _GameStartScreenState extends State<GameStartScreen> {
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium,
         ),
+        if (eliminatedThisRound.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Eliminated: '
+            '${eliminatedThisRound.map((record) => record.player.name).join(', ')}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         for (final player in _game.players) ...[
           Text(
-            '${player.name}: ${_game.capturedCardsOf(player).length}',
+            '${player.name}: ${_game.captureCountOf(player)} captured · '
+            '${_game.penaltyCountOf(player)} penalty',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 4),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _game.canStartNextRound ? _startNextRound : null,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text('Start Next Round'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Back to setup'),
+        ),
+      ],
+    );
+  }
+
+  Widget _gameOverView(BuildContext context) {
+    final theme = Theme.of(context);
+    final result = _game.finalResult!;
+    final kings = result.turtleKings.map((player) => player.name).join(', ');
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Game complete',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          result.turtleKings.length == 1
+              ? 'Turtle King: $kings'
+              : 'Turtle Kings: $kings',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Rounds played: ${result.roundsPlayed}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Finalists: ${result.finalists.map((player) => player.name).join(', ')}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium,
+        ),
+        if (result.eliminated.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Eliminated: '
+            '${result.eliminated.map((player) => player.name).join(', ')}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        for (final player in _game.players) ...[
+          Text(
+            '${player.name}: ${result.scores[player]} captured · '
+            '${_game.penaltyCountOf(player)} penalty',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge,
           ),
