@@ -1,11 +1,12 @@
+// Verifies the Turtle King branding is actually wired into the project:
+// asset files exist, pubspec declares them, and the Android/iOS native
+// configuration references the Turtle King artwork and icon. Also checks
+// that generated artwork has safe-area padding so nothing is clipped.
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Verifies the Turtle King branding is actually wired into the project:
-/// asset files exist, pubspec declares them, and the Android/iOS native
-/// configuration references the Turtle King artwork and icon.
 /// Decodes a PNG and returns the bounding box of "content" pixels
 /// (top/left/right/bottom margins in pixels). [isContent] decides whether a
 /// pixel counts as artwork.

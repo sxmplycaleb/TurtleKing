@@ -6,10 +6,10 @@ import 'player.dart';
 /// Read-only, chronological summary of every completed round.
 ///
 /// Pure presentation over data [GameState] already records: [GameState.roundResults]
-/// for captures and per-round penalties and [GameState.eliminationHistory] for
-/// eliminations. There is no second history store, no gameplay mutation, and
-/// no card identity is ever shown — only player names, capture counts,
-/// penalty counts, and eliminations.
+/// for drinks / YAMADA calls / smallest hands / cup size and
+/// [GameState.eliminationHistory] for eliminations. There is no second
+/// history store, no gameplay mutation, and no card identity is ever shown —
+/// only player names and counts.
 class RoundHistoryScreen extends StatelessWidget {
   const RoundHistoryScreen({super.key, required this.game});
 
@@ -53,8 +53,9 @@ class RoundHistoryScreen extends StatelessWidget {
   }
 }
 
-/// One completed round: its number, every player's capture and penalty
-/// counts for that round, and anyone eliminated during it.
+/// One completed round: its number, cup size, every player's drinks and
+/// YAMADA calls for that round, the smallest-hand penalty, and anyone
+/// eliminated during it.
 class _RoundCard extends StatelessWidget {
   const _RoundCard({
     required this.roundNumber,
@@ -82,7 +83,7 @@ class _RoundCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Round $roundNumber',
+            'Round $roundNumber — ${result.cupSize.label} cup',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -90,8 +91,9 @@ class _RoundCard extends StatelessWidget {
           const SizedBox(height: 8),
           for (final player in players) ...[
             Text(
-              '${player.name}: ${result.scores[player] ?? 0} captured · '
-              '${result.penalties[player] ?? 0} penalty',
+              '${player.name}: ${result.drinks[player] ?? 0} drink(s)'
+              '${result.calledYamada[player] ?? false ? ' · YAMADA' : ''}'
+              '${result.smallestHands.contains(player) ? ' · smallest hand' : ''}',
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 4),

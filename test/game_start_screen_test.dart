@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
-import 'package:turtle_king/how_to_play_screen.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
 import 'package:turtle_king/round_history_screen.dart';
@@ -16,13 +15,11 @@ void main() {
     Player(id: 'player-2', name: 'Bob', color: PlayerColors.palette[1]),
   ];
 
-  GameState gameForTwo() =>
-      GameState(players: twoPlayers(), random: Random(42));
-
-  /// Seed 1: neither player can capture the initial center card (3 of
-  /// Spades), so YAMADA calls are wrong and incur penalties.
-  GameState gameForPenalty() =>
-      GameState(players: twoPlayers(), random: Random(1));
+  GameState gameForTwo({int threshold = 100}) => GameState(
+    players: twoPlayers(),
+    random: Random(42),
+    eliminationThreshold: threshold,
+  );
 
   Future<void> pumpGame(WidgetTester tester, GameState game) async {
     await tester.pumpWidget(MaterialApp(home: GameStartScreen(game: game)));
@@ -33,12 +30,20 @@ void main() {
       .map((face) => face.card.displayName)
       .toList();
 
-  /// The full private-viewing turn for the current player: reveal, then pass.
-  Future<void> completeTurn(WidgetTester tester) async {
-    await tester.tap(find.text('Reveal My Cards'));
+  /// The private-viewing turn for the current viewer: reveal, then pass.
+  Future<void> completeViewingTurn(WidgetTester tester) async {
+    await tester.tap(find.text('Reveal My Card'));
     await tester.pump();
     await tester.tap(find.text('Pass to Next Player'));
     await tester.pump();
+  }
+
+  /// Both players view their one card, then pouring begins.
+  Future<void> finishViewing(WidgetTester tester) async {
+    await completeViewingTurn(tester);
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await completeViewingTurn(tester);
   }
 
   /// Scrolls [label] into view and taps it.
@@ -49,20 +54,26 @@ void main() {
     await tester.pump();
   }
 
-  group('GameStartScreen', () {
-    testWidgets('the first player starts the viewing flow with cards hidden', (
+  /// The current pourer holds out; a neutral handoff follows.
+  Future<void> holdOut(WidgetTester tester) async {
+    await tapVisible(tester, 'Hold out');
+  }
+
+  group('viewing phase', () {
+    testWidgets('the first player starts the flow with cards hidden', (
       tester,
     ) async {
       final game = gameForTwo();
       await pumpGame(tester, game);
 
+      expect(find.text('Round 1'), findsOneWidget);
       expect(find.text('Player 1 of 2'), findsOneWidget);
       expect(find.text('Caleb'), findsOneWidget);
-      expect(find.text('Reveal My Cards'), findsOneWidget);
+      expect(find.text('Reveal My Card'), findsOneWidget);
       expect(find.byType(CardFace), findsNothing);
     });
 
-    testWidgets('tells the player to view their cards privately', (
+    testWidgets('tells the player to view their card privately', (
       tester,
     ) async {
       await pumpGame(tester, gameForTwo());
@@ -70,21 +81,18 @@ void main() {
       expect(find.textContaining('privately'), findsOneWidget);
     });
 
-    testWidgets('reveals exactly the current player\'s two cards', (
+    testWidgets("reveals exactly the current player's one visible card", (
       tester,
     ) async {
       final game = gameForTwo();
       await pumpGame(tester, game);
 
-      await tester.tap(find.text('Reveal My Cards'));
+      await tester.tap(find.text('Reveal My Card'));
       await tester.pump();
 
-      final expected = game
-          .handOf(game.players[0])
-          .map((card) => card.displayName)
-          .toList();
-      expect(revealedLabels(tester), hasLength(2));
-      expect(revealedLabels(tester), expected);
+      expect(revealedLabels(tester), [
+        game.visibleCardOf(game.players[0]).displayName,
+      ]);
       expect(find.text('Pass to Next Player'), findsOneWidget);
     });
 
@@ -93,663 +101,248 @@ void main() {
     ) async {
       await pumpGame(tester, gameForTwo());
 
-      await completeTurn(tester);
+      await completeViewingTurn(tester);
 
       expect(find.text('Pass the phone'), findsOneWidget);
       expect(find.text('Hand the phone to Bob.'), findsOneWidget);
+      expect(find.textContaining('card stays hidden'), findsOneWidget);
       expect(find.byType(CardFace), findsNothing);
-      expect(find.text('Reveal My Cards'), findsNothing);
+      expect(find.text('Reveal My Card'), findsNothing);
     });
 
     testWidgets(
-      'the next player\'s cards stay hidden until they explicitly reveal '
-      'them',
+      "the next player's card stays hidden until they explicitly continue",
       (tester) async {
         final game = gameForTwo();
         await pumpGame(tester, game);
 
-        // Caleb views and passes; the phone is handed to Bob.
-        await completeTurn(tester);
+        await completeViewingTurn(tester);
         expect(find.byType(CardFace), findsNothing);
 
-        // Bob continues to his own ready screen — still hidden.
         await tester.tap(find.text('Continue'));
         await tester.pump();
         expect(find.text('Player 2 of 2'), findsOneWidget);
         expect(find.text('Bob'), findsOneWidget);
         expect(find.byType(CardFace), findsNothing);
-
-        // Only after Bob explicitly reveals do his cards appear.
-        await tester.tap(find.text('Reveal My Cards'));
-        await tester.pump();
-        final expected = game
-            .handOf(game.players[1])
-            .map((card) => card.displayName)
-            .toList();
-        expect(revealedLabels(tester), hasLength(2));
-        expect(revealedLabels(tester), expected);
       },
     );
-
-    testWidgets(
-      'the final player reaching the end sees the completion screen',
-      (tester) async {
-        await pumpGame(tester, gameForTwo());
-
-        await completeTurn(tester); // Caleb views and passes.
-        await tester.tap(find.text('Continue')); // Bob takes the phone.
-        await tester.pump();
-        await completeTurn(tester); // Bob views and passes.
-
-        expect(find.text('All players ready'), findsOneWidget);
-        expect(
-          find.textContaining('initial dealing phase is complete'),
-          findsOneWidget,
-        );
-        expect(find.byType(CardFace), findsNothing);
-      },
-    );
-
-    testWidgets('Back to setup returns to the previous screen', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: Center(
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => GameStartScreen(game: gameForTwo()),
-                    ),
-                  ),
-                  child: const Text('Launch game'),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Launch game'));
-      await tester.pumpAndSettle();
-      expect(find.byType(GameStartScreen), findsOneWidget);
-
-      await tester.tap(find.text('Back to setup'));
-      await tester.pumpAndSettle();
-      expect(find.byType(GameStartScreen), findsNothing);
-      expect(find.text('Launch game'), findsOneWidget);
-    });
   });
 
-  group('GameStartScreen YAMADA round', () {
-    /// Completes the M04 viewing phase for both players.
-    Future<void> completeViewing(WidgetTester tester) async {
-      await completeTurn(tester); // Caleb views and passes.
-      await tester.tap(find.text('Continue')); // Bob takes the phone.
-      await tester.pump();
-      await completeTurn(tester); // Bob views and passes.
-      expect(find.text('All players ready'), findsOneWidget);
-    }
-
-    /// Runs the full viewing phase, then starts the YAMADA round.
-    Future<void> startRound(WidgetTester tester) async {
-      await completeViewing(tester);
-      await tester.tap(find.text('Start YAMADA Round'));
-      await tester.pump();
-    }
-
-    /// Scrolls [label] into view (the round screen can overflow the test
-    /// viewport) and taps it.
-    Future<void> tapAction(WidgetTester tester, String label) async {
-      await tester.ensureVisible(find.text(label));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(label));
-      await tester.pump();
-    }
-
-    testWidgets('the done screen offers to start the YAMADA round', (
+  group('pouring phase', () {
+    testWidgets('pouring begins after everyone has viewed their card', (
       tester,
     ) async {
       await pumpGame(tester, gameForTwo());
-      await completeViewing(tester);
 
-      expect(find.text('Start YAMADA Round'), findsOneWidget);
+      await finishViewing(tester);
+
+      // The phone goes back to player 1 with the cup already pouring.
+      expect(find.text('Pass the phone'), findsOneWidget);
+      expect(find.text('Hand the phone to Caleb.'), findsOneWidget);
+      expect(find.textContaining('cup is on the table'), findsOneWidget);
+      expect(find.byType(CardFace), findsNothing);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(find.textContaining('Water is being poured'), findsOneWidget);
+      expect(find.textContaining('normal cup'), findsOneWidget);
+      expect(find.text('YAMADA!'), findsOneWidget);
+      expect(find.text('Hold out'), findsOneWidget);
+    });
+
+    testWidgets("the pour turn shows only the current player's visible card", (
+      tester,
+    ) async {
+      final game = gameForTwo();
+      await pumpGame(tester, game);
+
+      await finishViewing(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+
+      final current = game.pourCurrentPlayer;
+      expect(find.text(current.name), findsOneWidget);
+      expect(revealedLabels(tester), [game.visibleCardOf(current).displayName]);
     });
 
     testWidgets(
-      'starting the round shows the first player, their cards, and the '
-      'center card',
+      'YAMADA records a drink, deals new cards, and keeps the same turn',
       (tester) async {
         final game = gameForTwo();
         await pumpGame(tester, game);
-        await startRound(tester);
 
-        expect(find.text('Player 1 of 2'), findsOneWidget);
-        expect(find.text('Caleb'), findsOneWidget);
-        final expected = [
-          game.currentCenterCard!.displayName,
-          ...game.handOf(game.players[0]).map((card) => card.displayName),
-        ];
-        expect(revealedLabels(tester), hasLength(3));
-        expect(revealedLabels(tester), expected);
+        await finishViewing(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+
+        final player = game.pourCurrentPlayer;
+        await tapVisible(tester, 'YAMADA!');
+
         expect(find.text('YAMADA!'), findsOneWidget);
-        expect(find.text('Draw to center'), findsOneWidget);
-      },
-    );
-
-    testWidgets('YAMADA is always available during a turn', (tester) async {
-      final game = gameForTwo(); // seed 42: 3/6 vs center 5, so it captures.
-      await pumpGame(tester, game);
-      await startRound(tester);
-
-      final yamada = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'YAMADA!'),
-      );
-      expect(yamada.onPressed, isNotNull);
-      expect(game.canCallYamada, isTrue);
-      expect(find.textContaining('YAMADA will capture it'), findsOneWidget);
-
-      final draw = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Draw to center'),
-      );
-      expect(draw.onPressed != null, game.remainingCards > 0);
-    });
-
-    testWidgets(
-      'the YAMADA hint warns about the penalty when the center card is '
-      "not between the player's cards",
-      (tester) async {
-        final game = gameForPenalty();
-        await pumpGame(tester, game);
-        await startRound(tester);
-
-        expect(game.canCallYamada, isFalse);
         expect(
-          find.textContaining('YAMADA would cost you a penalty'),
+          find.textContaining('admitted defeat and drank the water'),
           findsOneWidget,
         );
-        final yamada = tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'YAMADA!'),
-        );
-        expect(yamada.onPressed, isNotNull);
+        expect(find.text('Lifetime drinks: 1'), findsOneWidget);
+        expect(find.byType(CardFace), findsNothing);
+
+        await tapVisible(tester, 'Continue');
+
+        // The same player's turn repeats with the fresh hand.
+        expect(find.text(player.name), findsOneWidget);
+        expect(find.byType(CardFace), findsOneWidget);
+        expect(find.text('Drinks: 1 (100 drinks eliminate)'), findsOneWidget);
       },
     );
 
-    testWidgets('a wrong YAMADA call shows the penalty screen, then hands '
-        'the phone over', (tester) async {
-      await pumpGame(tester, gameForPenalty());
-      await startRound(tester);
-
-      await tapAction(tester, 'YAMADA!');
-
-      expect(find.text('Wrong YAMADA call'), findsOneWidget);
-      expect(find.textContaining('Caleb called YAMADA'), findsOneWidget);
-      expect(find.textContaining('Nothing was captured'), findsOneWidget);
-      expect(find.textContaining('cup: 1/3'), findsOneWidget);
-      expect(find.byType(CardFace), findsNothing);
-
-      await tester.tap(find.text('Pass the phone'));
-      await tester.pump();
-      expect(find.text('Pass the phone'), findsOneWidget); // handoff header
-      expect(find.text('Hand the phone to Bob.'), findsOneWidget);
-      expect(find.byType(CardFace), findsNothing);
-    });
-
-    testWidgets('the completion screen shows captures and penalties', (
-      tester,
-    ) async {
-      await pumpGame(tester, gameForPenalty());
-      await startRound(tester);
-
-      // Caleb makes a wrong call, then the phone moves to Bob who draws.
-      await tapAction(tester, 'YAMADA!');
-      await tester.tap(find.text('Pass the phone'));
-      await tester.pump();
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      await tapAction(tester, 'Draw to center');
-
-      expect(find.text('YAMADA round complete'), findsOneWidget);
-      expect(find.text('Caleb: 0 captured · 1 penalty'), findsOneWidget);
-      expect(find.text('Bob: 0 captured · 0 penalty'), findsOneWidget);
-      expect(find.byType(CardFace), findsNothing);
-    });
-
-    testWidgets('acting moves to a neutral handoff screen with no cards', (
+    testWidgets('holding out passes the turn through a neutral handoff', (
       tester,
     ) async {
       await pumpGame(tester, gameForTwo());
-      await startRound(tester);
 
-      await tapAction(tester, 'Draw to center');
+      await finishViewing(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+
+      await holdOut(tester);
 
       expect(find.text('Pass the phone'), findsOneWidget);
       expect(find.text('Hand the phone to Bob.'), findsOneWidget);
-      expect(find.byType(CardFace), findsNothing);
-    });
-
-    testWidgets("the next player's cards only appear after they continue", (
-      tester,
-    ) async {
-      final game = gameForTwo();
-      await pumpGame(tester, game);
-      await startRound(tester);
-
-      final calebCards = game
-          .handOf(game.players[0])
-          .map((card) => card.displayName)
-          .toSet();
-
-      await tapAction(tester, 'Draw to center');
-      // The neutral handoff shows no one's cards.
-      expect(find.byType(CardFace), findsNothing);
-
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-
-      expect(find.text('Player 2 of 2'), findsOneWidget);
-      expect(find.text('Bob'), findsOneWidget);
-      final visible = revealedLabels(tester);
-      expect(visible, hasLength(3));
-      expect(visible.toSet().intersection(calebCards), isEmpty);
-      final expected = [
-        game.currentCenterCard!.displayName,
-        ...game.handOf(game.players[1]).map((card) => card.displayName),
-      ];
-      expect(visible, expected);
-    });
-
-    testWidgets('the round completes after every player acts once', (
-      tester,
-    ) async {
-      await pumpGame(tester, gameForTwo());
-      await startRound(tester);
-
-      await tapAction(tester, 'Draw to center');
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      await tapAction(tester, 'Draw to center');
-
-      expect(find.text('YAMADA round complete'), findsOneWidget);
-      expect(find.text('Caleb: 0 captured · 0 penalty'), findsOneWidget);
-      expect(find.text('Bob: 0 captured · 0 penalty'), findsOneWidget);
+      expect(find.textContaining('cup is on the table'), findsOneWidget);
       expect(find.byType(CardFace), findsNothing);
     });
   });
 
-  group('GameStartScreen multi-round', () {
-    GameState gameForTwoRounds() =>
-        GameState(players: twoPlayers(), random: Random(42), maxRounds: 2);
+  group('round completion', () {
+    testWidgets(
+      'a no-YAMADA round reveals all cards and the smallest hand drinks',
+      (tester) async {
+        final game = gameForTwo();
+        await pumpGame(tester, game);
 
-    /// Plays the current player's round action by drawing to the center.
-    Future<void> roundDraw(WidgetTester tester) async {
-      await tapVisible(tester, 'Draw to center');
-    }
+        await finishViewing(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
 
-    /// Completes the M04 viewing phase for both players.
-    Future<void> viewRound(WidgetTester tester) async {
-      await completeTurn(tester); // Caleb views and passes.
-      await tester.tap(find.text('Continue')); // Bob takes the phone.
-      await tester.pump();
-      await completeTurn(tester); // Bob views and passes.
-      expect(find.text('All players ready'), findsOneWidget);
-    }
+        expect(find.text('Round 1 complete'), findsOneWidget);
+        expect(
+          find.textContaining('all cards are revealed together'),
+          findsOneWidget,
+        );
+        // Both hands (2 cards each) are face-up at the reveal.
+        expect(find.byType(CardFace), findsNWidgets(4));
+        expect(find.textContaining('Smallest hand:'), findsOneWidget);
+        expect(
+          find.textContaining('drinks a full cup and an extra cup'),
+          findsOneWidget,
+        );
+        expect(find.text('Next round cup: large'), findsOneWidget);
+        expect(find.text('Start Next Round'), findsOneWidget);
+      },
+    );
 
-    /// Starts the round and plays both players' turns by drawing.
-    Future<void> playRound(WidgetTester tester) async {
-      await tapVisible(tester, 'Start YAMADA Round');
-      await roundDraw(tester);
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      await roundDraw(tester);
-    }
-
-    testWidgets('the round number is shown during a round', (tester) async {
-      await pumpGame(tester, gameForTwoRounds());
-      await viewRound(tester);
-      await tapVisible(tester, 'Start YAMADA Round');
-
-      expect(find.text('Round 1'), findsOneWidget);
-      expect(find.text('Player 1 of 2'), findsOneWidget);
-    });
-
-    testWidgets('a completed round shows its number and offers the next one', (
+    testWidgets('a round with YAMADA completes without a reveal', (
       tester,
     ) async {
-      await pumpGame(tester, gameForTwoRounds());
-      await viewRound(tester);
-      await playRound(tester);
+      await pumpGame(tester, gameForTwo());
 
-      expect(find.text('YAMADA round complete'), findsOneWidget);
-      expect(find.text('Round 1'), findsOneWidget);
+      await finishViewing(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await tapVisible(tester, 'YAMADA!');
+      await tapVisible(tester, 'Continue');
+      await holdOut(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await holdOut(tester);
+
+      expect(find.text('Round 1 complete'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'YAMADA was called — the round ended without a '
+          'reveal',
+        ),
+        findsOneWidget,
+      );
+      // No group reveal: zero card faces and no smallest-hand penalty.
+      expect(find.byType(CardFace), findsNothing);
+      expect(find.textContaining('Smallest hand:'), findsNothing);
+      expect(find.textContaining('1 drink(s) this round'), findsOneWidget);
+      expect(find.text('Next round cup: normal'), findsOneWidget);
       expect(find.text('Start Next Round'), findsOneWidget);
     });
 
-    testWidgets('the next round deals a fresh private hand', (tester) async {
-      final game = gameForTwoRounds();
-      await pumpGame(tester, game);
-      await viewRound(tester);
-      await playRound(tester);
-      final roundOne = game
-          .handOf(game.players[0])
-          .map((card) => card.displayName)
-          .toSet();
-
-      await tapVisible(tester, 'Start Next Round');
-
-      // Round 2 viewing begins with cards hidden.
-      expect(find.text('Round 2'), findsOneWidget);
-      expect(find.text('Player 1 of 2'), findsOneWidget);
-      expect(find.byType(CardFace), findsNothing);
-
-      await tester.tap(find.text('Reveal My Cards'));
-      await tester.pump();
-      final roundTwo = revealedLabels(tester);
-      expect(roundTwo, hasLength(2));
-      expect(roundTwo.toSet().intersection(roundOne), isEmpty);
-    });
-
-    testWidgets(
-      'the game completes after the final round and crowns the Turtle '
-      'King',
-      (tester) async {
-        await pumpGame(tester, gameForTwoRounds());
-
-        await viewRound(tester);
-        await playRound(tester); // Round 1
-        await tapVisible(tester, 'Start Next Round');
-        await viewRound(tester);
-        await playRound(tester); // Round 2
-
-        expect(find.text('Game complete'), findsOneWidget);
-        expect(find.text('Turtle Kings: Caleb, Bob'), findsOneWidget);
-        expect(find.text('Rounds played: 2'), findsOneWidget);
-        expect(find.text('Caleb: 0 captured · 0 penalty'), findsOneWidget);
-        expect(find.text('Bob: 0 captured · 0 penalty'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-        expect(find.text('Start Next Round'), findsNothing);
-      },
-    );
-  });
-
-  group('GameStartScreen elimination', () {
-    List<Player> threePlayers() => [
-      Player(id: 'player-1', name: 'Player 1', color: PlayerColors.palette[0]),
-      Player(id: 'player-2', name: 'Player 2', color: PlayerColors.palette[1]),
-      Player(id: 'player-3', name: 'Player 3', color: PlayerColors.palette[2]),
-    ];
-
-    /// Seed 1, 1-slot cups, threshold 2: player 1 wrong-calls in rounds 1
-    /// and 2 and is eliminated mid-round 2, while the game continues.
-    GameState gameForElimination() => GameState(
-      players: threePlayers(),
-      random: Random(1),
-      cupCapacity: 1,
-      eliminationThreshold: 2,
-    );
-
-    /// Seed 1, 1-slot cups, threshold 1: Caleb's wrong call in round 1
-    /// eliminates them and leaves one active player, ending the game.
-    GameState gameForEarlyEnd() => GameState(
-      players: twoPlayers(),
-      random: Random(1),
-      cupCapacity: 1,
-      eliminationThreshold: 1,
-    );
-
-    /// Completes the private viewing phase for [count] players.
-    Future<void> viewPlayers(WidgetTester tester, int count) async {
-      for (var i = 0; i < count; i++) {
-        await completeTurn(tester);
-        if (i < count - 1) {
-          await tester.tap(find.text('Continue'));
-          await tester.pump();
-        }
-      }
-      expect(find.text('All players ready'), findsOneWidget);
-    }
-
-    /// Plays the round: player 1 wrong-calls YAMADA, then everyone else
-    /// draws. Finishes on the round-complete view.
-    Future<void> playRound(WidgetTester tester) async {
-      await tapVisible(tester, 'Start YAMADA Round');
-      await tapVisible(tester, 'YAMADA!');
-      await tester.tap(find.text('Pass the phone'));
-      await tester.pump();
-      for (var i = 1; i < 3; i++) {
-        await tester.tap(find.text('Continue'));
-        await tester.pump();
-        await tapVisible(tester, 'Draw to center');
-      }
-    }
-
-    testWidgets(
-      'an elimination is announced on the penalty screen without revealing '
-      'cards',
-      (tester) async {
-        await pumpGame(tester, gameForElimination());
-        await viewPlayers(tester, 3);
-        await playRound(tester); // Round 1: penalty, no elimination yet
-
-        await tapVisible(tester, 'Start Next Round');
-        await viewPlayers(tester, 3);
-        await tapVisible(tester, 'Start YAMADA Round');
-        await tapVisible(tester, 'YAMADA!'); // Round 2 wrong call
-
-        // The penalty view announces the elimination.
-        expect(find.text('Wrong YAMADA call'), findsOneWidget);
-        expect(find.text('Player 1 has been eliminated!'), findsOneWidget);
-        expect(find.text('Player 1 of 3'), findsNothing); // turn already over
-
-        // Passing the phone shows a neutral handoff with zero cards.
-        await tester.tap(find.text('Pass the phone'));
-        await tester.pump();
-        expect(find.text('Hand the phone to Player 2.'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'the round completes with active players and the next round deals to '
-      'active players only',
-      (tester) async {
-        await pumpGame(tester, gameForElimination());
-        await viewPlayers(tester, 3);
-        await playRound(tester);
-        await tapVisible(tester, 'Start Next Round');
-        await viewPlayers(tester, 3);
-        await playRound(tester); // Player 1 eliminated mid-round 2
-
-        // Round completion names the eliminated player.
-        expect(find.text('YAMADA round complete'), findsOneWidget);
-        expect(find.text('Eliminated: Player 1'), findsOneWidget);
-        expect(find.text('Start Next Round'), findsOneWidget);
-
-        // Round 3 cycles only the two active players.
-        await tapVisible(tester, 'Start Next Round');
-        expect(find.text('Round 3'), findsOneWidget);
-        expect(find.text('Player 1 of 2'), findsOneWidget);
-        expect(find.text('Player 1 of 3'), findsNothing);
-        expect(find.text('Player 2'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'the final screen shows the elimination and finalist data when the '
-      'game ends with fewer than two active players',
-      (tester) async {
-        await pumpGame(tester, gameForEarlyEnd());
-        await viewPlayers(tester, 2);
-        await tapVisible(tester, 'Start YAMADA Round');
-        await tapVisible(tester, 'YAMADA!'); // Caleb's wrong call eliminates
-
-        expect(find.text('Game complete'), findsOneWidget);
-        expect(find.text('Turtle Kings: Caleb, Bob'), findsOneWidget);
-        expect(find.text('Rounds played: 0'), findsOneWidget);
-        expect(find.text('Finalists: Bob'), findsOneWidget);
-        expect(find.text('Eliminated: Caleb'), findsOneWidget);
-        expect(find.text('Caleb: 0 captured · 1 penalty'), findsOneWidget);
-        expect(find.text('Bob: 0 captured · 0 penalty'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-      },
-    );
-  });
-
-  group('GameStartScreen in-game rules', () {
-    /// A snapshot of every observable gameplay value, for proving that
-    /// opening the rules changes nothing.
-    Map<String, Object?> snapshot(GameState game) => {
-      'remainingCards': game.remainingCards,
-      'roundStarted': game.roundStarted,
-      'roundComplete': game.roundComplete,
-      'currentPlayerIndex': game.currentPlayerIndex,
-      'currentPlayer': game.currentPlayer.id,
-      'currentPlayerRevealed': game.currentPlayerRevealed,
-      'allPlayersViewed': game.allPlayersViewed,
-      'roundPlayerIndex': game.roundPlayerIndex,
-      'centerPile': game.centerPile,
-      'gameComplete': game.gameComplete,
-    };
-
-    testWidgets('a How to Play action is available during gameplay', (
-      tester,
-    ) async {
-      await pumpGame(tester, gameForTwo());
-
-      expect(find.byTooltip('How to Play'), findsOneWidget);
-    });
-
-    testWidgets(
-      'opening the rules shows the shared HowToPlayScreen with no private '
-      'cards',
-      (tester) async {
-        final game = gameForTwo();
-        await pumpGame(tester, game);
-
-        await tester.tap(find.byTooltip('How to Play'));
-        await tester.pumpAndSettle();
-
-        expect(find.byType(HowToPlayScreen), findsOneWidget);
-        expect(find.text('How to Play'), findsOneWidget);
-        // The rules screen never shows card widgets or card identities.
-        expect(find.byType(CardFace), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'returning from the rules lands on the same stage with unchanged '
-      'state',
-      (tester) async {
-        final game = gameForTwo();
-        await pumpGame(tester, game);
-        final before = snapshot(game);
-
-        await tester.tap(find.byTooltip('How to Play'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byType(BackButton));
-        await tester.pumpAndSettle();
-
-        // Back on the exact same ready view, nothing advanced.
-        expect(find.text('Reveal My Cards'), findsOneWidget);
-        expect(find.byType(HowToPlayScreen), findsNothing);
-        expect(snapshot(game), before);
-      },
-    );
-
-    testWidgets('rules can be opened mid-turn without advancing the turn', (
+    testWidgets('starting the next round deals fresh private hands', (
       tester,
     ) async {
       final game = gameForTwo();
       await pumpGame(tester, game);
-      await tester.tap(find.text('Reveal My Cards'));
+
+      await finishViewing(tester);
+      await tester.tap(find.text('Continue'));
       await tester.pump();
-      expect(find.text('Pass to Next Player'), findsOneWidget);
-      final before = snapshot(game);
-      final handBefore = game
-          .handOf(game.players[0])
-          .map((card) => card.displayName)
-          .toList();
+      await holdOut(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await holdOut(tester);
 
-      await tester.tap(find.byTooltip('How to Play'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(BackButton));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, 'Start Next Round');
 
-      // Still the revealed stage with the same private cards.
-      expect(find.text('Pass to Next Player'), findsOneWidget);
-      expect(revealedLabels(tester), handBefore);
-      expect(snapshot(game), before);
+      expect(find.text('Round 2'), findsOneWidget);
+      expect(find.text('Player 1 of 2'), findsOneWidget);
+      expect(find.text('Reveal My Card'), findsOneWidget);
+      expect(find.byType(CardFace), findsNothing);
     });
-
-    testWidgets(
-      'rules can be opened during the neutral handoff without revealing the '
-      'next player\'s cards',
-      (tester) async {
-        final game = gameForTwo();
-        await pumpGame(tester, game);
-        await completeTurn(tester); // Caleb views and passes.
-        expect(find.text('Pass the phone'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-        final before = snapshot(game);
-
-        await tester.tap(find.byTooltip('How to Play'));
-        await tester.pumpAndSettle();
-        expect(find.byType(HowToPlayScreen), findsOneWidget);
-        await tester.tap(find.byType(BackButton));
-        await tester.pumpAndSettle();
-
-        // Still the neutral handoff with zero cards for the next player.
-        expect(find.text('Pass the phone'), findsOneWidget);
-        expect(find.text('Hand the phone to Bob.'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-        expect(snapshot(game), before);
-      },
-    );
   });
 
-  group('GameStartScreen round history', () {
-    GameState gameForTwoRounds() =>
-        GameState(players: twoPlayers(), random: Random(22), maxRounds: 2);
-
+  group('elimination and game over', () {
     testWidgets(
-      'the final screen offers Round History and opens the read-only view',
+      'a player eliminated by YAMADA is out; the last player is Turtle King',
       (tester) async {
-        final game = gameForTwoRounds();
+        final game = gameForTwo(threshold: 2);
         await pumpGame(tester, game);
 
-        // Play both rounds with the established helpers.
-        for (var round = 0; round < 2; round++) {
-          for (var i = 0; i < 2; i++) {
-            await completeTurn(tester);
-            if (i < 1) {
-              await tester.tap(find.text('Continue'));
-              await tester.pump();
-            }
-          }
-          await tapVisible(tester, 'Start YAMADA Round');
-          await tapVisible(tester, 'YAMADA!'); // Caleb captures.
-          await tester.tap(find.text('Continue'));
-          await tester.pump();
-          await tapVisible(tester, 'Draw to center'); // Bob draws.
-          if (!game.gameComplete) {
-            await tapVisible(tester, 'Start Next Round');
-          }
-        }
-        expect(find.text('Game complete'), findsOneWidget);
-        expect(find.text('Round History'), findsOneWidget);
+        await finishViewing(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
 
-        await tapVisible(tester, 'Round History');
-        await tester.pumpAndSettle();
-        expect(find.byType(RoundHistoryScreen), findsOneWidget);
-        expect(find.text('Round History'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
+        await tapVisible(tester, 'YAMADA!');
+        expect(find.text('Lifetime drinks: 1'), findsOneWidget);
+        await tapVisible(tester, 'Continue');
+        await tapVisible(tester, 'YAMADA!');
 
-        await tester.tap(find.byType(BackButton));
-        await tester.pumpAndSettle();
-        expect(find.byType(RoundHistoryScreen), findsNothing);
+        expect(find.textContaining('has been eliminated'), findsOneWidget);
+        expect(find.text('The game is over!'), findsOneWidget);
+
+        await tapVisible(tester, 'Continue');
+
         expect(find.text('Game complete'), findsOneWidget);
+        expect(find.text('Turtle King: Bob'), findsOneWidget);
+        expect(find.text('Round History'), findsOneWidget);
       },
     );
+
+    testWidgets('round history opens from the final screen', (tester) async {
+      final game = gameForTwo(threshold: 2);
+      await pumpGame(tester, game);
+
+      await finishViewing(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await tapVisible(tester, 'YAMADA!');
+      await tapVisible(tester, 'Continue');
+      await tapVisible(tester, 'YAMADA!');
+      await tapVisible(tester, 'Continue');
+
+      await tapVisible(tester, 'Round History');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RoundHistoryScreen), findsOneWidget);
+      expect(find.text('Round History'), findsOneWidget);
+    });
   });
 }
