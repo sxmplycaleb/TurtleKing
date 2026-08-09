@@ -9,12 +9,12 @@ void main() {
     test('stores id, name, and color', () {
       const player = Player(
         id: 'player-1',
-        name: 'Alice',
+        name: 'Caleb',
         color: Color(0xFFD32F2F),
       );
 
       expect(player.id, 'player-1');
-      expect(player.name, 'Alice');
+      expect(player.name, 'Caleb');
       expect(player.color, const Color(0xFFD32F2F));
     });
   });
