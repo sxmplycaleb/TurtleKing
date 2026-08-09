@@ -170,4 +170,134 @@ void main() {
       expect(find.text('Launch game'), findsOneWidget);
     });
   });
+
+  group('GameStartScreen YAMADA round', () {
+    /// Completes the M04 viewing phase for both players.
+    Future<void> completeViewing(WidgetTester tester) async {
+      await completeTurn(tester); // Caleb views and passes.
+      await tester.tap(find.text('Continue')); // Bob takes the phone.
+      await tester.pump();
+      await completeTurn(tester); // Bob views and passes.
+      expect(find.text('All players ready'), findsOneWidget);
+    }
+
+    /// Runs the full viewing phase, then starts the YAMADA round.
+    Future<void> startRound(WidgetTester tester) async {
+      await completeViewing(tester);
+      await tester.tap(find.text('Start YAMADA Round'));
+      await tester.pump();
+    }
+
+    /// Scrolls [label] into view (the round screen can overflow the test
+    /// viewport) and taps it.
+    Future<void> tapAction(WidgetTester tester, String label) async {
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pump();
+    }
+
+    testWidgets('the done screen offers to start the YAMADA round',
+        (tester) async {
+      await pumpGame(tester, gameForTwo());
+      await completeViewing(tester);
+
+      expect(find.text('Start YAMADA Round'), findsOneWidget);
+    });
+
+    testWidgets(
+        'starting the round shows the first player, their cards, and the '
+        'center card', (tester) async {
+      final game = gameForTwo();
+      await pumpGame(tester, game);
+      await startRound(tester);
+
+      expect(find.text('Player 1 of 2'), findsOneWidget);
+      expect(find.text('Caleb'), findsOneWidget);
+      final expected = [
+        game.currentCenterCard!.displayName,
+        ...game.handOf(game.players[0]).map((card) => card.displayName),
+      ];
+      expect(revealedLabels(tester), hasLength(3));
+      expect(revealedLabels(tester), expected);
+      expect(find.text('YAMADA!'), findsOneWidget);
+      expect(find.text('Draw to center'), findsOneWidget);
+    });
+
+    testWidgets(
+        'YAMADA is enabled exactly when the center card is between the '
+        "player's cards", (tester) async {
+      final game = gameForTwo();
+      await pumpGame(tester, game);
+      await startRound(tester);
+
+      final yamada = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'YAMADA!'),
+      );
+      expect(yamada.onPressed != null, game.canCallYamada);
+
+      final draw = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Draw to center'),
+      );
+      expect(draw.onPressed != null, game.remainingCards > 0);
+    });
+
+    testWidgets('acting moves to a neutral handoff screen with no cards',
+        (tester) async {
+      await pumpGame(tester, gameForTwo());
+      await startRound(tester);
+
+      await tapAction(tester, 'Draw to center');
+
+      expect(find.text('Pass the phone'), findsOneWidget);
+      expect(find.text('Hand the phone to Bob.'), findsOneWidget);
+      expect(find.byType(CardFace), findsNothing);
+    });
+
+    testWidgets("the next player's cards only appear after they continue",
+        (tester) async {
+      final game = gameForTwo();
+      await pumpGame(tester, game);
+      await startRound(tester);
+
+      final calebCards = game
+          .handOf(game.players[0])
+          .map((card) => card.displayName)
+          .toSet();
+
+      await tapAction(tester, 'Draw to center');
+      // The neutral handoff shows no one's cards.
+      expect(find.byType(CardFace), findsNothing);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+
+      expect(find.text('Player 2 of 2'), findsOneWidget);
+      expect(find.text('Bob'), findsOneWidget);
+      final visible = revealedLabels(tester);
+      expect(visible, hasLength(3));
+      expect(visible.toSet().intersection(calebCards), isEmpty);
+      final expected = [
+        game.currentCenterCard!.displayName,
+        ...game.handOf(game.players[1]).map((card) => card.displayName),
+      ];
+      expect(visible, expected);
+    });
+
+    testWidgets('the round completes after every player acts once',
+        (tester) async {
+      await pumpGame(tester, gameForTwo());
+      await startRound(tester);
+
+      await tapAction(tester, 'Draw to center');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await tapAction(tester, 'Draw to center');
+
+      expect(find.text('YAMADA round complete'), findsOneWidget);
+      expect(find.text('Caleb: 0'), findsOneWidget);
+      expect(find.text('Bob: 0'), findsOneWidget);
+      expect(find.byType(CardFace), findsNothing);
+    });
+  });
 }
