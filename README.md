@@ -69,6 +69,54 @@ This milestone turns the placeholder game screen into the pass-and-play flow:
 YAMADA, rounds, penalties, elimination, and winner logic arrive in later
 milestones.
 
+## Milestone 05 — Center Pile
+
+This milestone adds the model seam for shared gameplay, without gameplay
+rules yet:
+
+- **Center pile** — a face-up pile owned by `GameState`; a new game starts
+  with an empty pile, and cards are added in deal order via
+  `dealToCenter()`.
+- **Single deck** — the pile is fed exclusively from the same shuffled deck
+  the hands were dealt from. No second deck is created, and hands are never
+  re-dealt.
+- **Card accounting** — each `dealToCenter()` draws the top card of the
+  remaining deck, so `remainingCards` decreases by one and a center card can
+  never also be in a player's hand or elsewhere in the pile.
+- **Out of scope** — YAMADA rules, rounds, penalties, elimination, and
+  winner logic remain later milestones; the center pile is only their
+  foundation.
+
+## Milestone 06 — YAMADA Round Mechanics
+
+This milestone implements the YAMADA round on top of the center pile:
+
+- **Round start** — once every player has viewed their two cards, the round
+  begins (`startYamadaRound`): the top card of the remaining deck becomes the
+  first center card, and the first player takes the turn.
+- **Turn actions** — players act in setup order. On a turn, a player either
+  **draws** the top card of the deck onto the center pile
+  (`drawToCenter`), or, when the current center card's value is **strictly
+  between** their two hand cards, calls **YAMADA** (`callYamada`) to capture
+  that card into their own captured pile. Every action advances the turn
+  exactly once.
+- **Center card** — the top of the center pile is public; players compare it
+  with their own two cards using `Card.value` (Ace = 1 … King = 13). A
+  capture removes only the top card, so the remaining pile keeps its deal
+  order. Player hands never change.
+- **Round completion** — the round is complete after every player has acted
+  once. A single round never exhausts the deck (up to 10 players leaves at
+  least 31 cards).
+- **Invalid actions** — acting before the round starts, after it completes,
+  out of turn, twice in a row, or calling YAMADA when the center card is not
+  between the player's cards throws `YamadaRoundException` and leaves the
+  state unchanged.
+- **Determinism** — rounds are fully deterministic for a given `Random`
+  seed, so gameplay can be replayed for testing or debugging.
+- **Out of scope** — drinking/cup mechanics, penalties (a false YAMADA call
+  in the drinking game costs a drink), elimination, winner/Turtle King
+  determination, round escalation, and multiplayer remain later milestones.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -126,7 +174,7 @@ lib/
   player.dart             # Player model (id, name, color)
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
-  game_start_screen.dart  # Pass-and-play flow (ready/reveal/handoff/done)
+  game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turn state, and center pile
