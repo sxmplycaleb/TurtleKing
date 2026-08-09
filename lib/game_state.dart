@@ -38,6 +38,7 @@ class GameState {
   List<Player> get players => _players;
 
   /// Cards remaining in the deck after the initial deal and any center draws.
+  /// Cards remaining in the deck after the initial deal.
   int get remainingCards => _deck.remainingCards;
 
   /// Index into [players] of the player whose turn it is to view their cards.

@@ -69,24 +69,6 @@ This milestone turns the placeholder game screen into the pass-and-play flow:
 YAMADA, rounds, penalties, elimination, and winner logic arrive in later
 milestones.
 
-## Milestone 05 — Center Pile
-
-This milestone adds the model seam for shared gameplay, without gameplay
-rules yet:
-
-- **Center pile** — a face-up pile owned by `GameState`; a new game starts
-  with an empty pile, and cards are added in deal order via
-  `dealToCenter()`.
-- **Single deck** — the pile is fed exclusively from the same shuffled deck
-  the hands were dealt from. No second deck is created, and hands are never
-  re-dealt.
-- **Card accounting** — each `dealToCenter()` draws the top card of the
-  remaining deck, so `remainingCards` decreases by one and a center card can
-  never also be in a player's hand or elsewhere in the pile.
-- **Out of scope** — YAMADA rules, rounds, penalties, elimination, and
-  winner logic remain later milestones; the center pile is only their
-  foundation.
-
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -148,6 +130,7 @@ lib/
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turn state, and center pile
+  game_state.dart         # Dealt hands + pass-and-play turn state
 test/
   home_screen_test.dart        # Home screen branding + navigation
   player_test.dart             # Player model + color palette
@@ -155,5 +138,6 @@ test/
   card_test.dart               # Suit/rank values, Card display + equality
   deck_test.dart               # Deck creation, shuffle, dealing, reset
   game_state_test.dart         # Hand dealing, turn flow, center pile
+  game_state_test.dart         # Hand dealing + turn progression
   game_start_screen_test.dart  # Pass-and-play flow + privacy behavior
 ```
