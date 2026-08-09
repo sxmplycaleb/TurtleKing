@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:turtle_king/card.dart';
 import 'package:turtle_king/deck.dart';
 import 'package:turtle_king/game_state.dart';
 import 'package:turtle_king/player.dart';
@@ -128,6 +129,98 @@ void main() {
 
       expect(game.allPlayersViewed, isTrue);
       game.revealCurrentPlayer();
+      expect(game.currentPlayerRevealed, isFalse);
+    });
+  });
+
+  group('GameState center pile', () {
+    test('a new game starts with an empty center pile', () {
+      final game = GameState(players: makePlayers(3), random: Random(1));
+      expect(game.centerPile, isEmpty);
+    });
+
+    test('dealToCenter consumes one card from the undealt deck', () {
+      final game = GameState(players: makePlayers(2), random: Random(1));
+      expect(game.remainingCards, 48);
+
+      final card = game.dealToCenter();
+
+      expect(card, isA<Card>());
+      expect(game.remainingCards, 47);
+      expect(game.centerPile, [card]);
+    });
+
+    test('the drawn card comes from the original 52-card deck', () {
+      const seed = 7;
+      final game = GameState(players: makePlayers(3), random: Random(seed));
+      // Replay the same seeded deal: 2 cards per player, then the next card
+      // in the deck is exactly what dealToCenter draws.
+      final deck = Deck(random: Random(seed))..shuffle();
+      deck.deal(2 * game.players.length);
+      final expected = deck.dealOne();
+
+      expect(game.dealToCenter(), expected);
+    });
+
+    test('dealing to the center leaves player hands unchanged', () {
+      final game = GameState(players: makePlayers(4), random: Random(1));
+      final handsBefore = {
+        for (final player in game.players)
+          player.id: [...game.handOf(player)],
+      };
+
+      game.dealToCenter();
+      game.dealToCenter();
+      game.dealToCenter();
+
+      for (final player in game.players) {
+        expect(game.handOf(player), handsBefore[player.id]);
+      }
+    });
+
+    test('remainingCards decreases by one per center draw', () {
+      final game = GameState(players: makePlayers(2), random: Random(1));
+      const draws = 10;
+      for (var i = 0; i < draws; i++) {
+        game.dealToCenter();
+      }
+      expect(game.remainingCards, 48 - draws);
+      expect(game.centerPile, hasLength(draws));
+    });
+
+    test('repeated center draws never duplicate a card or a hand card', () {
+      final game = GameState(players: makePlayers(3), random: Random(1));
+      final handCards = {
+        for (final player in game.players) ...game.handOf(player),
+      };
+
+      for (var i = 0; i < 20; i++) {
+        final card = game.dealToCenter();
+        expect(handCards, isNot(contains(card)));
+        expect(game.centerPile.where((c) => c == card), hasLength(1));
+      }
+      expect(game.centerPile.toSet(), hasLength(20));
+    });
+
+    test('dealing to the center when the deck is empty throws', () {
+      final game = GameState(players: makePlayers(2), random: Random(1));
+      while (game.remainingCards > 0) {
+        game.dealToCenter();
+      }
+      expect(game.remainingCards, 0);
+      expect(() => game.dealToCenter(), throwsA(isA<EmptyDeckException>()));
+    });
+
+    test('center draws do not affect the viewing flow', () {
+      final game = GameState(players: makePlayers(2), random: Random(1));
+      game.dealToCenter();
+
+      game.revealCurrentPlayer();
+      expect(game.currentPlayerRevealed, isTrue);
+      expect(game.allPlayersViewed, isFalse);
+
+      game.passToNextPlayer();
+      expect(game.currentPlayer, game.players[1]);
       expect(game.currentPlayerRevealed, isFalse);
     });
   });
