@@ -15,13 +15,24 @@ class EmptyDeckException implements Exception {
 /// A fresh, unshuffled deck deals Ace of Hearts first, then proceeds through
 /// every suit/rank combination. [shuffle] randomizes the order.
 class Deck {
-  Deck({Random? random}) : _random = random ?? Random();
+  Deck({Random? random}) : _random = random ?? Random(), _cards = _newDeck();
+
+  /// Restores a deck holding exactly [cards] (in order) as its remaining
+  /// cards, without shuffling. Used by the save/resume layer so a restored
+  /// game deals the same cards the original would have dealt next.
+  Deck.fromCards(List<Card> cards)
+    : _random = Random(),
+      _cards = List.of(cards);
 
   final Random _random;
-  final List<Card> _cards = _newDeck();
+  final List<Card> _cards;
 
   /// Number of cards remaining in the deck.
   int get remainingCards => _cards.length;
+
+  /// The remaining cards in deal order (top of the deck first). Read-only;
+  /// used by the save/resume layer to restore the exact deck.
+  List<Card> get remainingCardsInOrder => List.unmodifiable(_cards);
 
   static List<Card> _newDeck() => [
     for (final suit in Suit.values)

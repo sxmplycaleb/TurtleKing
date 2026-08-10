@@ -630,6 +630,63 @@ sound/haptics, no card-flip animation, and no landscape layout — those
 belong to later milestones. Gameplay rules, `GameState` semantics, the
 privacy contract, and the M13/M14 visual system are unchanged.
 
+## Milestone 16 — Game Save/Resume + Small-Screen Audit
+
+This milestone lets an in-progress game survive app restarts, and audits the
+whole app at small phone sizes — without changing any gameplay rule.
+
+**Save/resume** (`lib/game_save.dart`):
+
+- `GameSaveCodec` serializes the complete resumable `GameState` to a single
+  versioned JSON document (`schemaVersion: 1`) under one `SharedPreferences`
+  key. Persisted: players (id/name/color), elimination threshold, lifetime
+  and per-round drinks, YAMADA flags, round results, the replay event log,
+  eliminations, current hands, remaining deck order, viewing/pouring
+  position, cup size, round number, and the final result when complete.
+- `GameState.restore(...)` + `Deck.fromCards(...)` reconstruct the game
+  exactly — same hands, same turn, same remaining deck — without re-dealing
+  or recording new events. A restored game plays and saves identically.
+- `GameSaveStore` wraps `SharedPreferences`: `hasSave`, `load`, `save`,
+  `clear`. Local-only: no networking, analytics, or cloud sync.
+- Corrupt JSON, unsupported schema versions, missing fields, wrong types,
+  and unknown enum values are rejected safely with `GameSaveException` —
+  never a partial restore, never a crash.
+
+**Save lifecycle**: the game is saved automatically on every action (and as
+soon as it is created); a completed game clears the save so finished games
+are never offered as resumable; "Save & Exit" in the game app bar persists
+and returns home; starting a New Game discards any old save.
+
+**Resume UX** (`lib/home_screen.dart`): when a resumable save exists the
+home screen shows a prominent **Resume Game** card with safe summary only
+(round number, active players, cup size, current player's name — no card
+information). A corrupt/unsupported save shows a "Saved game cannot be
+resumed" card with a **Discard Save** action; the app never crashes on bad
+save data.
+
+**Privacy**: hidden card identities are persisted only inside the local
+save document (they are gameplay state required for exact resume). They are
+never shown by the UI, semantics, history, logs, or the resume summary;
+the M13 card-back rendering and the M15 history screens are unchanged.
+
+**Small-screen audit** (`test/small_screen_test.dart`): every major screen
+(home, settings, how to play, player setup, round history, game history,
+the game at every stage) is pumped at 320×568, 360×640, 375×667, 390×844,
+and 412×915, including a full tap-through game at 320×568, asserting zero
+layout exceptions. The home screen was made scrollable so the resume card
+cannot overflow small viewports.
+
+**Tests**: `test/game_save_test.dart` (round-trips at every stage, exact
+continuation determinism, rejection paths, store lifecycle, privacy),
+`test/resume_flow_test.dart` (resume card, safe summary, resume navigation,
+New Game clears, corrupt-save discard, Save & Exit, completion clears),
+`test/small_screen_test.dart`. No existing test was weakened or deleted;
+M14's home golden baselines were regenerated for the (purely layout) home
+scroll wrapper.
+
+**Out of scope** — no gameplay rule changed; no database; no cross-device
+sync; history remains in-memory for the current session.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -685,12 +742,13 @@ lib/
   settings.dart           # SettingsStore (persisted preferences) + SettingsScope
   settings_screen.dart    # Personalization screen (theme mode, colors, card designs)
   splash_screen.dart      # Branded launch screen (full artwork -> home)
-  home_screen.dart        # Home screen (emblem brand mark + New Game + How to Play)
+  home_screen.dart        # Home screen (emblem brand mark + Resume Game + New Game + How to Play)
   how_to_play_screen.dart # Rules documentation (How to Play screen)
   player.dart             # Player model (id, name, color)
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen (card table UI)
+  game_save.dart          # Save/resume: versioned GameSaveCodec + GameSaveStore
   card_widgets.dart       # Realistic PlayingCard, Turtle King CardBack, CardFace
   game_table.dart         # Felt table background, cup and crown visuals
   round_history_screen.dart # Read-only round-by-round history (type chips, latest)
@@ -723,4 +781,7 @@ test/
   round_history_screen_test.dart # Round cards, type chips, latest round, privacy
   rules_source_test.dart       # Rules single-source contract tests (authoritative concepts)
   how_to_play_screen_test.dart # How to Play content, scrolling, navigation
+  game_save_test.dart          # Save codec round-trips, rejection paths, store lifecycle
+  resume_flow_test.dart        # Home resume card, save lifecycle, corrupt-save recovery
+  small_screen_test.dart       # Every screen at 320-412px viewports, full 320x568 game
 ```

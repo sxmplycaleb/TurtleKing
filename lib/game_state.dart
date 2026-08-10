@@ -4,6 +4,12 @@ import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
 
+// The restore factory deliberately maps public named parameters onto private
+// fields (so the save layer passes readable names like `viewIndex`), which
+// the initializing-formal lint cannot express. The lint is not applicable
+// to that constructor.
+// ignore_for_file: prefer_initializing_formals
+
 /// Thrown when a Turtle King game action is attempted illegally.
 ///
 /// A rejected action never mutates the game state.
@@ -256,7 +262,13 @@ class GameState {
   }) : _players = List.unmodifiable(players),
        _deck = Deck(random: random),
        _eliminationThreshold = eliminationThreshold,
-       _lifetimeDrinks = {for (final player in players) player.id: 0} {
+       _lifetimeDrinks = {for (final player in players) player.id: 0},
+       _roundDrinks = {},
+       _calledYamada = {},
+       _roundResults = [],
+       _events = [],
+       _eliminatedIds = {},
+       _eliminations = [] {
     if (_players.length < 2) {
       throw ArgumentError.value(players, 'players', 'need at least 2 players');
     }
@@ -282,16 +294,95 @@ class GameState {
     _viewingPlayers = activePlayers;
   }
 
+  /// Restores a game from previously saved state (the save/resume layer).
+  ///
+  /// Reconstructs the game exactly as it was — hands, turn, pouring state,
+  /// drinks, eliminations, history, and the remaining deck order — without
+  /// re-dealing, re-shuffling, or recording new events. The public gameplay
+  /// API is identical to a freshly constructed game, so a restored game can
+  /// be played, saved again, and completed exactly as if it had never left
+  /// memory.
+  ///
+  /// [remainingDeck] is the ordered list of cards still in the deck, so the
+  /// next deal matches what the original game would have dealt.
+  GameState.restore({
+    required List<Player> players,
+    required int eliminationThreshold,
+    required Map<String, int> lifetimeDrinks,
+    required Map<String, int> roundDrinks,
+    required Map<String, bool> calledYamada,
+    required List<RoundResult> roundResults,
+    required List<GameEvent> events,
+    required Set<String> eliminatedIds,
+    required List<EliminationRecord> eliminations,
+    required Map<String, List<Card>> hands,
+    required int viewIndex,
+    required bool revealed,
+    required bool pouring,
+    required int pourIndex,
+    required int consecutiveHolds,
+    required CupSize cupSize,
+    required int roundNumber,
+    required bool roundFinalized,
+    required List<Player> smallestHands,
+    required List<Player> revealedPlayers,
+    required bool gameComplete,
+    required GameResult? finalResult,
+    required List<Card> remainingDeck,
+  }) : _players = List.unmodifiable(players),
+       _deck = Deck.fromCards(remainingDeck),
+       _eliminationThreshold = eliminationThreshold,
+       _lifetimeDrinks = Map.of(lifetimeDrinks),
+       _roundDrinks = Map.of(roundDrinks),
+       _calledYamada = Map.of(calledYamada),
+       _roundResults = List.of(roundResults),
+       _events = List.of(events),
+       _eliminatedIds = Set.of(eliminatedIds),
+       _eliminations = List.of(eliminations),
+       _hands = {
+         for (final entry in hands.entries) entry.key: List.of(entry.value),
+       },
+       _viewIndex = viewIndex,
+       _revealed = revealed,
+       _pouring = pouring,
+       _pourIndex = pourIndex,
+       _consecutiveHolds = consecutiveHolds,
+       _cupSize = cupSize,
+       _roundNumber = roundNumber,
+       _roundFinalized = roundFinalized,
+       _smallestHands = List.of(smallestHands),
+       _revealedPlayers = List.of(revealedPlayers),
+       _gameComplete = gameComplete,
+       _finalResult = finalResult {
+    if (_players.length < 2) {
+      throw ArgumentError.value(players, 'players', 'need at least 2 players');
+    }
+    if (_eliminationThreshold < 1) {
+      throw ArgumentError.value(
+        eliminationThreshold,
+        'eliminationThreshold',
+        'must be at least 1',
+      );
+    }
+    if (_roundNumber < 1) {
+      throw ArgumentError.value(roundNumber, 'roundNumber', 'must be >= 1');
+    }
+    if (_gameComplete != (_finalResult != null)) {
+      throw ArgumentError('gameComplete and finalResult must agree');
+    }
+    _viewingPlayers = activePlayers;
+  }
+
   final List<Player> _players;
   final Deck _deck;
   final int _eliminationThreshold;
   final Map<String, int> _lifetimeDrinks;
-  final Map<String, int> _roundDrinks = {};
-  final Map<String, bool> _calledYamada = {};
-  final List<RoundResult> _roundResults = [];
-  final List<GameEvent> _events = [];
-  final Set<String> _eliminatedIds = {};
-  final List<EliminationRecord> _eliminations = [];
+  final Map<String, int> _roundDrinks;
+  final Map<String, bool> _calledYamada;
+  final List<RoundResult> _roundResults;
+  final List<GameEvent> _events;
+  final Set<String> _eliminatedIds;
+  final List<EliminationRecord> _eliminations;
 
   /// The current round's hands, keyed by player id (2 cards each).
   Map<String, List<Card>> _hands = {};
@@ -368,6 +459,21 @@ class GameState {
 
   /// Cards remaining in the deck before the next deal.
   int get remainingCards => _deck.remainingCards;
+
+  /// The remaining deck cards in deal order, read-only. Exposed for the
+  /// save/resume layer so a restored game deals exactly the cards the
+  /// original would have dealt next; never shown in the UI.
+  List<Card> get remainingDeck => _deck.remainingCardsInOrder;
+
+  /// The viewing index within the round's viewing list. Save-layer support.
+  int get viewIndex => _viewIndex;
+
+  /// The pouring index within the active players. Save-layer support.
+  int get pourIndex => _pourIndex;
+
+  /// Consecutive holds without a YAMADA so far this round. Save-layer
+  /// support.
+  int get consecutiveHolds => _consecutiveHolds;
 
   /// The two cards dealt to [player] this round, in deal order.
   ///

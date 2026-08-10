@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide Card;
 
 import 'card_widgets.dart';
 import 'game_history_screen.dart';
+import 'game_save.dart';
 import 'game_state.dart';
 import 'game_table.dart';
 import 'how_to_play_screen.dart';
@@ -23,10 +24,16 @@ export 'card_widgets.dart' show CardFace;
 ///
 /// All game logic lives in [GameState]; this screen is presentation only.
 class GameStartScreen extends StatefulWidget {
-  const GameStartScreen({super.key, required this.game});
+  const GameStartScreen({super.key, required this.game, this.saveStore});
 
   /// The dealt game state; owns the players, hands, and turn order.
   final GameState game;
+
+  /// Optional save store. When present the game is persisted automatically
+  /// after every action and cleared when the game completes, so the player
+  /// can always resume from the last safe boundary. Null disables
+  /// persistence (tests, previews).
+  final GameSaveStore? saveStore;
 
   @override
   State<GameStartScreen> createState() => _GameStartScreenState();
@@ -55,6 +62,32 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   GameState get _game => widget.game;
 
+  @override
+  void initState() {
+    super.initState();
+    // Persist as soon as the game exists so a freshly started game is always
+    // resumable, even before the first action.
+    _persistGame();
+  }
+
+  /// Persists the game after every action; clears the save once the game
+  /// completes so a finished game is never offered as resumable.
+  void _persistGame() {
+    final store = widget.saveStore;
+    if (store == null) return;
+    if (_game.gameComplete) {
+      store.clear();
+    } else {
+      store.save(_game);
+    }
+  }
+
+  /// Saves the in-progress game (if any) and returns to the home screen.
+  void _saveAndExit() {
+    _persistGame();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   _Stage get _stage {
     // A YAMADA drink result (including one that eliminates the caller and
     // ends the game) is always shown before the game-over screen, so the
@@ -71,6 +104,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   void _reveal() {
     setState(() => _game.revealCurrentPlayer());
+    _persistGame();
   }
 
   void _pass() {
@@ -79,6 +113,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
       // After the final viewer, pouring begins: hand the phone to player 1.
       _showingHandoff = true;
     });
+    _persistGame();
   }
 
   void _continue() {
@@ -93,6 +128,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
       _showingYamadaResult = true;
       _showingHandoff = false;
     });
+    _persistGame();
   }
 
   void _holdOut() {
@@ -101,6 +137,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
       _showingYamadaResult = false;
       _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
+    _persistGame();
   }
 
   void _yamadaContinue() {
@@ -121,6 +158,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
       _showingHandoff = false;
       _showingYamadaResult = false;
     });
+    _persistGame();
   }
 
   /// Opens the shared rules screen. Pure presentation: the game state is
@@ -311,6 +349,11 @@ class _GameStartScreenState extends State<GameStartScreen> {
             icon: const Icon(Icons.menu_book_outlined),
             tooltip: 'How to Play',
             onPressed: _openHowToPlay,
+          ),
+          IconButton(
+            icon: const Icon(Icons.save_outlined),
+            tooltip: 'Save & Exit',
+            onPressed: _saveAndExit,
           ),
         ],
       ),
