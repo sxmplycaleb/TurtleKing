@@ -24,9 +24,9 @@ class Deck {
   int get remainingCards => _cards.length;
 
   static List<Card> _newDeck() => [
-        for (final suit in Suit.values)
-          for (final rank in Rank.values) Card(suit: suit, rank: rank),
-      ];
+    for (final suit in Suit.values)
+      for (final rank in Rank.values) Card(suit: suit, rank: rank),
+  ];
 
   /// Randomly reorders the deck, preserving all 52 cards.
   void shuffle() {

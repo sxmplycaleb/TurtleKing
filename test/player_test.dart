@@ -25,17 +25,19 @@ void main() {
       expect(PlayerColors.maxPlayers, 10);
     });
 
-    test('palette has exactly one color per supported player, all distinct',
-        () {
-      expect(PlayerColors.palette.length, PlayerColors.maxPlayers);
-      expect(PlayerColors.palette.toSet().length, PlayerColors.palette.length);
-    });
+    test(
+      'palette has exactly one color per supported player, all distinct',
+      () {
+        expect(PlayerColors.palette.length, PlayerColors.maxPlayers);
+        expect(
+          PlayerColors.palette.toSet().length,
+          PlayerColors.palette.length,
+        );
+      },
+    );
 
     test('nextAvailable returns the first color not already in use', () {
-      expect(
-        PlayerColors.nextAvailable(const {}),
-        PlayerColors.palette[0],
-      );
+      expect(PlayerColors.nextAvailable(const {}), PlayerColors.palette[0]);
       expect(
         PlayerColors.nextAvailable({PlayerColors.palette[0]}),
         PlayerColors.palette[1],

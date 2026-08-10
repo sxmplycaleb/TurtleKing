@@ -88,9 +88,7 @@ class _PlayerSetupScreenState extends State<PlayerSetupScreen> {
     }
     final game = GameState(players: List.unmodifiable(_players));
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GameStartScreen(game: game),
-      ),
+      MaterialPageRoute<void>(builder: (_) => GameStartScreen(game: game)),
     );
   }
 
@@ -110,8 +108,9 @@ class _PlayerSetupScreenState extends State<PlayerSetupScreen> {
               Text(
                 'Turtle King',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
               Row(

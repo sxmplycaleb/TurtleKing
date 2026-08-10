@@ -5,11 +5,7 @@ import 'package:flutter/material.dart';
 /// Intentionally minimal and immutable: identity, display name, and color.
 /// Gameplay state (score, hand, etc.) belongs in later milestones.
 class Player {
-  const Player({
-    required this.id,
-    required this.name,
-    required this.color,
-  });
+  const Player({required this.id, required this.name, required this.color});
 
   /// Unique identifier for this player within the game session.
   final String id;
