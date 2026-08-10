@@ -444,6 +444,66 @@ touching any gameplay:
 - **Out of scope** — gameplay rules, privacy, and `GameState` are untouched;
   persistence and multiplayer remain later milestones.
 
+## Milestone 13 — Card Game UI & Visual Experience
+
+This milestone turns the functional game screen into a polished card-table
+experience. It is presentation-only: the authoritative rules, `GameState`,
+privacy guarantees, and navigation are unchanged.
+
+**Reusable card widgets** (`lib/card_widgets.dart`):
+
+- `PlayingCard` — a realistic face-up poker card: cream surface, rounded
+  corners, subtle shadow, standard rank/suit corner indices (top-left and
+  rotated bottom-right), a large center suit pip, and red (`#C62828`) for
+  hearts/diamonds vs near-black (`#212121`) for spades/clubs. Card sizes
+  are responsive (`~26%` of screen width, clamped 72–104 px) with a
+  standard 2.5 : 3.5 ratio. An optional `highlighted` state draws a gold
+  border (used to single out the smallest hand at the reveal). It renders
+  the existing pure-Dart `Card` model and exposes a single semantic label
+  (e.g. "7 of Clubs") with decorative glyphs excluded from semantics.
+- `CardBack` — the face-down Turtle King card back: the navy emblem on a
+  gold-ringed cream card. It deliberately takes **no** `Card`, so a hidden
+  card can never leak its identity through pixels, semantics, or keys; its
+  accessibility label is just "Card back".
+- `CardFace` — kept as a thin wrapper around `PlayingCard` so existing
+  screens and tests using `CardFace.card` keep working unchanged.
+
+**Card-table environment** (`lib/game_table.dart`):
+
+- `GameTableBackground` — a deep-green felt table: a radial "table light"
+  gradient (green center fading to `#08211A` edges) with a subtle,
+  deterministic felt texture. The game screen sits on it behind a
+  transparent, gold-titled app bar.
+- `TurtleKingCup` — a drawn water cup whose size reflects the authoritative
+  `CupSize` (normal → large → extra-large); pure presentation, never a
+  second cup-size state.
+- `TurtleKingCrown` — the gold crown shown on the final Turtle King screen.
+
+**Game screen presentation** (`lib/game_start_screen.dart`):
+
+- Every stage keeps its exact flow and copy, restyled for the table:
+  round badge, "Player X of Y" pill, gold-ringed player avatar, and a
+  "Your turn" indicator; the viewing screens pair the one visible card
+  with a hidden `CardBack`; the neutral handoff shows a phone icon and
+  zero cards; the pour turn shows the cup, the drinks chip, a prominent
+  red "YAMADA! — Admit defeat · drink the cup" button, and a green
+  "Hold out" button; the group reveal animates in once (a short,
+  settling fade/scale) and gold-highlights the smallest hand(s); the
+  final screen shows the crown, the gold Turtle King name, and
+  de-emphasizes (struck-through) eliminated players.
+- The reveal and hands use `Wrap`, so any number of players' cards flow
+  to new rows instead of overflowing small screens; the whole screen
+  scrolls and avoids hard-coded coordinates.
+- No infinite/repeating animations are used, so gameplay never blocks and
+  the existing test flow (which relies on `pumpAndSettle`) is unaffected.
+
+**Theme** (`lib/theme.dart`) — added `TurtleKingColors`, the shared brand
+palette (navy `#0B263C`, gold `#D4AF37`, felt greens, card cream, suit
+red/black) used by the card widgets, table, and game screen.
+
+**Out of scope** — gameplay rules, `GameState`, privacy behavior, and all
+other screens are untouched; no dependencies were added.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -502,7 +562,9 @@ lib/
   player.dart             # Player model (id, name, color)
   player_colors.dart      # Auto-assigned player color palette
   player_setup_screen.dart# Player setup (add/remove/limits/start)
-  game_start_screen.dart  # Pass-and-play flow + YAMADA round screen
+  game_start_screen.dart  # Pass-and-play flow + YAMADA round screen (card table UI)
+  card_widgets.dart       # Realistic PlayingCard, Turtle King CardBack, CardFace
+  game_table.dart         # Felt table background, cup and crown visuals
   round_history_screen.dart # Read-only round-by-round history
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
@@ -521,6 +583,8 @@ test/
   deck_test.dart               # Deck creation, shuffle, dealing, reset
   game_state_test.dart         # Hands, rounds, cup, scoring, elimination, result
   game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
+  card_widgets_test.dart       # PlayingCard/CardBack/CardFace rendering + semantics
+  game_visuals_test.dart       # Table, hidden cards, cup, YAMADA, reveal, winner UI
   how_to_play_screen_test.dart # How to Play content, scrolling, navigation
   round_history_screen_test.dart# Round history content, privacy, scrolling
 ```

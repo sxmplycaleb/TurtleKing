@@ -1,46 +1,14 @@
 import 'package:flutter/material.dart' hide Card;
 
-import 'card.dart';
+import 'card_widgets.dart';
 import 'game_state.dart';
+import 'game_table.dart';
 import 'how_to_play_screen.dart';
 import 'player.dart';
 import 'round_history_screen.dart';
+import 'theme.dart';
 
-/// A face-up view of a single [Card], sized for a phone screen.
-class CardFace extends StatelessWidget {
-  const CardFace({super.key, required this.card});
-
-  final Card card;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isRed = card.suit == Suit.hearts || card.suit == Suit.diamonds;
-
-    return Container(
-      width: 116,
-      height: 162,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline),
-      ),
-      child: Center(
-        child: Text(
-          card.displayName,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: isRed
-                ? theme.colorScheme.error
-                : theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
+export 'card_widgets.dart' show CardFace;
 
 /// The pass-and-play game flow, implementing the authoritative rules:
 ///
@@ -51,6 +19,8 @@ class CardFace extends StatelessWidget {
 ///    hand drinks a full cup plus an extra cup.
 /// 4. Rounds repeat with a growing cup until one player remains — the
 ///    Turtle King.
+///
+/// All game logic lives in [GameState]; this screen is presentation only.
 class GameStartScreen extends StatefulWidget {
   const GameStartScreen({super.key, required this.game});
 
@@ -167,75 +137,110 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Turtle King'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu_book_outlined),
-            tooltip: 'How to Play',
-            onPressed: _openHowToPlay,
-          ),
-        ],
+  // ---------------------------------------------------------------------
+  // Shared visual helpers
+  // ---------------------------------------------------------------------
+
+  /// Label style for the gold primary buttons (dark text on gold).
+  static const TextStyle _goldButtonLabel = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF33290A),
+  );
+
+  ButtonStyle _goldButtonStyle() => FilledButton.styleFrom(
+    backgroundColor: TurtleKingColors.gold,
+    foregroundColor: const Color(0xFF33290A),
+    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+  );
+
+  /// The current round as a branded pill (exact "Round N" text).
+  Widget _roundBadge(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: TurtleKingColors.gold.withValues(alpha: 0.7)),
       ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_game.roundNumber > 0 && !_game.gameComplete) ...[
-                  Text(
-                    'Round ${_game.roundNumber}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                switch (_stage) {
-                  _Stage.ready => _readyView(context),
-                  _Stage.revealed => _revealedView(context),
-                  _Stage.handoff => _handoffView(context),
-                  _Stage.pourTurn => _pourTurnView(context),
-                  _Stage.yamadaResult => _yamadaResultView(context),
-                  _Stage.roundComplete => _roundCompleteView(context),
-                  _Stage.gameOver => _gameOverView(context),
-                },
-              ],
-            ),
-          ),
+      child: Text(
+        'Round ${_game.roundNumber}',
+        style: const TextStyle(
+          color: TurtleKingColors.gold,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
         ),
       ),
     );
   }
 
+  /// The active player's avatar: a gold ring around their color disc.
+  Widget _turnAvatar(Player player) {
+    return Container(
+      padding: const EdgeInsets.all(2.5),
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFE082), TurtleKingColors.gold],
+        ),
+      ),
+      child: CircleAvatar(radius: 18, backgroundColor: player.color),
+    );
+  }
+
+  /// "Player X of Y" pill plus the player's name and turn indicator.
   Widget _playerHeader(BuildContext context, Player player) {
     final theme = Theme.of(context);
     return Column(
       children: [
-        Text(
-          'Player ${_game.currentPlayerIndex + 1} of ${_game.currentPlayerCount}',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            'Player ${_game.currentPlayerIndex + 1} of ${_game.currentPlayerCount}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircleAvatar(radius: 12, backgroundColor: player.color),
+            _turnAvatar(player),
             const SizedBox(width: 10),
             Flexible(
               child: Text(
                 player.name,
                 style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Current-turn indicator (a colored dot + label).
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Color(0xFF81C784),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Your turn',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
             ),
           ],
         ),
@@ -246,9 +251,88 @@ class _GameStartScreenState extends State<GameStartScreen> {
   Widget _backToSetup(BuildContext context) {
     return TextButton(
       onPressed: () => Navigator.of(context).pop(),
+      style: TextButton.styleFrom(foregroundColor: Colors.white70),
       child: const Text('Back to setup'),
     );
   }
+
+  /// A small glass label pill, e.g. the drinks counter.
+  Widget _infoChip(Widget child) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: TurtleKingColors.feltDark,
+      appBar: AppBar(
+        title: const Text(
+          'Turtle King',
+          style: TextStyle(
+            color: TurtleKingColors.gold,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu_book_outlined),
+            tooltip: 'How to Play',
+            onPressed: _openHowToPlay,
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          const GameTableBackground(),
+          SafeArea(
+            minimum: const EdgeInsets.only(top: kToolbarHeight + 4),
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_game.roundNumber > 0 && !_game.gameComplete) ...[
+                      _roundBadge(context),
+                      const SizedBox(height: 14),
+                    ],
+                    switch (_stage) {
+                      _Stage.ready => _readyView(context),
+                      _Stage.revealed => _revealedView(context),
+                      _Stage.handoff => _handoffView(context),
+                      _Stage.pourTurn => _pourTurnView(context),
+                      _Stage.yamadaResult => _yamadaResultView(context),
+                      _Stage.roundComplete => _roundCompleteView(context),
+                      _Stage.gameOver => _gameOverView(context),
+                    },
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Stage views
+  // ---------------------------------------------------------------------
 
   Widget _readyView(BuildContext context) {
     final theme = Theme.of(context);
@@ -258,19 +342,26 @@ class _GameStartScreenState extends State<GameStartScreen> {
       children: [
         _playerHeader(context, _game.currentPlayer),
         const SizedBox(height: 24),
+        // Both cards are dealt but hidden: card backs carry no identity.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [CardBack(), SizedBox(width: 14), CardBack()],
+        ),
+        const SizedBox(height: 20),
         Text(
           'You have two cards, but you may only look at ONE of them. View '
           'it privately — do not show anyone else.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white,
+            height: 1.4,
+          ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
         FilledButton(
           onPressed: _reveal,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          child: const Text('Reveal My Card'),
+          style: _goldButtonStyle(),
+          child: const Text('Reveal My Card', style: _goldButtonLabel),
         ),
         const SizedBox(height: 8),
         _backToSetup(context),
@@ -290,17 +381,26 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'This is the only card you may look at. Memorize it, then pass '
           'the phone to the next player.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white,
+            height: 1.4,
+          ),
         ),
-        const SizedBox(height: 24),
-        CardFace(card: card),
-        const SizedBox(height: 32),
+        const SizedBox(height: 20),
+        // The one visible card face-up; the second card stays face-down.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CardFace(card: card),
+            const SizedBox(width: 14),
+            const CardBack(),
+          ],
+        ),
+        const SizedBox(height: 28),
         FilledButton(
           onPressed: _pass,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          ),
-          child: const Text('Pass to Next Player'),
+          style: _goldButtonStyle(),
+          child: const Text('Pass to Next Player', style: _goldButtonLabel),
         ),
       ],
     );
@@ -315,10 +415,21 @@ class _GameStartScreenState extends State<GameStartScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: 0.08),
+            border: Border.all(color: TurtleKingColors.gold),
+          ),
+          child: const Icon(Icons.phone_iphone, color: Colors.white, size: 34),
+        ),
+        const SizedBox(height: 16),
         Text(
           'Pass the phone',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -326,7 +437,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'Hand the phone to ${next.name}.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge,
+          style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white),
         ),
         const SizedBox(height: 8),
         Text(
@@ -336,16 +447,15 @@ class _GameStartScreenState extends State<GameStartScreen> {
               : 'Their card stays hidden until they choose to reveal it.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            color: Colors.white70,
+            height: 1.4,
           ),
         ),
         const SizedBox(height: 32),
         FilledButton(
           onPressed: _continue,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          child: const Text('Continue'),
+          style: _goldButtonStyle(),
+          child: const Text('Continue', style: _goldButtonLabel),
         ),
       ],
     );
@@ -358,47 +468,87 @@ class _GameStartScreenState extends State<GameStartScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _playerHeader(context, player),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        // The cup, drawn at its authoritative size (normal/large/extra).
+        TurtleKingCup(size: _game.cupSize, diameter: 54),
+        const SizedBox(height: 8),
         Text(
           'Water is being poured into the ${_game.cupSize.label} cup. If '
           'you feel your other card is too small, shout YAMADA — or hold '
           'out.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           'Your visible card (private):',
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+          style: theme.textTheme.titleSmall?.copyWith(color: Colors.white70),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CardFace(card: _game.visibleCardOf(player)),
+            const SizedBox(width: 14),
+            const CardBack(),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _infoChip(
+          Text(
+            'Drinks: ${_game.drinksOf(player)} '
+            '(${_game.eliminationThreshold} drinks eliminate)',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
         ),
-        const SizedBox(height: 12),
-        CardFace(card: _game.visibleCardOf(player)),
-        const SizedBox(height: 16),
-        Text(
-          'Drinks: ${_game.drinksOf(player)} '
-          '(${_game.eliminationThreshold} drinks eliminate)',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
+        // YAMADA is the loud, prominent admit-defeat action.
         FilledButton(
           onPressed: _yamada,
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            backgroundColor: TurtleKingColors.suitRed,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
           ),
-          child: const Text('YAMADA!'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'YAMADA!',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                'Admit defeat — drink the cup',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.tonal(
           onPressed: _holdOut,
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            backgroundColor: const Color(0xFF2E7D32),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
           ),
-          child: const Text('Hold out'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Hold out', style: TextStyle(fontSize: 16)),
+              Text(
+                'Keep your cards',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         _backToSetup(context),
@@ -419,10 +569,13 @@ class _GameStartScreenState extends State<GameStartScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        TurtleKingCup(size: _game.cupSize, diameter: 54),
+        const SizedBox(height: 6),
         Text(
           'YAMADA!',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
+            color: TurtleKingColors.gold,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -430,21 +583,42 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           '${player.name} admitted defeat and drank the water in the cup.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: Colors.white,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           'Lifetime drinks: ${_game.drinksOf(player)}',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
+          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
         ),
         if (eliminated) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: TurtleKingColors.suitRed,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'ELIMINATED',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Text(
             '${player.name} has been eliminated!',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.error,
+              color: const Color(0xFFFF8A80),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -454,7 +628,10 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'New cards were dealt. Look at your new visible card, then '
             'continue.',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.white,
+              height: 1.4,
+            ),
           ),
         ],
         if (gameOver) ...[
@@ -463,7 +640,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'The game is over!',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.error,
+              color: const Color(0xFFFF8A80),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -471,10 +648,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 32),
         FilledButton(
           onPressed: _yamadaContinue,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          child: const Text('Continue'),
+          style: _goldButtonStyle(),
+          child: const Text('Continue', style: _goldButtonLabel),
         ),
       ],
     );
@@ -496,6 +671,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'Round ${_game.roundNumber} complete',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -504,36 +680,56 @@ class _GameStartScreenState extends State<GameStartScreen> {
           Text(
             'YAMADA was called — the round ended without a reveal.',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
           )
         else
           Text(
             'Everyone held out — all cards are revealed together!',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
           ),
-        const SizedBox(height: 16),
         if (!yamadaCalled) ...[
-          for (final player in _game.revealedPlayers) ...[
-            Text(
-              player.name,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          const SizedBox(height: 16),
+          // One-shot entrance for the group reveal (short, settles).
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutCubic,
+            builder: (context, t, child) => Opacity(
+              opacity: t,
+              child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
               children: [
-                for (var i = 0; i < _game.handOf(player).length; i++) ...[
-                  if (i > 0) const SizedBox(width: 12),
-                  CardFace(card: _game.handOf(player)[i]),
+                for (final player in _game.revealedPlayers) ...[
+                  Text(
+                    player.name,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Wrap so many revealed hands never overflow the screen.
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (var i = 0; i < _game.handOf(player).length; i++)
+                        CardFace(
+                          card: _game.handOf(player)[i],
+                          highlighted: result.smallestHands.contains(player),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                 ],
               ],
             ),
-            const SizedBox(height: 12),
-          ],
+          ),
+          const SizedBox(height: 4),
           Text(
             result.smallestHands.length == 1
                 ? 'Smallest hand: '
@@ -545,7 +741,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
                       'out.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
+              color: const Color(0xFFFFE082),
               fontWeight: FontWeight.w600,
+              height: 1.4,
             ),
           ),
         ],
@@ -556,7 +754,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             '${eliminatedThisRound.map((record) => record.player.name).join(', ')}',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
+              color: const Color(0xFFFF8A80),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -568,7 +766,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'round · ${_game.drinksOf(player)} lifetime'
             '${_game.calledYamadaThisRound(player) ? ' · YAMADA' : ''}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
           ),
           const SizedBox(height: 4),
         ],
@@ -578,16 +776,15 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'Next round cup: ${_game.cupSize.label}',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: TurtleKingColors.gold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _startNextRound,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: const Text('Start Next Round'),
+            style: _goldButtonStyle(),
+            child: const Text('Start Next Round', style: _goldButtonLabel),
           ),
         ],
         const SizedBox(height: 8),
@@ -603,10 +800,13 @@ class _GameStartScreenState extends State<GameStartScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const TurtleKingCrown(size: 84),
+        const SizedBox(height: 8),
         Text(
           'Game complete',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -616,6 +816,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'Turtle King: ${result.turtleKings.first.name}',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleLarge?.copyWith(
+              color: TurtleKingColors.gold,
               fontWeight: FontWeight.bold,
             ),
           )
@@ -624,6 +825,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'No Turtle King — every player was eliminated.',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleLarge?.copyWith(
+              color: Colors.white,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -631,16 +833,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'Rounds played: ${result.roundsPlayed}',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
         ),
         const SizedBox(height: 8),
         if (result.finalists.isNotEmpty) ...[
           Text(
             'Finalists: ${result.finalists.map((p) => p.name).join(', ')}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
           ),
           const SizedBox(height: 4),
         ],
@@ -650,7 +850,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             '${result.eliminated.map((p) => p.name).join(', ')}',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
+              color: const Color(0xFFFF8A80),
             ),
           ),
         ],
@@ -659,7 +859,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
           Text(
             '${player.name}: ${result.drinks[player]} drink(s)',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: _game.isEliminated(player) ? Colors.white54 : Colors.white,
+              decoration: _game.isEliminated(player)
+                  ? TextDecoration.lineThrough
+                  : null,
+            ),
           ),
           const SizedBox(height: 4),
         ],
@@ -667,17 +872,17 @@ class _GameStartScreenState extends State<GameStartScreen> {
         OutlinedButton(
           onPressed: _openRoundHistory,
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            foregroundColor: TurtleKingColors.gold,
+            side: const BorderSide(color: TurtleKingColors.gold),
+            padding: const EdgeInsets.symmetric(vertical: 14),
           ),
           child: const Text('Round History'),
         ),
         const SizedBox(height: 8),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          child: const Text('Back to setup'),
+          style: _goldButtonStyle(),
+          child: const Text('Back to setup', style: _goldButtonLabel),
         ),
       ],
     );
