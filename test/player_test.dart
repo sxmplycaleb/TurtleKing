@@ -17,6 +17,36 @@ void main() {
       expect(player.name, 'Caleb');
       expect(player.color, const Color(0xFFD32F2F));
     });
+
+    test('is a value type: equal fields mean equal players', () {
+      const a = Player(id: 'p1', name: 'Caleb', color: Color(0xFFD32F2F));
+      const b = Player(id: 'p1', name: 'Caleb', color: Color(0xFFD32F2F));
+      expect(a, b);
+      expect(b, a);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('players differing in id, name, or color are not equal', () {
+      const base = Player(id: 'p1', name: 'Caleb', color: Color(0xFFD32F2F));
+      expect(
+        base,
+        isNot(const Player(id: 'p2', name: 'Caleb', color: Color(0xFFD32F2F))),
+      );
+      expect(
+        base,
+        isNot(const Player(id: 'p1', name: 'Mina', color: Color(0xFFD32F2F))),
+      );
+      expect(
+        base,
+        isNot(const Player(id: 'p1', name: 'Caleb', color: Color(0xFF1976D2))),
+      );
+    });
+
+    test('does not equal a non-Player value', () {
+      const player = Player(id: 'p1', name: 'Caleb', color: Color(0xFFD32F2F));
+      expect(player, isNot('p1'));
+      expect(player == const Object(), isFalse);
+    });
   });
 
   group('PlayerColors', () {

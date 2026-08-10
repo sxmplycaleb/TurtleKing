@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Card;
 
 import 'card_widgets.dart';
+import 'game_history_screen.dart';
 import 'game_state.dart';
 import 'game_table.dart';
 import 'how_to_play_screen.dart';
@@ -134,6 +135,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
   void _openRoundHistory() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => RoundHistoryScreen(game: _game)),
+    );
+  }
+
+  /// Opens the read-only game history (chronological replay) for the current
+  /// game. Pure presentation: the game state is untouched.
+  void _openGameHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => GameHistoryScreen(game: _game)),
     );
   }
 
@@ -921,6 +930,16 @@ class _GameStartScreenState extends State<GameStartScreen> {
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
           child: const Text('Round History'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: _openGameHistory,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: style.accentText,
+            side: BorderSide(color: style.accentText),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: const Text('Game History'),
         ),
         const SizedBox(height: 8),
         FilledButton(

@@ -15,4 +15,18 @@ class Player {
 
   /// The player's assigned color, used to tell players apart.
   final Color color;
+
+  /// Value equality: two players are equal when their identity, display
+  /// name, and color all match. Gameplay code (e.g. comparing the current
+  /// player against the roster) relies on this being stable.
+  @override
+  bool operator ==(Object other) {
+    return other is Player &&
+        other.id == id &&
+        other.name == name &&
+        other.color == color;
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, color);
 }
