@@ -42,6 +42,7 @@ class RoundHistoryScreen extends StatelessWidget {
                     roundNumber: roundNumber,
                     result: results[index],
                     players: game.players,
+                    isLatest: index == results.length - 1,
                     eliminatedThisRound: game.eliminationHistory
                         .where((record) => record.round == roundNumber)
                         .toList(),
@@ -53,31 +54,40 @@ class RoundHistoryScreen extends StatelessWidget {
   }
 }
 
-/// One completed round: its number, cup size, every player's drinks and
-/// YAMADA calls for that round, the smallest-hand penalty, and anyone
-/// eliminated during it.
+/// One completed round: its number, cup size, round type, every player's
+/// drinks and YAMADA calls for that round, the smallest-hand penalty, and
+/// anyone eliminated during it. The latest round is highlighted.
 class _RoundCard extends StatelessWidget {
   const _RoundCard({
     required this.roundNumber,
     required this.result,
     required this.players,
+    required this.isLatest,
     required this.eliminatedThisRound,
   });
 
   final int roundNumber;
   final RoundResult result;
   final List<Player> players;
+
+  /// Whether this is the most recently completed round.
+  final bool isLatest;
+
   final List<EliminationRecord> eliminatedThisRound;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final yamadaRound = result.calledYamada.values.any((called) => called);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
+        border: isLatest
+            ? Border.all(color: theme.colorScheme.primary, width: 2)
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,6 +97,15 @@ class _RoundCard extends StatelessWidget {
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _TypeChip(yamadaRound: yamadaRound),
+              if (isLatest) _LatestChip(),
+            ],
           ),
           const SizedBox(height: 8),
           for (final player in players) ...[
@@ -110,6 +129,60 @@ class _RoundCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// A small pill that says whether the round ended via YAMADA or a
+/// simultaneous reveal, so the two round types are distinguishable at a
+/// glance.
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({required this.yamadaRound});
+
+  final bool yamadaRound;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = yamadaRound
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        yamadaRound ? 'YAMADA round' : 'Hold-out reveal',
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+/// Marks the most recently completed round.
+class _LatestChip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'Latest',
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.onPrimary,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

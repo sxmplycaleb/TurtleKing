@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:turtle_king/game_history_screen.dart';
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
 import 'package:turtle_king/player.dart';
@@ -343,6 +344,25 @@ void main() {
 
       expect(find.byType(RoundHistoryScreen), findsOneWidget);
       expect(find.text('Round History'), findsOneWidget);
+    });
+
+    testWidgets('game history opens from the final screen', (tester) async {
+      final game = gameForTwo(threshold: 2);
+      await pumpGame(tester, game);
+
+      await finishViewing(tester);
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await tapVisible(tester, 'YAMADA!');
+      await tapVisible(tester, 'Continue');
+      await tapVisible(tester, 'YAMADA!');
+      await tapVisible(tester, 'Continue');
+
+      await tapVisible(tester, 'Game History');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GameHistoryScreen), findsOneWidget);
+      expect(find.text('Game History'), findsOneWidget);
     });
   });
 }

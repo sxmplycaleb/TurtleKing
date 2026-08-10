@@ -563,6 +563,73 @@ no persistence at all). No other dependencies.
 privacy contract are unchanged; no networking, accounts, or storage beyond
 the three preference keys.
 
+## Milestone 15 — History, Replay & Rules Architecture
+
+This milestone records *what happened* during a game and makes the rules
+documentation a single shared source — without changing any gameplay
+mechanics and without ever exposing hidden card identities.
+
+**History architecture** (`lib/game_state.dart`):
+
+- `GameEventType` + `GameEvent` — a typed, immutable replay log appended by
+  `GameState` as the game runs. Events are pure facts (who did what, in
+  which round, with which cup): game start, round start, cards dealt
+  (players only, never card identities), player viewed, handoff, pouring
+  started, held out, called YAMADA, YAMADA drink, replacement cards dealt,
+  reveal occurred, smallest hand(s) determined, full-cup penalty, extra-cup
+  penalty, elimination, cup-size transition, round result, round complete,
+  and game complete. `events` / `eventsForRound(round)` expose the
+  chronological log immutably.
+- Recording happens only inside valid mutations — a rejected action records
+  nothing, so history stays atomic with the state. Recorded events are
+  snapshots: later rounds can never rewrite earlier history.
+- The existing `RoundResult`, `EliminationRecord`, and `GameResult` models
+  are unchanged; the event log complements them as the game-level replay.
+
+**Round summaries** (`lib/round_history_screen.dart`):
+
+- Each completed round card now shows a type chip distinguishing a
+  **YAMADA round** from a **Hold-out reveal** round, and the latest round is
+  highlighted (accent border + "Latest" chip). The per-round details
+  (cup size, per-player drinks, YAMADA calls, smallest hand, eliminations)
+  are unchanged.
+
+**Game history** (`lib/game_history_screen.dart`):
+
+- A read-only, chronological game-level replay reachable from the final
+  result screen ("Game History" button). It shows a game summary (players,
+  rounds played, Turtle King/finalists/eliminated, lifetime drinks) and a
+  timeline of every recorded event with round numbers.
+
+**Single-source rules** (`lib/rules.dart`):
+
+- `RulesContent.sections` is the one application-level copy of the
+  user-facing rules text. `HowToPlayScreen` renders it (no duplicated text
+  in widgets), the in-game rules button uses the same screen, and contract
+  tests verify the authoritative concepts stay present.
+
+**Contract tests**: `test/rules_source_test.dart` verifies every required
+concept (two cards, one visible, YAMADA = admit defeat + drink + new cards,
+hold-out reveal, smallest-hand + extra cup, cup progression, six drinks,
+elimination, last player = Turtle King) maps to a stable semantic section
+id; `test/game_history_test.dart` verifies the replay log records YAMADA and
+no-YAMADA rounds, ties, penalties, six-drink elimination, cup progression,
+chronological order, atomicity on rejected actions, and that events never
+contain card identities.
+
+**Privacy guarantees**: events carry types, players, cup sizes, and aggregate
+round results only — no rank, suit, hand, or `Card` object is ever recorded.
+The history and rules screens render no card widgets and no card identities;
+legitimately revealed card values are intentionally *not* stored in history
+(the authoritative rules only require revealing them on screen at the
+group reveal).
+
+**Scope boundaries**: M15 adds no save/resume, no database, no persistent
+history across sessions (history lives for the current in-memory game), no
+sound/haptics, no card-flip animation, and no landscape layout — those
+belong to later milestones. Gameplay rules, `GameState` semantics, the
+privacy contract, and the M13/M14 visual system are unchanged.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -626,10 +693,12 @@ lib/
   game_start_screen.dart  # Pass-and-play flow + YAMADA round screen (card table UI)
   card_widgets.dart       # Realistic PlayingCard, Turtle King CardBack, CardFace
   game_table.dart         # Felt table background, cup and crown visuals
-  round_history_screen.dart # Read-only round-by-round history
+  round_history_screen.dart # Read-only round-by-round history (type chips, latest)
+  game_history_screen.dart # Read-only game-level replay timeline (Game History)
+  rules.dart              # Single source of user-facing rules text (RulesContent)
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
-  game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result
+  game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result, event log
 assets/
   branding/               # Turtle King artwork (splash, emblem, icon)
 tool/
@@ -649,6 +718,9 @@ test/
   settings_store_test.dart     # Preferences defaults, selection, persistence
   theme_test.dart              # Light/dark themes, accent themes, card/table styles
   settings_screen_test.dart    # Settings UI, selection, app-wide application, navigation
+  game_history_test.dart       # Game replay event log (chronology, YAMADA, ties, privacy)
+  game_history_screen_test.dart# Game History timeline UI, summary, privacy, small screens
+  round_history_screen_test.dart # Round cards, type chips, latest round, privacy
+  rules_source_test.dart       # Rules single-source contract tests (authoritative concepts)
   how_to_play_screen_test.dart # How to Play content, scrolling, navigation
-  round_history_screen_test.dart# Round history content, privacy, scrolling
 ```

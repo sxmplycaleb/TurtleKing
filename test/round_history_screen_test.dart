@@ -157,5 +157,79 @@ void main() {
 
       expect(find.byType(CardFace), findsNothing);
     });
+
+    testWidgets('labels a hold-out round with the reveal chip', (tester) async {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        eliminationThreshold: 100,
+      );
+      viewAll(game);
+      everyoneHoldsOut(game);
+
+      await pumpHistory(tester, game);
+
+      expect(find.text('Hold-out reveal'), findsOneWidget);
+      expect(find.text('YAMADA round'), findsNothing);
+    });
+
+    testWidgets('labels a YAMADA round distinctly from a reveal round', (
+      tester,
+    ) async {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        eliminationThreshold: 100,
+      );
+      viewAll(game);
+      final first = game.pourCurrentPlayer;
+      game.callYamada(first);
+      game.holdOut(first);
+      game.holdOut(game.pourCurrentPlayer);
+
+      await pumpHistory(tester, game);
+
+      expect(find.text('YAMADA round'), findsOneWidget);
+      expect(find.text('Hold-out reveal'), findsNothing);
+    });
+
+    testWidgets('marks the latest round and shows the next cup size', (
+      tester,
+    ) async {
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        eliminationThreshold: 100,
+      );
+      viewAll(game);
+      everyoneHoldsOut(game);
+      game.startNextRound();
+      viewAll(game);
+      everyoneHoldsOut(game);
+
+      await pumpHistory(tester, game);
+
+      // Exactly one card is marked as the latest round.
+      expect(find.text('Latest'), findsOneWidget);
+      // Round 2 was played with the large cup (progression from round 1).
+      expect(find.text('Round 2 — large cup'), findsOneWidget);
+    });
+
+    testWidgets('works on a small phone without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final game = GameState(
+        players: makePlayers(2),
+        random: Random(1),
+        eliminationThreshold: 100,
+      );
+      viewAll(game);
+      everyoneHoldsOut(game);
+
+      await pumpHistory(tester, game);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

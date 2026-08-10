@@ -129,6 +129,106 @@ class GameResult {
   final int roundsPlayed;
 }
 
+/// The kind of event recorded in the game replay log.
+///
+/// Events are pure facts about the game — who did what, in which round, and
+/// with which cup size — and never carry card identities, so the log can
+/// never leak a hidden hand.
+enum GameEventType {
+  /// The game was created with its starting roster.
+  gameStarted,
+
+  /// A new round began (round number in [GameEvent.round]).
+  roundStarted,
+
+  /// Fresh two-card hands were dealt to every active player.
+  cardsDealt,
+
+  /// A player looked at their one permitted (visible) card.
+  playerViewed,
+
+  /// The phone was passed to the next player (neutral handoff).
+  handoff,
+
+  /// The water-pouring phase began after everyone viewed their card.
+  pouringStarted,
+
+  /// A player held out during the pouring phase.
+  playerHeldOut,
+
+  /// A player called YAMADA, admitting defeat.
+  playerCalledYamada,
+
+  /// A YAMADA caller drank the water in the cup.
+  yamadaDrink,
+
+  /// A YAMADA caller was dealt two new cards and continues.
+  replacementCardsDealt,
+
+  /// The round completed.
+  roundCompleted,
+
+  /// Everyone held out and all hands were revealed together.
+  revealOccurred,
+
+  /// The smallest hand(s) were determined after the reveal.
+  smallestDetermined,
+
+  /// A smallest-hand player drank one full cup.
+  fullCupPenalty,
+
+  /// A smallest-hand player drank one extra cup for holding out.
+  extraCupPenalty,
+
+  /// A player was eliminated (reached the drinking threshold).
+  playerEliminated,
+
+  /// The cup grew one step (normal → large → extra-large).
+  cupSizeAdvanced,
+
+  /// The game completed and a final result was produced.
+  gameCompleted,
+
+  /// The deterministic result of a completed round was recorded.
+  roundResult,
+}
+
+/// One immutable entry in the game replay log.
+///
+/// [round] is 1-based for round-scoped events and 0 for game-level events
+/// (game start / completion). Optional payloads: the affected [player], the
+/// affected [players] (e.g. everyone tied for the smallest hand), the [cupSize]
+/// in effect (or the new size after a [GameEventType.cupSizeAdvanced]), and the
+/// [result] for a [GameEventType.roundResult] event.
+class GameEvent {
+  const GameEvent({
+    required this.type,
+    required this.round,
+    this.player,
+    this.players = const [],
+    this.cupSize,
+    this.result,
+  });
+
+  /// What happened.
+  final GameEventType type;
+
+  /// The 1-based round the event belongs to (0 for game-level events).
+  final int round;
+
+  /// The single player the event concerns, when applicable.
+  final Player? player;
+
+  /// The players the event concerns, when more than one (ties, deals).
+  final List<Player> players;
+
+  /// The cup size in effect, or the new size after a cup-size transition.
+  final CupSize? cupSize;
+
+  /// The recorded round result for a [GameEventType.roundResult] event.
+  final RoundResult? result;
+}
+
 /// The pass-and-play state of a Turtle King game, implementing the
 /// authoritative rules:
 ///
@@ -169,7 +269,16 @@ class GameState {
     }
     _deck.shuffle();
     _roundNumber = 1;
+    _record(const GameEvent(type: GameEventType.gameStarted, round: 0));
+    _record(GameEvent(type: GameEventType.roundStarted, round: _roundNumber));
     _dealHands();
+    _record(
+      GameEvent(
+        type: GameEventType.cardsDealt,
+        round: _roundNumber,
+        players: List.of(activePlayers),
+      ),
+    );
     _viewingPlayers = activePlayers;
   }
 
@@ -180,6 +289,7 @@ class GameState {
   final Map<String, int> _roundDrinks = {};
   final Map<String, bool> _calledYamada = {};
   final List<RoundResult> _roundResults = [];
+  final List<GameEvent> _events = [];
   final Set<String> _eliminatedIds = {};
   final List<EliminationRecord> _eliminations = [];
 
@@ -237,6 +347,20 @@ class GameState {
   /// The full elimination history, in elimination order.
   List<EliminationRecord> get eliminationHistory =>
       List.unmodifiable(_eliminations);
+
+  /// Every recorded game event, in chronological order. Immutable; events
+  /// never carry card identities.
+  List<GameEvent> get events => List.unmodifiable(_events);
+
+  /// The events recorded for [round] (1-based), in chronological order.
+  /// Game-level events (game start / completion) are excluded.
+  List<GameEvent> eventsForRound(int round) => [
+    for (final event in _events)
+      if (event.round == round) event,
+  ];
+
+  /// Appends one immutable event to the replay log.
+  void _record(GameEvent event) => _events.add(event);
 
   // ---------------------------------------------------------------------
   // Deck / hands
@@ -305,6 +429,13 @@ class GameState {
       throw const YamadaRoundException('all players have already viewed');
     }
     _revealed = true;
+    _record(
+      GameEvent(
+        type: GameEventType.playerViewed,
+        round: _roundNumber,
+        player: _viewingPlayers[_viewIndex],
+      ),
+    );
   }
 
   /// Passes the phone to the next viewer; after the final viewer, pouring
@@ -321,10 +452,14 @@ class GameState {
     }
     _viewIndex++;
     _revealed = false;
+    _record(GameEvent(type: GameEventType.handoff, round: _roundNumber));
     if (allPlayersViewed) {
       _pouring = true;
       _pourIndex = 0;
       _consecutiveHolds = 0;
+      _record(
+        GameEvent(type: GameEventType.pouringStarted, round: _roundNumber),
+      );
     }
   }
 
@@ -393,6 +528,13 @@ class GameState {
   void holdOut(Player player) {
     _validatePourAction(player);
     _consecutiveHolds++;
+    _record(
+      GameEvent(
+        type: GameEventType.playerHeldOut,
+        round: _roundNumber,
+        player: player,
+      ),
+    );
     if (_consecutiveHolds >= activePlayerCount) {
       _completeRound();
       return;
@@ -413,12 +555,27 @@ class GameState {
   void callYamada(Player player) {
     _validatePourAction(player);
     _calledYamada[player.id] = true;
-    _drink(player);
+    _record(
+      GameEvent(
+        type: GameEventType.playerCalledYamada,
+        round: _roundNumber,
+        player: player,
+        cupSize: _cupSize,
+      ),
+    );
+    _drink(player, GameEventType.yamadaDrink);
     _consecutiveHolds = 0;
     _maybeCompleteGame();
     if (_gameComplete) return;
     if (!isEliminated(player)) {
       _redealHand(player);
+      _record(
+        GameEvent(
+          type: GameEventType.replacementCardsDealt,
+          round: _roundNumber,
+          player: player,
+        ),
+      );
       return; // the same player's turn repeats with the new cards
     }
     // The eliminated player is gone from [activePlayers], so the next active
@@ -463,9 +620,17 @@ class GameState {
   /// Records one drinking event for [player] and eliminates them on the spot
   /// if the event reaches the threshold. Game completion is evaluated by the
   /// caller, after the surrounding action fully resolves.
-  void _drink(Player player) {
+  void _drink(Player player, GameEventType drinkType) {
     _lifetimeDrinks[player.id] = _lifetimeDrinks[player.id]! + 1;
     _roundDrinks[player.id] = (_roundDrinks[player.id] ?? 0) + 1;
+    _record(
+      GameEvent(
+        type: drinkType,
+        round: _roundNumber,
+        player: player,
+        cupSize: _cupSize,
+      ),
+    );
     if (_lifetimeDrinks[player.id]! >= _eliminationThreshold) {
       _eliminate(player);
     }
@@ -489,13 +654,35 @@ class GameState {
       _revealedPlayers = List.of(activePlayers);
       final smallest = _smallestHandsAmong(activePlayers);
       _smallestHands = smallest;
+      _record(
+        GameEvent(
+          type: GameEventType.revealOccurred,
+          round: _roundNumber,
+          players: List.of(_revealedPlayers),
+        ),
+      );
+      _record(
+        GameEvent(
+          type: GameEventType.smallestDetermined,
+          round: _roundNumber,
+          players: List.of(smallest),
+        ),
+      );
       for (final player in smallest) {
         // Full cup for the smallest hand, plus the extra holding-out cup.
-        _drink(player);
-        _drink(player);
+        _drink(player, GameEventType.fullCupPenalty);
+        _drink(player, GameEventType.extraCupPenalty);
       }
     }
     _finalizeRound();
+    _record(
+      GameEvent(
+        type: GameEventType.roundResult,
+        round: _roundNumber,
+        result: _roundResults.last,
+      ),
+    );
+    _record(GameEvent(type: GameEventType.roundCompleted, round: _roundNumber));
     if (!yamadaCalled) {
       _advanceCupSize();
     }
@@ -547,6 +734,13 @@ class GameState {
       CupSize.normal => CupSize.large,
       CupSize.large || CupSize.extraLarge => CupSize.extraLarge,
     };
+    _record(
+      GameEvent(
+        type: GameEventType.cupSizeAdvanced,
+        round: _roundNumber,
+        cupSize: _cupSize,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------
@@ -584,7 +778,15 @@ class GameState {
     _consecutiveHolds = 0;
     _roundFinalized = false;
     _roundNumber++;
+    _record(GameEvent(type: GameEventType.roundStarted, round: _roundNumber));
     _dealHands();
+    _record(
+      GameEvent(
+        type: GameEventType.cardsDealt,
+        round: _roundNumber,
+        players: List.of(activePlayers),
+      ),
+    );
     _viewingPlayers = activePlayers;
   }
 
@@ -604,6 +806,13 @@ class GameState {
         reason: EliminationReason.sixDrinks,
       ),
     );
+    _record(
+      GameEvent(
+        type: GameEventType.playerEliminated,
+        round: _roundNumber,
+        player: player,
+      ),
+    );
   }
 
   /// Whether the whole game is over: fewer than two active players remain.
@@ -618,6 +827,7 @@ class GameState {
     if (activePlayerCount >= 2) return;
     _gameComplete = true;
     _finalResult = _buildFinalResult();
+    _record(GameEvent(type: GameEventType.gameCompleted, round: _roundNumber));
   }
 
   /// Builds the final result. Per the authoritative rules the Turtle King is
