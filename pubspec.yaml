@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Minimal, standard persistence for the personalization settings
+  # (theme mode, color theme, card design) across app restarts.
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

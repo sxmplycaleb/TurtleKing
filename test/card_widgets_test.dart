@@ -125,4 +125,66 @@ void main() {
       expect(tester.widget<CardFace>(find.byType(CardFace)).card, card);
     });
   });
+
+  group('card designs', () {
+    testWidgets('every design still renders the same rank and suit', (
+      tester,
+    ) async {
+      for (final design in CardDesign.values) {
+        await pumpCard(
+          tester,
+          PlayingCard(
+            card: const Card(suit: Suit.hearts, rank: Rank.king),
+            style: CardStyle.forDesign(design),
+          ),
+        );
+        expect(find.text('K'), findsWidgets);
+        expect(find.text('♥'), findsWidgets);
+      }
+    });
+
+    testWidgets('designs render distinct face surfaces', (tester) async {
+      // Render one card of each design and confirm the styles differ.
+      await pumpCard(
+        tester,
+        Row(
+          children: [
+            for (final design in CardDesign.values)
+              PlayingCard(
+                card: const Card(suit: Suit.spades, rank: Rank.ace),
+                style: CardStyle.forDesign(design),
+              ),
+          ],
+        ),
+      );
+
+      final faces = tester
+          .widgetList<PlayingCard>(find.byType(PlayingCard))
+          .map((c) => c.style!.faceTop)
+          .toSet();
+      expect(faces.length, CardDesign.values.length);
+    });
+
+    testWidgets('card backs stay identity-free in every design', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pumpCard(
+        tester,
+        Row(
+          children: [
+            for (final design in CardDesign.values)
+              CardBack(style: CardStyle.forDesign(design)),
+          ],
+        ),
+      );
+
+      expect(find.bySemanticsLabel('Card back'), findsNWidgets(3));
+      for (final glyph in ['A', 'K', '♥', '♠']) {
+        expect(find.text(glyph), findsNothing);
+      }
+
+      semantics.dispose();
+    });
+  });
 }

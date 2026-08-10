@@ -130,9 +130,7 @@ void main() {
 
     test('dealing one card at a time yields all 52 unique cards', () {
       final deck = Deck();
-      final dealt = <Card>[
-        for (var i = 0; i < 52; i++) deck.dealOne(),
-      ];
+      final dealt = <Card>[for (var i = 0; i < 52; i++) deck.dealOne()];
       expect(dealt.toSet(), hasLength(52));
       expect(deck.remainingCards, 0);
     });

@@ -55,6 +55,7 @@ class PlayingCard extends StatelessWidget {
     this.width,
     this.highlighted = false,
     this.semanticLabel,
+    this.style,
   });
 
   /// The card to render face-up.
@@ -63,20 +64,23 @@ class PlayingCard extends StatelessWidget {
   /// The card width; when null a responsive default is used.
   final double? width;
 
-  /// Draws a gold border/glow to single out this card (e.g. the smallest
+  /// Draws an accent border/glow to single out this card (e.g. the smallest
   /// hand at the reveal).
   final bool highlighted;
 
   /// Overrides the semantics label; defaults to the card's display name.
   final String? semanticLabel;
 
+  /// The card style to render with; when null the active theme's style is
+  /// used (defaulting to Classic Poker).
+  final CardStyle? style;
+
   @override
   Widget build(BuildContext context) {
+    final cardStyle = style ?? CardStyle.of(context);
     final size = width ?? defaultCardWidth(context);
     final suit = suitSymbol(card.suit);
-    final ink = isRedSuit(card.suit)
-        ? TurtleKingColors.suitRed
-        : TurtleKingColors.suitBlack;
+    final ink = isRedSuit(card.suit) ? cardStyle.inkRed : cardStyle.inkDark;
 
     return Semantics(
       label: semanticLabel ?? card.displayName,
@@ -88,16 +92,14 @@ class PlayingCard extends StatelessWidget {
         width: size,
         height: size / _cardAspectRatio,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFFFFFF), Color(0xFFF6F1E3)],
+            colors: [cardStyle.faceTop, cardStyle.faceBottom],
           ),
           borderRadius: BorderRadius.circular(size * 0.09),
           border: Border.all(
-            color: highlighted
-                ? TurtleKingColors.gold
-                : const Color(0xFFC9C2AE),
+            color: highlighted ? cardStyle.highlight : cardStyle.faceBorder,
             width: highlighted ? 2.5 : 1,
           ),
           boxShadow: [
@@ -116,7 +118,7 @@ class PlayingCard extends StatelessWidget {
                 width: size * 0.62,
                 height: size * 0.62,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFE9D8).withValues(alpha: 0.6),
+                  color: cardStyle.watermark,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -236,13 +238,18 @@ class _CornerIndex extends StatelessWidget {
 /// it exists so the UI can show "a card is here" without ever leaking which
 /// card it is, in any channel (pixels, semantics, or keys).
 class CardBack extends StatelessWidget {
-  const CardBack({super.key, this.width});
+  const CardBack({super.key, this.width, this.style});
 
   /// The card width; when null a responsive default is used.
   final double? width;
 
+  /// The card style to render with; when null the active theme's style is
+  /// used (defaulting to Classic Poker).
+  final CardStyle? style;
+
   @override
   Widget build(BuildContext context) {
+    final cardStyle = style ?? CardStyle.of(context);
     final size = width ?? defaultCardWidth(context);
     return Semantics(
       label: 'Card back',
@@ -253,13 +260,16 @@ class CardBack extends StatelessWidget {
         width: size,
         height: size / _cardAspectRatio,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFFFFFFF), Color(0xFFF6F1E3)],
+            colors: [
+              cardStyle.backSurface,
+              Color.lerp(cardStyle.backSurface, Colors.black, 0.10)!,
+            ],
           ),
           borderRadius: BorderRadius.circular(size * 0.09),
-          border: Border.all(color: const Color(0xFFC9C2AE)),
+          border: Border.all(color: cardStyle.backBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.35),
@@ -273,12 +283,12 @@ class CardBack extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(size * 0.06),
-              border: Border.all(color: TurtleKingColors.gold, width: 1.4),
+              border: Border.all(color: cardStyle.backRing, width: 1.4),
             ),
             padding: EdgeInsets.all(size * 0.05),
             child: Container(
-              decoration: const BoxDecoration(
-                color: TurtleKingColors.navy,
+              decoration: BoxDecoration(
+                color: cardStyle.backDisc,
                 shape: BoxShape.circle,
               ),
               padding: EdgeInsets.all(size * 0.08),
@@ -307,6 +317,7 @@ class CardFace extends StatelessWidget {
     required this.card,
     this.width,
     this.highlighted = false,
+    this.style,
   });
 
   /// The card to render face-up.
@@ -315,12 +326,21 @@ class CardFace extends StatelessWidget {
   /// The card width; when null a responsive default is used.
   final double? width;
 
-  /// Draws a gold border/glow to single out this card (e.g. the smallest
+  /// Draws an accent border/glow to single out this card (e.g. the smallest
   /// hand at the reveal).
   final bool highlighted;
 
+  /// The card style to render with; when null the active theme's style is
+  /// used (defaulting to Classic Poker).
+  final CardStyle? style;
+
   @override
   Widget build(BuildContext context) {
-    return PlayingCard(card: card, width: width, highlighted: highlighted);
+    return PlayingCard(
+      card: card,
+      width: width,
+      highlighted: highlighted,
+      style: style,
+    );
   }
 }

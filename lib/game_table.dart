@@ -15,18 +15,15 @@ class GameTableBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = GameTableStyle.of(context);
     return Positioned.fill(
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(0, -0.25),
             radius: 1.5,
-            colors: [
-              Color(0xFF1C5C43), // table light center
-              Color(0xFF11402F),
-              TurtleKingColors.feltDark,
-            ],
-            stops: [0.0, 0.55, 1.0],
+            colors: [style.feltTop, style.feltMid, style.feltBottom],
+            stops: const [0.0, 0.55, 1.0],
           ),
         ),
         child: CustomPaint(painter: _FeltTexturePainter()),
@@ -69,6 +66,7 @@ class TurtleKingCup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = GameTableStyle.of(context);
     final scale = switch (size) {
       CupSize.normal => 1.0,
       CupSize.large => 1.22,
@@ -80,14 +78,18 @@ class TurtleKingCup extends StatelessWidget {
       child: SizedBox(
         width: diameter * scale,
         height: diameter * 1.25 * scale,
-        child: CustomPaint(painter: _CupPainter()),
+        child: CustomPaint(painter: _CupPainter(accent: style.accent)),
       ),
     );
   }
 }
 
-/// Draws a glass cup with a gold rim and a rising water fill.
+/// Draws a glass cup with an accent rim and a rising water fill.
 class _CupPainter extends CustomPainter {
+  const _CupPainter({required this.accent});
+
+  final Color accent;
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
@@ -130,9 +132,9 @@ class _CupPainter extends CustomPainter {
       surface,
     );
 
-    // Gold rim.
+    // Accent rim.
     final rim = Paint()
-      ..color = TurtleKingColors.gold
+      ..color = accent
       ..style = PaintingStyle.stroke
       ..strokeWidth = math.max(1.6, w * 0.05);
     canvas.drawLine(
@@ -168,20 +170,38 @@ class TurtleKingCrown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = GameTableStyle.of(context);
     return Semantics(
       label: 'Turtle King crown',
       image: true,
       child: SizedBox(
         width: size,
         height: size,
-        child: CustomPaint(painter: _CrownPainter()),
+        child: CustomPaint(
+          painter: _CrownPainter(
+            fillTop: style.accentSoft,
+            fillBottom: style.accent,
+            outline: style.accent,
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Draws a simple three-point gold crown with jewel tips and a band.
+/// Draws a simple three-point crown with jewel tips and a band, tinted with
+/// the active accent.
 class _CrownPainter extends CustomPainter {
+  const _CrownPainter({
+    required this.fillTop,
+    required this.fillBottom,
+    required this.outline,
+  });
+
+  final Color fillTop;
+  final Color fillBottom;
+  final Color outline;
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
@@ -198,22 +218,22 @@ class _CrownPainter extends CustomPainter {
       ..close();
 
     final fill = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFFFE082), TurtleKingColors.gold],
+        colors: [fillTop, fillBottom],
       ).createShader(Offset.zero & size);
     canvas.drawPath(crown, fill);
 
-    final outline = Paint()
-      ..color = TurtleKingColors.goldDark
+    final outlinePaint = Paint()
+      ..color = outline
       ..style = PaintingStyle.stroke
       ..strokeWidth = math.max(1.2, w * 0.03);
-    canvas.drawPath(crown, outline);
+    canvas.drawPath(crown, outlinePaint);
 
     // Band line.
     final band = Paint()
-      ..color = TurtleKingColors.goldDark
+      ..color = outline
       ..strokeWidth = math.max(1.2, w * 0.03);
     canvas.drawLine(
       Offset(w * 0.10, h * 0.60),

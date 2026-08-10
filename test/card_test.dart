@@ -36,10 +36,12 @@ void main() {
   group('Suits and ranks', () {
     test('there are exactly four suits', () {
       expect(Suit.values, hasLength(4));
-      expect(
-        Suit.values.map((suit) => suit.label),
-        ['Hearts', 'Diamonds', 'Clubs', 'Spades'],
-      );
+      expect(Suit.values.map((suit) => suit.label), [
+        'Hearts',
+        'Diamonds',
+        'Clubs',
+        'Spades',
+      ]);
     });
 
     test('there are exactly thirteen ranks', () {

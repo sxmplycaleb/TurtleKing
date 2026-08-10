@@ -141,32 +141,40 @@ class _GameStartScreenState extends State<GameStartScreen> {
   // Shared visual helpers
   // ---------------------------------------------------------------------
 
-  /// Label style for the gold primary buttons (dark text on gold).
-  static const TextStyle _goldButtonLabel = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w700,
-    color: Color(0xFF33290A),
-  );
+  /// Label style for the accent primary buttons (contrasting text on the
+  /// accent).
+  TextStyle _goldButtonLabelStyle(BuildContext context) {
+    final style = GameTableStyle.of(context);
+    return TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
+      color: style.onAccent,
+    );
+  }
 
-  ButtonStyle _goldButtonStyle() => FilledButton.styleFrom(
-    backgroundColor: TurtleKingColors.gold,
-    foregroundColor: const Color(0xFF33290A),
-    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-  );
+  ButtonStyle _goldButtonStyle(BuildContext context) {
+    final style = GameTableStyle.of(context);
+    return FilledButton.styleFrom(
+      backgroundColor: style.accent,
+      foregroundColor: style.onAccent,
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+    );
+  }
 
   /// The current round as a branded pill (exact "Round N" text).
   Widget _roundBadge(BuildContext context) {
+    final style = GameTableStyle.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: style.chipBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: TurtleKingColors.gold.withValues(alpha: 0.7)),
+        border: Border.all(color: style.chipBorder),
       ),
       child: Text(
         'Round ${_game.roundNumber}',
-        style: const TextStyle(
-          color: TurtleKingColors.gold,
+        style: TextStyle(
+          color: style.accentText,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.4,
         ),
@@ -174,15 +182,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
     );
   }
 
-  /// The active player's avatar: a gold ring around their color disc.
-  Widget _turnAvatar(Player player) {
+  /// The active player's avatar: an accent ring around their color disc.
+  Widget _turnAvatar(BuildContext context, Player player) {
+    final style = GameTableStyle.of(context);
     return Container(
       padding: const EdgeInsets.all(2.5),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [Color(0xFFFFE082), TurtleKingColors.gold],
-        ),
+        gradient: LinearGradient(colors: [style.accentSoft, style.accent]),
       ),
       child: CircleAvatar(radius: 18, backgroundColor: player.color),
     );
@@ -191,18 +198,19 @@ class _GameStartScreenState extends State<GameStartScreen> {
   /// "Player X of Y" pill plus the player's name and turn indicator.
   Widget _playerHeader(BuildContext context, Player player) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: style.chipBg,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
             'Player ${_game.currentPlayerIndex + 1} of ${_game.currentPlayerCount}',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.white70,
+              color: style.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -211,13 +219,13 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _turnAvatar(player),
+            _turnAvatar(context, player),
             const SizedBox(width: 10),
             Flexible(
               child: Text(
                 player.name,
                 style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                  color: style.textPrimary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -240,7 +248,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
             const SizedBox(width: 6),
             Text(
               'Your turn',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: style.textSecondary,
+              ),
             ),
           ],
         ),
@@ -249,19 +259,20 @@ class _GameStartScreenState extends State<GameStartScreen> {
   }
 
   Widget _backToSetup(BuildContext context) {
+    final style = GameTableStyle.of(context);
     return TextButton(
       onPressed: () => Navigator.of(context).pop(),
-      style: TextButton.styleFrom(foregroundColor: Colors.white70),
+      style: TextButton.styleFrom(foregroundColor: style.textSecondary),
       child: const Text('Back to setup'),
     );
   }
 
   /// A small glass label pill, e.g. the drinks counter.
-  Widget _infoChip(Widget child) {
+  Widget _infoChip(BuildContext context, Widget child) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: GameTableStyle.of(context).chipBg,
         borderRadius: BorderRadius.circular(16),
       ),
       child: child,
@@ -270,21 +281,22 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final style = GameTableStyle.of(context);
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: TurtleKingColors.feltDark,
+      backgroundColor: style.feltBottom,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Turtle King',
           style: TextStyle(
-            color: TurtleKingColors.gold,
+            color: style.accentText,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: Colors.white,
+        foregroundColor: style.textPrimary,
         actions: [
           IconButton(
             icon: const Icon(Icons.menu_book_outlined),
@@ -336,6 +348,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _readyView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,15 +366,15 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'it privately — do not show anyone else.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             height: 1.4,
           ),
         ),
         const SizedBox(height: 28),
         FilledButton(
           onPressed: _reveal,
-          style: _goldButtonStyle(),
-          child: const Text('Reveal My Card', style: _goldButtonLabel),
+          style: _goldButtonStyle(context),
+          child: Text('Reveal My Card', style: _goldButtonLabelStyle(context)),
         ),
         const SizedBox(height: 8),
         _backToSetup(context),
@@ -371,6 +384,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _revealedView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     final card = _game.visibleCardOf(_game.currentPlayer);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -382,7 +396,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'the phone to the next player.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             height: 1.4,
           ),
         ),
@@ -399,8 +413,11 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 28),
         FilledButton(
           onPressed: _pass,
-          style: _goldButtonStyle(),
-          child: const Text('Pass to Next Player', style: _goldButtonLabel),
+          style: _goldButtonStyle(context),
+          child: Text(
+            'Pass to Next Player',
+            style: _goldButtonLabelStyle(context),
+          ),
         ),
       ],
     );
@@ -408,6 +425,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _handoffView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     final next = _game.pouringStarted
         ? _game.pourCurrentPlayer
         : _game.currentPlayer;
@@ -419,17 +437,17 @@ class _GameStartScreenState extends State<GameStartScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.08),
-            border: Border.all(color: TurtleKingColors.gold),
+            color: style.chipBg,
+            border: Border.all(color: style.accent),
           ),
-          child: const Icon(Icons.phone_iphone, color: Colors.white, size: 34),
+          child: Icon(Icons.phone_iphone, color: style.textPrimary, size: 34),
         ),
         const SizedBox(height: 16),
         Text(
           'Pass the phone',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -437,7 +455,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'Hand the phone to ${next.name}.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white),
+          style: theme.textTheme.bodyLarge?.copyWith(color: style.textPrimary),
         ),
         const SizedBox(height: 8),
         Text(
@@ -447,15 +465,15 @@ class _GameStartScreenState extends State<GameStartScreen> {
               : 'Their card stays hidden until they choose to reveal it.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.white70,
+            color: style.textSecondary,
             height: 1.4,
           ),
         ),
         const SizedBox(height: 32),
         FilledButton(
           onPressed: _continue,
-          style: _goldButtonStyle(),
-          child: const Text('Continue', style: _goldButtonLabel),
+          style: _goldButtonStyle(context),
+          child: Text('Continue', style: _goldButtonLabelStyle(context)),
         ),
       ],
     );
@@ -463,6 +481,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _pourTurnView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     final player = _game.pourCurrentPlayer;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -478,14 +497,16 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'out.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             height: 1.4,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           'Your visible card (private):',
-          style: theme.textTheme.titleSmall?.copyWith(color: Colors.white70),
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: style.textSecondary,
+          ),
         ),
         const SizedBox(height: 10),
         Row(
@@ -498,10 +519,13 @@ class _GameStartScreenState extends State<GameStartScreen> {
         ),
         const SizedBox(height: 14),
         _infoChip(
+          context,
           Text(
             'Drinks: ${_game.drinksOf(player)} '
             '(${_game.eliminationThreshold} drinks eliminate)',
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: style.textSecondary,
+            ),
           ),
         ),
         const SizedBox(height: 18),
@@ -509,21 +533,25 @@ class _GameStartScreenState extends State<GameStartScreen> {
         FilledButton(
           onPressed: _yamada,
           style: FilledButton.styleFrom(
-            backgroundColor: TurtleKingColors.suitRed,
-            foregroundColor: Colors.white,
+            backgroundColor: style.danger,
+            foregroundColor: style.onDanger,
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'YAMADA!',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: style.onDanger,
+                ),
               ),
               Text(
                 'Admit defeat — drink the cup',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
+                  color: style.onDanger.withValues(alpha: 0.8),
                 ),
               ),
             ],
@@ -544,7 +572,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
               Text(
                 'Keep your cards',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
+                  color: Colors.white.withValues(alpha: 0.8),
                 ),
               ),
             ],
@@ -558,6 +586,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _yamadaResultView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     final player = _yamadaPlayer;
     if (player == null) {
       // Only reachable right after a YAMADA call.
@@ -575,7 +604,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'YAMADA!',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
-            color: TurtleKingColors.gold,
+            color: style.accentText,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -584,7 +613,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           '${player.name} admitted defeat and drank the water in the cup.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             height: 1.4,
           ),
         ),
@@ -592,7 +621,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'Lifetime drinks: ${_game.drinksOf(player)}',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+          style: theme.textTheme.bodyMedium?.copyWith(color: style.textPrimary),
         ),
         if (eliminated) ...[
           const SizedBox(height: 14),
@@ -600,13 +629,13 @@ class _GameStartScreenState extends State<GameStartScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               decoration: BoxDecoration(
-                color: TurtleKingColors.suitRed,
+                color: style.danger,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Text(
+              child: Text(
                 'ELIMINATED',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: style.onDanger,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1,
                 ),
@@ -618,7 +647,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             '${player.name} has been eliminated!',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFFFF8A80),
+              color: style.danger,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -629,7 +658,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'continue.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
+              color: style.textPrimary,
               height: 1.4,
             ),
           ),
@@ -640,7 +669,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'The game is over!',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFFFF8A80),
+              color: style.danger,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -648,8 +677,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 32),
         FilledButton(
           onPressed: _yamadaContinue,
-          style: _goldButtonStyle(),
-          child: const Text('Continue', style: _goldButtonLabel),
+          style: _goldButtonStyle(context),
+          child: Text('Continue', style: _goldButtonLabelStyle(context)),
         ),
       ],
     );
@@ -657,6 +686,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _roundCompleteView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     final result = _game.roundResult!;
     final yamadaCalled = result.calledYamada.values.any((called) => called);
     final eliminatedThisRound = _game.eliminationHistory
@@ -671,7 +701,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'Round ${_game.roundNumber} complete',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -680,13 +710,17 @@ class _GameStartScreenState extends State<GameStartScreen> {
           Text(
             'YAMADA was called — the round ended without a reveal.',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: style.textSecondary,
+            ),
           )
         else
           Text(
             'Everyone held out — all cards are revealed together!',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: style.textSecondary,
+            ),
           ),
         if (!yamadaCalled) ...[
           const SizedBox(height: 16),
@@ -706,7 +740,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                     player.name,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
+                      color: style.textPrimary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -741,7 +775,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                       'out.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFFFFE082),
+              color: style.accentTextSoft,
               fontWeight: FontWeight.w600,
               height: 1.4,
             ),
@@ -754,7 +788,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             '${eliminatedThisRound.map((record) => record.player.name).join(', ')}',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFFF8A80),
+              color: style.danger,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -766,7 +800,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'round · ${_game.drinksOf(player)} lifetime'
             '${_game.calledYamadaThisRound(player) ? ' · YAMADA' : ''}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: style.textPrimary,
+            ),
           ),
           const SizedBox(height: 4),
         ],
@@ -776,15 +812,18 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'Next round cup: ${_game.cupSize.label}',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: TurtleKingColors.gold,
+              color: style.accentText,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _startNextRound,
-            style: _goldButtonStyle(),
-            child: const Text('Start Next Round', style: _goldButtonLabel),
+            style: _goldButtonStyle(context),
+            child: Text(
+              'Start Next Round',
+              style: _goldButtonLabelStyle(context),
+            ),
           ),
         ],
         const SizedBox(height: 8),
@@ -795,6 +834,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   Widget _gameOverView(BuildContext context) {
     final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
     final result = _game.finalResult!;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -806,7 +846,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           'Game complete',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
+            color: style.textPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -816,7 +856,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'Turtle King: ${result.turtleKings.first.name}',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleLarge?.copyWith(
-              color: TurtleKingColors.gold,
+              color: style.accentText,
               fontWeight: FontWeight.bold,
             ),
           )
@@ -825,7 +865,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'No Turtle King — every player was eliminated.',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleLarge?.copyWith(
-              color: Colors.white,
+              color: style.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -833,14 +873,18 @@ class _GameStartScreenState extends State<GameStartScreen> {
         Text(
           'Rounds played: ${result.roundsPlayed}',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: style.textSecondary,
+          ),
         ),
         const SizedBox(height: 8),
         if (result.finalists.isNotEmpty) ...[
           Text(
             'Finalists: ${result.finalists.map((p) => p.name).join(', ')}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: style.textPrimary,
+            ),
           ),
           const SizedBox(height: 4),
         ],
@@ -849,9 +893,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
             'Eliminated: '
             '${result.eliminated.map((p) => p.name).join(', ')}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFFFF8A80),
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: style.danger),
           ),
         ],
         const SizedBox(height: 16),
@@ -860,7 +902,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
             '${player.name}: ${result.drinks[player]} drink(s)',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: _game.isEliminated(player) ? Colors.white54 : Colors.white,
+              color: _game.isEliminated(player)
+                  ? style.textSecondary
+                  : style.textPrimary,
               decoration: _game.isEliminated(player)
                   ? TextDecoration.lineThrough
                   : null,
@@ -872,8 +916,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
         OutlinedButton(
           onPressed: _openRoundHistory,
           style: OutlinedButton.styleFrom(
-            foregroundColor: TurtleKingColors.gold,
-            side: const BorderSide(color: TurtleKingColors.gold),
+            foregroundColor: style.accentText,
+            side: BorderSide(color: style.accentText),
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
           child: const Text('Round History'),
@@ -881,8 +925,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 8),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          style: _goldButtonStyle(),
-          child: const Text('Back to setup', style: _goldButtonLabel),
+          style: _goldButtonStyle(context),
+          child: Text('Back to setup', style: _goldButtonLabelStyle(context)),
         ),
       ],
     );

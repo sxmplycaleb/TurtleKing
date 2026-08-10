@@ -504,6 +504,65 @@ red/black) used by the card widgets, table, and game screen.
 **Out of scope** — gameplay rules, `GameState`, privacy behavior, and all
 other screens are untouched; no dependencies were added.
 
+## Milestone 14 — Personalization & Theme Settings
+
+This milestone adds a persistent personalization system — theme mode, accent
+color theme, and card design — while leaving the authoritative gameplay rules
+and `GameState` completely untouched. Presentation preferences live entirely
+apart from gameplay state.
+
+**Settings model** (`lib/settings.dart`):
+
+- `SettingsStore` is the single source of truth for presentation preferences:
+  theme mode (`system`/`light`/`dark`), accent color theme, and card design.
+  It persists to `SharedPreferences` (the standard, minimal Flutter solution
+  for cross-restart settings) and exposes a `ChangeNotifier`; `inMemory()`
+  provides an unpersisted store for tests/previews. Setters are no-op when
+  the value is unchanged.
+- `SettingsScope` (`InheritedNotifier`) exposes the store to the widget tree;
+  the root rebuilds the Material theme on change, and the Settings screen
+  re-renders its selected states.
+
+**Theme system** (`lib/theme.dart`):
+
+- `AppColorTheme` — five intentional accent themes: **Turtle King Gold**
+  (default), **Emerald**, **Royal Purple**, **Ocean Blue**, **Crimson**.
+  Each defines its own accent, on-accent text, light and dark felt palettes,
+  and on-felt text colors — light and dark are designed palettes, not an
+  inversion, and the felt never becomes a black void (asserted by a test).
+- `buildTheme(colorTheme:, brightness:, cardDesign:)` seeds the Material
+  color scheme from the accent and carries two `ThemeExtension`s:
+  `GameTableStyle` (felt, on-felt text, accent, chip, danger colors) and
+  `CardStyle` (the selected `CardDesign`'s face/back surfaces). Every screen
+  — home, setup, How to Play, round history, settings, and the game table —
+  adapts automatically; the game screen now reads its colors from
+  `GameTableStyle` instead of hardcoding them.
+- `CardDesign` — three presentation-only designs: **Classic Poker**
+  (baseline), **Turtle King** (navy/gold), and **Noir** (dark). Suit colors
+  stay conventional in every design (hearts/diamonds red, clubs/spades the
+  dark suit ink); the `Card` model, deck, ranks, and gameplay are identical.
+  Card backs remain privacy-safe in every design: they take no `Card`, carry
+  no rank/suit, and expose only the "Card back" semantics label.
+
+**Settings screen** (`lib/settings_screen.dart`):
+
+- Appearance: System/Light/Dark radio group (with device-following and
+  mode icons), reached from a settings icon on the home screen.
+- Color Theme: selectable accent swatches with labels and check markers
+  (selection is never color-only).
+- Cards: live face-up + card-back previews for each design, also with check
+  markers.
+- All changes apply immediately and persist across restarts; the screen
+  states that settings never affect gameplay.
+
+**Dependency**: added `shared_preferences` — the minimal standard plugin
+required for genuine cross-restart persistence (the project previously had
+no persistence at all). No other dependencies.
+
+**Out of scope** — gameplay rules, `GameState`, card/deck behavior, and the
+privacy contract are unchanged; no networking, accounts, or storage beyond
+the three preference keys.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
@@ -554,8 +613,10 @@ flutter build ios
 
 ```
 lib/
-  main.dart               # App entry point (splash -> home)
-  theme.dart              # Shared visual theme
+  main.dart               # App entry point (loads settings, splash -> home)
+  theme.dart              # Brand palette, accent themes, card designs, theme extensions
+  settings.dart           # SettingsStore (persisted preferences) + SettingsScope
+  settings_screen.dart    # Personalization screen (theme mode, colors, card designs)
   splash_screen.dart      # Branded launch screen (full artwork -> home)
   home_screen.dart        # Home screen (emblem brand mark + New Game + How to Play)
   how_to_play_screen.dart # Rules documentation (How to Play screen)
@@ -583,8 +644,11 @@ test/
   deck_test.dart               # Deck creation, shuffle, dealing, reset
   game_state_test.dart         # Hands, rounds, cup, scoring, elimination, result
   game_start_screen_test.dart  # Pass-and-play + round + penalty + multi-round UI
-  card_widgets_test.dart       # PlayingCard/CardBack/CardFace rendering + semantics
+  card_widgets_test.dart       # PlayingCard/CardBack/CardFace rendering + semantics + designs
   game_visuals_test.dart       # Table, hidden cards, cup, YAMADA, reveal, winner UI
+  settings_store_test.dart     # Preferences defaults, selection, persistence
+  theme_test.dart              # Light/dark themes, accent themes, card/table styles
+  settings_screen_test.dart    # Settings UI, selection, app-wide application, navigation
   how_to_play_screen_test.dart # How to Play content, scrolling, navigation
   round_history_screen_test.dart# Round history content, privacy, scrolling
 ```
