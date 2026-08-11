@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Card;
 
 import 'card_widgets.dart';
+import 'feedback.dart';
 import 'game_history_screen.dart';
 import 'game_save.dart';
 import 'game_state.dart';
@@ -70,6 +71,15 @@ class _GameStartScreenState extends State<GameStartScreen> {
     _persistGame();
   }
 
+  /// Plays feedback for [event], guarding gameplay from any feedback failure.
+  void _playFeedback(FeedbackEvent event) {
+    try {
+      GameFeedbackScope.of(context).play(event);
+    } catch (_) {
+      // Feedback is an optional UX enhancement: never interrupt gameplay.
+    }
+  }
+
   /// Persists the game after every action; clears the save once the game
   /// completes so a finished game is never offered as resumable.
   void _persistGame() {
@@ -105,6 +115,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
   void _reveal() {
     setState(() => _game.revealCurrentPlayer());
     _persistGame();
+    _playFeedback(FeedbackEvent.cardReveal);
   }
 
   void _pass() {
@@ -114,6 +125,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
       _showingHandoff = true;
     });
     _persistGame();
+    _playFeedback(FeedbackEvent.handoffPass);
   }
 
   void _continue() {
@@ -121,6 +133,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
   }
 
   void _yamada() {
+    final eliminationsBefore = _game.eliminationHistory.length;
     setState(() {
       final player = _game.pourCurrentPlayer;
       _game.callYamada(player);
@@ -129,15 +142,39 @@ class _GameStartScreenState extends State<GameStartScreen> {
       _showingHandoff = false;
     });
     _persistGame();
+    _playFeedback(FeedbackEvent.yamada);
+    if (_game.eliminationHistory.length > eliminationsBefore) {
+      _playFeedback(FeedbackEvent.elimination);
+    }
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
   }
 
   void _holdOut() {
+    final eliminationsBefore = _game.eliminationHistory.length;
     setState(() {
       _game.holdOut(_game.pourCurrentPlayer);
       _showingYamadaResult = false;
       _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
     _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.roundComplete && !_game.gameComplete) {
+      // The round ended by a simultaneous reveal (everyone held out).
+      final yamadaCalled = _game.roundResult!.calledYamada.values.any(
+        (called) => called,
+      );
+      if (!yamadaCalled) {
+        _playFeedback(FeedbackEvent.roundReveal);
+      }
+    }
+    if (_game.eliminationHistory.length > eliminationsBefore) {
+      _playFeedback(FeedbackEvent.elimination);
+    }
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
   }
 
   void _yamadaContinue() {

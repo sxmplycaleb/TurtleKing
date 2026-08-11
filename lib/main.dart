@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'feedback.dart';
 import 'settings.dart';
 import 'splash_screen.dart';
 import 'theme.dart';
@@ -30,6 +31,10 @@ class TurtleKingApp extends StatefulWidget {
 class _TurtleKingAppState extends State<TurtleKingApp> {
   late final SettingsStore _store = widget.store ?? SettingsStore.inMemory();
 
+  /// Owned here (created once, disposed with the app) so the audio engine is
+  /// never recreated per rebuild and its resources are released.
+  GameFeedbackService? _feedback;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +44,8 @@ class _TurtleKingAppState extends State<TurtleKingApp> {
   @override
   void dispose() {
     _store.removeListener(_onSettingsChanged);
+    _feedback?.dispose();
+    _feedback = null;
     super.dispose();
   }
 
@@ -48,25 +55,32 @@ class _TurtleKingAppState extends State<TurtleKingApp> {
 
   @override
   Widget build(BuildContext context) {
+    // The feedback service reads the sound/haptic toggles live from the
+    // store, so toggling them takes effect immediately. Created lazily so
+    // the audio engine is never initialized during app startup.
+    final feedback = _feedback ??= GameFeedbackService(_store);
     return SettingsScope(
       store: _store,
-      child: MaterialApp(
-        title: 'Turtle King',
-        theme: buildTheme(
-          colorTheme: _store.colorTheme,
-          cardDesign: _store.cardDesign,
+      child: GameFeedbackScope(
+        feedback: feedback,
+        child: MaterialApp(
+          title: 'Turtle King',
+          theme: buildTheme(
+            colorTheme: _store.colorTheme,
+            cardDesign: _store.cardDesign,
+          ),
+          darkTheme: buildTheme(
+            colorTheme: _store.colorTheme,
+            brightness: Brightness.dark,
+            cardDesign: _store.cardDesign,
+          ),
+          themeMode: switch (_store.themeMode) {
+            ThemeModePref.system => ThemeMode.system,
+            ThemeModePref.light => ThemeMode.light,
+            ThemeModePref.dark => ThemeMode.dark,
+          },
+          home: const SplashScreen(),
         ),
-        darkTheme: buildTheme(
-          colorTheme: _store.colorTheme,
-          brightness: Brightness.dark,
-          cardDesign: _store.cardDesign,
-        ),
-        themeMode: switch (_store.themeMode) {
-          ThemeModePref.system => ThemeMode.system,
-          ThemeModePref.light => ThemeMode.light,
-          ThemeModePref.dark => ThemeMode.dark,
-        },
-        home: const SplashScreen(),
       ),
     );
   }

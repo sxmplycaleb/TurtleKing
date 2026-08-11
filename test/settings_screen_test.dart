@@ -3,10 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/card_widgets.dart';
+import 'package:turtle_king/feedback.dart';
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/settings.dart';
 import 'package:turtle_king/settings_screen.dart';
 import 'package:turtle_king/theme.dart';
+
+/// A recording [GameFeedback] that proves the Settings screen itself never
+/// fires sound/haptic feedback while being built or rebuilt.
+class _RecordingFeedback implements GameFeedback {
+  final List<FeedbackEvent> events = [];
+
+  @override
+  void play(FeedbackEvent event) => events.add(event);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +47,51 @@ void main() {
       expect(find.text('Light'), findsOneWidget);
       expect(find.text('Dark'), findsOneWidget);
       expect(find.text('Turtle King Gold'), findsOneWidget);
+
+      // The feedback section lives below the fold; scroll to it.
+      await tester.scrollUntilVisible(find.text('Feedback'), 200);
+      expect(find.text('Feedback'), findsOneWidget);
+      expect(find.text('Sound Effects'), findsOneWidget);
+      expect(find.text('Haptic Feedback'), findsOneWidget);
+    });
+
+    testWidgets('sound and haptic switches reflect and update the store', (
+      tester,
+    ) async {
+      final store = await storeWithPrefs();
+      await pumpSettings(tester, store);
+
+      // Both default to enabled.
+      final soundSwitch = find.widgetWithText(SwitchListTile, 'Sound Effects');
+      final hapticSwitch = find.widgetWithText(
+        SwitchListTile,
+        'Haptic Feedback',
+      );
+      await tester.scrollUntilVisible(soundSwitch, 200);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(soundSwitch).value, isTrue);
+      expect(tester.widget<SwitchListTile>(hapticSwitch).value, isTrue);
+
+      // Toggling updates the store immediately.
+      await tester.tap(soundSwitch);
+      await tester.pump();
+      expect(store.soundEnabled, isFalse);
+      expect(tester.widget<SwitchListTile>(soundSwitch).value, isFalse);
+
+      await tester.ensureVisible(hapticSwitch);
+      await tester.pumpAndSettle();
+      await tester.tap(hapticSwitch);
+      await tester.pump();
+      expect(store.hapticsEnabled, isFalse);
+      expect(tester.widget<SwitchListTile>(hapticSwitch).value, isFalse);
+
+      // And back on again.
+      await tester.tap(soundSwitch);
+      await tester.pump();
+      await tester.tap(hapticSwitch);
+      await tester.pump();
+      expect(store.soundEnabled, isTrue);
+      expect(store.hapticsEnabled, isTrue);
     });
 
     testWidgets('selecting a theme mode updates the store', (tester) async {
@@ -146,6 +201,116 @@ void main() {
       await tester.scrollUntilVisible(find.text('Classic Poker'), 200);
       expect(tester.takeException(), isNull);
       expect(find.text('Classic Poker'), findsOneWidget);
+    });
+  });
+
+  group('Settings screen never triggers feedback', () {
+    Future<void> pumpSettingsWithFeedback(
+      WidgetTester tester,
+      SettingsStore store,
+      GameFeedback feedback,
+    ) async {
+      await tester.pumpWidget(
+        SettingsScope(
+          store: store,
+          child: GameFeedbackScope(
+            feedback: feedback,
+            child: MaterialApp(
+              theme: buildTheme(),
+              home: const SettingsScreen(),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets(
+      'building, rebuilding, and changing unrelated settings play nothing',
+      (tester) async {
+        final store = await storeWithPrefs();
+        final feedback = _RecordingFeedback();
+        await pumpSettingsWithFeedback(tester, store, feedback);
+
+        // Initial build: zero feedback.
+        expect(feedback.events, isEmpty);
+
+        // Plain rebuilds (no interaction): zero feedback.
+        await tester.pump();
+        await tester.pump();
+        expect(feedback.events, isEmpty);
+
+        // Changing unrelated settings notifies the store and rebuilds the
+        // screen — still zero feedback.
+        store.setThemeMode(ThemeModePref.dark);
+        await tester.pump();
+        store.setColorTheme(AppColorTheme.emerald);
+        await tester.pump();
+        store.setCardDesign(CardDesign.noir);
+        await tester.pumpAndSettle();
+        expect(feedback.events, isEmpty);
+
+        // Scrolling through every section is presentation-only too.
+        await tester.scrollUntilVisible(find.text('Sound Effects'), 200);
+        await tester.pumpAndSettle();
+        expect(feedback.events, isEmpty);
+        await tester.scrollUntilVisible(find.text('Classic Poker'), 200);
+        await tester.pumpAndSettle();
+        expect(feedback.events, isEmpty);
+      },
+    );
+
+    testWidgets('the sound/haptic toggles still take effect immediately', (
+      tester,
+    ) async {
+      final store = await storeWithPrefs();
+      final sounds = <String>[];
+      final haptics = <FeedbackHaptic>[];
+      final service = GameFeedbackService(
+        store,
+        playSound: sounds.add,
+        playHaptic: haptics.add,
+      );
+      await pumpSettingsWithFeedback(tester, store, service);
+
+      final soundSwitch = find.widgetWithText(SwitchListTile, 'Sound Effects');
+      final hapticSwitch = find.widgetWithText(
+        SwitchListTile,
+        'Haptic Feedback',
+      );
+      await tester.scrollUntilVisible(soundSwitch, 200);
+      await tester.pumpAndSettle();
+
+      // Rendering and scrolling the switches themselves play nothing.
+      expect(sounds, isEmpty);
+      expect(haptics, isEmpty);
+      expect(tester.widget<SwitchListTile>(soundSwitch).value, isTrue);
+      expect(tester.widget<SwitchListTile>(hapticSwitch).value, isTrue);
+
+      // Both on → sound and haptics play.
+      service.play(FeedbackEvent.yamada);
+      expect(sounds, ['assets/sounds/yamada.wav']);
+      expect(haptics, [FeedbackHaptic.heavy]);
+
+      // Sound off (via the switch) → haptics only, immediately.
+      await tester.tap(soundSwitch);
+      await tester.pump();
+      expect(store.soundEnabled, isFalse);
+      service.play(FeedbackEvent.yamada);
+      expect(sounds, hasLength(1)); // No new sound request.
+      expect(haptics, [FeedbackHaptic.heavy, FeedbackHaptic.heavy]);
+
+      // Sound back on, then haptics off → sound only, immediately.
+      await tester.tap(soundSwitch);
+      await tester.pump();
+      expect(store.soundEnabled, isTrue);
+      await tester.ensureVisible(hapticSwitch);
+      await tester.pumpAndSettle();
+      await tester.tap(hapticSwitch);
+      await tester.pump();
+      expect(store.hapticsEnabled, isFalse);
+      service.play(FeedbackEvent.cardReveal);
+      expect(sounds.last, 'assets/sounds/card_reveal.wav');
+      expect(haptics, hasLength(2)); // No new haptic request.
     });
   });
 
