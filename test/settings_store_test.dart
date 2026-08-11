@@ -19,8 +19,6 @@ void main() {
       // Sound and haptics default to enabled.
       expect(store.soundEnabled, isTrue);
       expect(store.hapticsEnabled, isTrue);
-      // YAMADA voice defaults to Deep Voice.
-      expect(store.yamadaVoice, YamadaVoice.deep);
     });
 
     test('loading with empty prefs returns the defaults', () async {
@@ -31,25 +29,6 @@ void main() {
       expect(store.cardDesign, CardDesign.classicPoker);
       expect(store.soundEnabled, isTrue);
       expect(store.hapticsEnabled, isTrue);
-      expect(store.yamadaVoice, YamadaVoice.deep);
-    });
-
-    test('Anime Girl can be selected', () async {
-      SharedPreferences.setMockInitialValues({});
-      final store = await SettingsStore.load();
-
-      store.setYamadaVoice(YamadaVoice.animeGirl);
-      expect(store.yamadaVoice, YamadaVoice.animeGirl);
-
-      // Selecting the same voice again does not notify or rewrite.
-      var notifications = 0;
-      store.addListener(() => notifications++);
-      store.setYamadaVoice(YamadaVoice.animeGirl);
-      expect(notifications, 0);
-
-      // And back to Deep Voice.
-      store.setYamadaVoice(YamadaVoice.deep);
-      expect(store.yamadaVoice, YamadaVoice.deep);
     });
   });
 
@@ -145,28 +124,17 @@ void main() {
       },
     );
 
-    test(
-      'the YAMADA voice selection persists across a simulated restart',
-      () async {
-        SharedPreferences.setMockInitialValues({});
-
-        var store = await SettingsStore.load();
-        expect(store.yamadaVoice, YamadaVoice.deep); // default
-
-        store.setYamadaVoice(YamadaVoice.animeGirl);
-        store = await SettingsStore.load();
-        expect(store.yamadaVoice, YamadaVoice.animeGirl);
-
-        store.setYamadaVoice(YamadaVoice.deep);
-        store = await SettingsStore.load();
-        expect(store.yamadaVoice, YamadaVoice.deep);
-      },
-    );
-
-    test('an unrecognized stored voice falls back to Deep Voice', () async {
-      SharedPreferences.setMockInitialValues({'settings.yamadaVoice': 'robot'});
+    test('a stale stored YAMADA voice key is ignored (M17.5 removal)', () async {
+      // M17.5 removed the YAMADA voice setting. A leftover key from an older
+      // install must not break loading or alter any other preference.
+      SharedPreferences.setMockInitialValues({
+        'settings.yamadaVoice': 'animeGirl',
+        'settings.soundEnabled': false,
+      });
       final store = await SettingsStore.load();
-      expect(store.yamadaVoice, YamadaVoice.deep);
+      // The removed setting is simply gone; sound/haptics still load normally.
+      expect(store.soundEnabled, isFalse);
+      expect(store.hapticsEnabled, isTrue);
     });
   });
 
@@ -186,15 +154,14 @@ void main() {
       store.setThemeMode(ThemeModePref.dark);
       store.setColorTheme(AppColorTheme.crimson);
       store.setCardDesign(CardDesign.noir);
-      store.setYamadaVoice(YamadaVoice.animeGirl);
+      store.setSoundEnabled(false);
+      store.setHapticsEnabled(false);
 
       // The game state is untouched by presentation changes.
       expect(game.players.length, before);
       expect(game.remainingCards, remaining);
       expect(game.roundNumber, 1);
       expect(game.gameComplete, isFalse);
-      // The voice choice is a presentation preference, not gameplay data.
-      expect(store.yamadaVoice, YamadaVoice.animeGirl);
     });
   });
 }

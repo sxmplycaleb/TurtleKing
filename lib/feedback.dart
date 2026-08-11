@@ -35,26 +35,17 @@ enum FeedbackEvent {
 }
 
 /// Every bundled sound asset (also used by the asset validation tests and
-/// preloading). The YAMADA event has two voice variants; the other events
-/// have one asset each.
+/// preloading). One asset per event; the YAMADA event uses a single game
+/// sting (M17.5), not a spoken word.
 const List<String> allSoundAssetPaths = [
   'assets/sounds/card_reveal.wav',
   'assets/sounds/handoff.wav',
   'assets/sounds/hold_out.wav',
-  'assets/sounds/yamada_deep.wav',
-  'assets/sounds/yamada_anime.wav',
+  'assets/sounds/yamada.wav',
   'assets/sounds/reveal.wav',
   'assets/sounds/elimination.wav',
   'assets/sounds/victory.wav',
 ];
-
-/// The bundled voice asset for a [YamadaVoice]. Both are original,
-/// in-repo synthesized "Yamadaa!!!" clips (see `tool/generate_sounds.dart`);
-/// the choice never carries card, hand, or player identity.
-String yamadaAssetPath(YamadaVoice voice) => switch (voice) {
-  YamadaVoice.deep => 'assets/sounds/yamada_deep.wav',
-  YamadaVoice.animeGirl => 'assets/sounds/yamada_anime.wav',
-};
 
 /// The haptic intensities used (Flutter's built-in [HapticFeedback]).
 enum FeedbackHaptic { selection, light, medium, heavy, vibrate }
@@ -72,12 +63,8 @@ class FeedbackPattern {
 /// Maps a gameplay event to its feedback pattern.
 ///
 /// Pure and side-effect free so it can be unit-tested directly. The mapping
-/// depends only on the event and the selected [YamadaVoice] (which affects
-/// only the YAMADA asset) — never on cards, hands, or player identity.
-FeedbackPattern feedbackPatternFor(
-  FeedbackEvent event, {
-  YamadaVoice yamadaVoice = YamadaVoice.deep,
-}) {
+/// depends only on the event — never on cards, hands, or player identity.
+FeedbackPattern feedbackPatternFor(FeedbackEvent event) {
   return switch (event) {
     FeedbackEvent.cardReveal => const FeedbackPattern(
       assetPath: 'assets/sounds/card_reveal.wav',
@@ -87,8 +74,8 @@ FeedbackPattern feedbackPatternFor(
       assetPath: 'assets/sounds/handoff.wav',
       haptic: FeedbackHaptic.selection,
     ),
-    FeedbackEvent.yamada => FeedbackPattern(
-      assetPath: yamadaAssetPath(yamadaVoice),
+    FeedbackEvent.yamada => const FeedbackPattern(
+      assetPath: 'assets/sounds/yamada.wav',
       haptic: FeedbackHaptic.heavy,
     ),
     FeedbackEvent.holdOut => const FeedbackPattern(
@@ -124,13 +111,6 @@ abstract class GameFeedback {
   /// load latency. Must be safe to call before gameplay starts and to call
   /// repeatedly; never throws.
   void preload();
-
-  /// Plays only the YAMADA voice for [voice] as a settings preview.
-  ///
-  /// Sound only: it never fires a gameplay feedback event, never triggers
-  /// haptics, never touches game state, and honors the Sound Effects toggle.
-  /// Never throws.
-  void previewYamadaVoice(YamadaVoice voice);
 }
 
 /// Plays nothing. Used when no feedback scope is present (e.g. plain widget
@@ -143,9 +123,6 @@ class SilentGameFeedback implements GameFeedback {
 
   @override
   void preload() {}
-
-  @override
-  void previewYamadaVoice(YamadaVoice voice) {}
 }
 
 /// The minimal playback surface the service needs, abstracted so tests can
@@ -360,9 +337,8 @@ class GameFeedbackService implements GameFeedback {
   void play(FeedbackEvent event) {
     // Never throw: feedback is an optional UX enhancement and must not
     // interrupt gameplay, even if a hook (or the platform) fails. The YAMADA
-    // asset follows the user's selected voice, read live so the choice takes
-    // effect immediately.
-    final pattern = feedbackPatternFor(event, yamadaVoice: _store.yamadaVoice);
+    // sound follows the Sound Effects toggle like every other event.
+    final pattern = feedbackPatternFor(event);
     if (_store.soundEnabled) {
       try {
         (_playSound ?? _playAsset)(pattern.assetPath);
@@ -372,22 +348,6 @@ class GameFeedbackService implements GameFeedback {
       try {
         (_playHaptic ?? _defaultPlayHaptic)(pattern.haptic);
       } catch (_) {}
-    }
-  }
-
-  /// Plays the YAMADA voice for [voice] as a settings preview.
-  ///
-  /// Sound only and gated by the Sound Effects toggle: it never fires a
-  /// gameplay feedback event, never triggers haptics, and never touches game
-  /// state. Reuses the preloaded pool (via [_playAsset]) when available and
-  /// degrades to silence when audio is unavailable. Never throws.
-  @override
-  void previewYamadaVoice(YamadaVoice voice) {
-    if (_disposed || !_store.soundEnabled) return;
-    try {
-      (_playSound ?? _playAsset)(yamadaAssetPath(voice));
-    } catch (_) {
-      // A preview is an optional UX enhancement: never crash the settings UI.
     }
   }
 

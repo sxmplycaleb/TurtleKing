@@ -1026,8 +1026,8 @@ silence, tail, size:
 | `card_reveal.wav` | 80 ms | 0.105 | 0.591 | none | 0 ms | 15 ms | 3.6 KB | ✓ unchanged (M17.3 polish) |
 | `handoff.wav` | 45 ms | 0.043 | 0.233 | none | 0 ms | 8 ms | 2.0 KB | ✓ unchanged |
 | `hold_out.wav` | 300 ms | 0.126 | 0.494 | none | 0 ms | 60 ms | 13.3 KB | ✓ approved, untouched |
-| `yamada_deep.wav` | 933 ms | 0.092 | 0.410 | none | 0 ms | 2 ms | 41.2 KB | ✓ **changed** — intelligibility redesign |
-| `yamada_anime.wav` | 1103 ms | 0.111 | 0.396 | none | 0 ms | 0 ms | 48.7 KB | ✓ **changed** — intelligibility redesign |
+| `yamada_deep.wav` | 933 ms | 0.092 | 0.410 | none | 0 ms | 2 ms | 41.2 KB | *removed in M17.5* |
+| `yamada_anime.wav` | 1103 ms | 0.111 | 0.396 | none | 0 ms | 0 ms | 48.7 KB | *removed in M17.5* |
 | `reveal.wav` | 360 ms | 0.108 | 0.535 | none | 0 ms | 16 ms | 15.9 KB | ✓ **changed** — replaced with new reveal |
 | `elimination.wav` | 320 ms | 0.157 | 0.894 | none | 0 ms | 80 ms | 14.2 KB | ✓ unchanged (M17.3 polish) |
 | `victory.wav` | 750 ms | 0.108 | 0.585 | none | 0 ms | 17 ms | 33.1 KB | ✓ unchanged (M17.3 polish) |
@@ -1045,6 +1045,54 @@ pass unchanged.
 **Out of scope** — no gameplay rule changed; `GameFeedback` API, haptics,
 settings (voice selection, previews, toggles), privacy contract,
 save/resume, and history/replay untouched; no new dependencies.
+
+## Milestone 17.5 — Replace YAMADA Voice Clips with a Game Sting
+
+M17.5 **removes the YAMADA voice system entirely** and replaces it with one
+polished, satisfying game sound effect. The spoken voice clips were judged
+not satisfying, so they were deleted rather than re-tuned.
+
+**Removed** — the `YamadaVoice` enum, `settings.yamadaVoice` + its
+persistence key, the **YAMADA Voice** selector and its preview buttons in
+Settings, `yamadaAssetPath()`, `previewYamadaVoice()`, and the voice-aware
+parameter on `feedbackPatternFor`. The `assets/sounds/yamada_deep.wav` and
+`assets/sounds/yamada_anime.wav` assets are deleted. A stale
+`settings.yamadaVoice` key left in an older install's prefs is simply
+ignored (regression-tested).
+
+**New YAMADA sound** — `assets/sounds/yamada.wav`, an original
+anime/mobile-game **"special event" sting** (~0.55 s): a strong bright
+attack leads a quick upward C6 → G6 → C7 leap that rings out as a playful
+tremolo-shimmering D7 chime over a soft C-major body, then fades. It
+communicates "something special just happened!" rather than "someone said
+YAMADA" — there is no spoken word, no human voice, and no character
+imitation. It is clearly distinct from the reveal (staccato G-A-C bells +
+separate ding), the elimination thud, the hold-out confirmation, the
+handoff tap, and the victory arpeggio.
+
+**Mapping** — `FeedbackEvent.yamada → assets/sounds/yamada.wav` (exactly one
+asset, no parameters). The Sound Effects toggle gates it like every other
+event; haptics remain independent. Preloading, `AudioPool` reuse,
+fire-and-forget playback, async failure containment, and the privacy
+contract (only `FeedbackEvent`/declared asset path reaches audio) are
+unchanged.
+
+**Tests** — the voice-selection, voice-persistence, and voice-preview tests
+were removed. New/retained tests prove: `yamada` resolves to exactly
+`yamada.wav`; `yamada_deep.wav`/`yamada_anime.wav` are absent; the old
+voice-selection setting no longer exists (and a stale stored key is
+ignored); YAMADA respects the Sound Effects toggle; YAMADA haptics stay
+independent; preloaded-pool reuse; playback failure cannot affect gameplay;
+no feedback during rebuilds; no card/player identity reaches the audio
+layer; and `yamada.wav` satisfies the quality constraints (no clipping, no
+leading silence, clean tail, audible RMS, 0.4–0.8 s, valid WAV header).
+
+**Hold Out** — `hold_out.wav` is byte-for-byte unchanged (SHA-256
+`5db1bd…c7829bad` still pinned).
+
+**Out of scope** — no gameplay rule changed; save/resume, history/replay,
+M13 privacy, M14 personalization, and M16 small-screen behavior untouched;
+no new dependencies.
 
 ## Prerequisites
 

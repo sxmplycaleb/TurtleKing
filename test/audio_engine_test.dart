@@ -478,36 +478,5 @@ void main() {
       expect(playerPlatform.resumed, isNotEmpty);
       await disposeService(tester, service);
     });
-
-    testWidgets('previewing a voice reuses the preloaded pool and never '
-        'fires haptics', (tester) async {
-      final haptics = <FeedbackHaptic>[];
-      final store = SettingsStore.inMemory();
-      final engine = AudioplayersEngine();
-      final service = GameFeedbackService(
-        store,
-        engine: engine,
-        playHaptic: haptics.add,
-      );
-
-      await preloadAndSettle(tester, service);
-      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
-
-      await tester.runAsync(() async {
-        service.previewYamadaVoice(YamadaVoice.deep);
-        service.previewYamadaVoice(YamadaVoice.animeGirl);
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-      });
-
-      // Both voices played from their preloaded pools — no new loads or
-      // native players were created for the previews.
-      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
-      expect(playerPlatform.created, hasLength(allSoundAssetPaths.length));
-      expect(playerPlatform.resumed, isNotEmpty);
-      // Preview is sound only — no haptics ever fire.
-      expect(haptics, isEmpty);
-      expect(tester.takeException(), isNull);
-      await disposeService(tester, service);
-    });
   });
 }

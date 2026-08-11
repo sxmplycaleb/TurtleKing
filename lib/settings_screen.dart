@@ -2,7 +2,6 @@ import 'package:flutter/material.dart' hide Card;
 
 import 'card.dart';
 import 'card_widgets.dart';
-import 'feedback.dart';
 import 'settings.dart';
 import 'theme.dart';
 
@@ -195,7 +194,7 @@ class _SwatchTile extends StatelessWidget {
   }
 }
 
-/// The sound/haptic feedback switches plus the YAMADA voice selector.
+/// The sound/haptic feedback switches.
 class _FeedbackToggles extends StatelessWidget {
   const _FeedbackToggles();
 
@@ -215,8 +214,6 @@ class _FeedbackToggles extends StatelessWidget {
           value: store.soundEnabled,
           onChanged: (value) => store.setSoundEnabled(value),
         ),
-        // The YAMADA voice selector sits directly below Sound Effects.
-        const _YamadaVoiceSelector(),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           secondary: const Icon(Icons.vibration_outlined),
@@ -226,74 +223,6 @@ class _FeedbackToggles extends StatelessWidget {
           onChanged: (value) => store.setHapticsEnabled(value),
         ),
       ],
-    );
-  }
-}
-
-/// The two-option YAMADA voice selector (Deep Voice / Anime Girl).
-///
-/// Shows the currently selected voice; changing it applies and persists
-/// immediately via the [SettingsStore]. Purely presentational — it never
-/// touches gameplay state.
-class _YamadaVoiceSelector extends StatelessWidget {
-  const _YamadaVoiceSelector();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final store = SettingsScope.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'YAMADA Voice',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          RadioGroup<YamadaVoice>(
-            groupValue: store.yamadaVoice,
-            onChanged: (v) {
-              if (v != null) store.setYamadaVoice(v);
-            },
-            child: Column(
-              children: [
-                for (final voice in YamadaVoice.values)
-                  RadioListTile<YamadaVoice>(
-                    value: voice,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    // A small play button that previews only this voice's
-                    // asset (sound, never haptics). Tapping it does not
-                    // change the selection.
-                    secondary: Semantics(
-                      container: true,
-                      label: 'Preview ${voice.label}',
-                      button: true,
-                      excludeSemantics: true,
-                      child: IconButton(
-                        icon: const Icon(Icons.play_circle_outline),
-                        tooltip: 'Preview ${voice.label}',
-                        onPressed: () => GameFeedbackScope.of(
-                          context,
-                        ).previewYamadaVoice(voice),
-                      ),
-                    ),
-                    title: Text(voice.label),
-                    subtitle: Text(
-                      voice == YamadaVoice.deep
-                          ? 'Powerful dramatic voice'
-                          : 'Bright energetic voice',
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

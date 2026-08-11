@@ -6,7 +6,6 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/feedback.dart';
-import 'package:turtle_king/settings.dart';
 
 /// Measured stats for one 16-bit mono 22050 Hz WAV: duration, RMS, peak,
 /// leading silence, and the loudest sample in the final millisecond.
@@ -50,8 +49,8 @@ _wavStats(String path) {
 /// in pubspec, and every feedback event points at a real asset. No audio is
 /// decoded or played here.
 void main() {
-  test('all eight feedback assets exist as small, non-empty WAV files', () {
-    expect(allSoundAssetPaths, hasLength(8));
+  test('all seven feedback assets exist as small, non-empty WAV files', () {
+    expect(allSoundAssetPaths, hasLength(7));
     var total = 0;
     for (final path in allSoundAssetPaths) {
       final file = File(path);
@@ -67,35 +66,12 @@ void main() {
     expect(total, lessThan(256 * 1024));
   });
 
-  test('the YAMADA voice assets satisfy the 0.8–1.5 s duration spec', () {
-    for (final voice in YamadaVoice.values) {
-      final path = yamadaAssetPath(voice);
-      final bytes = File(path).readAsBytesSync();
-      expect(String.fromCharCodes(bytes.take(4)), 'RIFF');
-      final data = ByteData.sublistView(bytes);
-      final dataSize = data.getUint32(40, Endian.little); // data chunk size
-      final seconds = (dataSize ~/ 2) / 22050; // 16-bit mono @ 22050 Hz
-      expect(
-        seconds,
-        inInclusiveRange(0.8, 1.5),
-        reason: '$path is ${seconds.toStringAsFixed(2)}s',
-      );
-    }
-  });
-
   test('every feedback event maps to a declared, existing asset', () {
     for (final event in FeedbackEvent.values) {
-      // The YAMADA event must resolve to one of the two voice assets for
-      // every possible voice selection.
-      final voices = event == FeedbackEvent.yamada
-          ? YamadaVoice.values
-          : const <YamadaVoice>[YamadaVoice.deep];
-      for (final voice in voices) {
-        final path = feedbackPatternFor(event, yamadaVoice: voice).assetPath;
-        expect(path, startsWith('assets/sounds/'));
-        expect(allSoundAssetPaths, contains(path));
-        expect(File(path).existsSync(), isTrue, reason: '$path missing');
-      }
+      final path = feedbackPatternFor(event).assetPath;
+      expect(path, startsWith('assets/sounds/'));
+      expect(allSoundAssetPaths, contains(path));
+      expect(File(path).existsSync(), isTrue, reason: '$path missing');
     }
   });
 
@@ -110,22 +86,22 @@ void main() {
     );
   });
 
-  test('the two YAMADA voices map to two distinct assets', () {
+  test('the old YAMADA voice assets are removed (M17.5)', () {
+    // The two voice clips are gone; the YAMADA event uses a single sting.
+    expect(File('assets/sounds/yamada_deep.wav').existsSync(), isFalse);
+    expect(File('assets/sounds/yamada_anime.wav').existsSync(), isFalse);
+    expect(File('assets/sounds/yamada.wav').existsSync(), isTrue);
     expect(
-      yamadaAssetPath(YamadaVoice.deep),
-      isNot(yamadaAssetPath(YamadaVoice.animeGirl)),
+      allSoundAssetPaths,
+      isNot(contains('assets/sounds/yamada_deep.wav')),
     );
-    final deep = File(yamadaAssetPath(YamadaVoice.deep)).readAsBytesSync();
-    final anime = File(
-      yamadaAssetPath(YamadaVoice.animeGirl),
-    ).readAsBytesSync();
     expect(
-      sha256.convert(deep).toString(),
-      isNot(sha256.convert(anime).toString()),
+      allSoundAssetPaths,
+      isNot(contains('assets/sounds/yamada_anime.wav')),
     );
   });
 
-  test('all eight event sounds are distinct from one another', () {
+  test('all seven event sounds are distinct from one another', () {
     final hashes = <String>{};
     final durationsInSamples = <int>{};
     for (final path in allSoundAssetPaths) {
@@ -141,22 +117,33 @@ void main() {
     expect(durationsInSamples, hasLength(allSoundAssetPaths.length));
   });
 
-  test('both YAMADA voices are intelligible-grade: instant, unclipped, '
-      'clearly audible, and fade cleanly (M17.4)', () {
-    for (final voice in YamadaVoice.values) {
-      final s = _wavStats(yamadaAssetPath(voice));
-      // 0.8–1.5 s duration spec (also asserted above).
-      expect(s.duration, inInclusiveRange(0.8, 1.5));
-      // Zero leading silence — the word starts immediately, no latency.
-      expect(s.leadMs, lessThan(2), reason: '$voice leading silence');
-      // No clipping and no full-scale samples.
-      expect(s.peak, lessThan(0.98), reason: '$voice peak');
-      // Clearly audible on phone speakers (comparable to hold-out/victory).
-      expect(s.rms, greaterThan(0.06), reason: '$voice level');
+  test(
+    'yamada.wav meets the M17.5 quality spec (short, punchy game sting)',
+    () {
+      const path = 'assets/sounds/yamada.wav';
+      final file = File(path);
+      expect(file.existsSync(), isTrue, reason: '$path missing');
+      final bytes = file.readAsBytesSync();
+      // Valid WAV header (RIFF, PCM, mono, 22050 Hz, 16-bit).
+      expect(String.fromCharCodes(bytes.take(4)), 'RIFF');
+      final header = ByteData.sublistView(bytes);
+      expect(header.getUint16(20, Endian.little), 1); // PCM
+      expect(header.getUint16(22, Endian.little), 1); // mono
+      expect(header.getUint32(24, Endian.little), 22050); // sample rate
+      expect(header.getUint16(34, Endian.little), 16); // bits per sample
+      final s = _wavStats(path);
+      // Short and punchy — ~0.4–0.8 s.
+      expect(s.duration, inInclusiveRange(0.40, 0.80));
+      // Zero leading silence.
+      expect(s.leadMs, lessThan(2));
+      // No clipping / full-scale samples.
+      expect(s.peak, lessThan(0.98));
+      // Clearly audible for the most dramatic event (above hold-out/victory).
+      expect(s.rms, greaterThan(0.08));
       // Clean fade at the end — the final millisecond is near-silent.
-      expect(s.tailPeak, lessThan(0.01), reason: '$voice tail');
-    }
-  });
+      expect(s.tailPeak, lessThan(0.01));
+    },
+  );
 
   test('reveal.wav meets the M17.4 spec (short, bright, clean reveal)', () {
     const path = 'assets/sounds/reveal.wav';

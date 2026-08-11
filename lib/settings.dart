@@ -15,20 +15,6 @@ enum ThemeModePref {
   final String label;
 }
 
-/// Which voice says "Yamadaa!!!" when a player calls YAMADA.
-///
-/// Presentation only: the choice changes which bundled voice asset plays and
-/// never touches gameplay state.
-enum YamadaVoice {
-  deep('Deep Voice'),
-  animeGirl('Anime Girl');
-
-  const YamadaVoice(this.label);
-
-  /// Human-readable name shown in settings.
-  final String label;
-}
-
 /// The single source of truth for presentation preferences.
 ///
 /// Deliberately separate from [GameState]: preferences only describe how the
@@ -45,7 +31,6 @@ class SettingsStore extends ChangeNotifier {
     required this.cardDesign,
     required this.soundEnabled,
     required this.hapticsEnabled,
-    required this.yamadaVoice,
   });
 
   static const _themeModeKey = 'settings.themeMode';
@@ -53,7 +38,6 @@ class SettingsStore extends ChangeNotifier {
   static const _cardDesignKey = 'settings.cardDesign';
   static const _soundEnabledKey = 'settings.soundEnabled';
   static const _hapticsEnabledKey = 'settings.hapticsEnabled';
-  static const _yamadaVoiceKey = 'settings.yamadaVoice';
 
   final SharedPreferences? _prefs;
 
@@ -71,9 +55,6 @@ class SettingsStore extends ChangeNotifier {
 
   /// Whether gameplay haptic feedback plays (default: on).
   bool hapticsEnabled;
-
-  /// Which voice says "Yamadaa!!!" (default: Deep Voice).
-  YamadaVoice yamadaVoice;
 
   /// Loads the persisted preferences (defaults when unset).
   static Future<SettingsStore> load() async {
@@ -97,11 +78,6 @@ class SettingsStore extends ChangeNotifier {
       ),
       soundEnabled: prefs.getBool(_soundEnabledKey) ?? true,
       hapticsEnabled: prefs.getBool(_hapticsEnabledKey) ?? true,
-      yamadaVoice: _readEnum(
-        prefs.getString(_yamadaVoiceKey),
-        YamadaVoice.values,
-        YamadaVoice.deep,
-      ),
     );
   }
 
@@ -113,7 +89,6 @@ class SettingsStore extends ChangeNotifier {
     cardDesign: CardDesign.classicPoker,
     soundEnabled: true,
     hapticsEnabled: true,
-    yamadaVoice: YamadaVoice.deep,
   );
 
   static T _readEnum<T extends Enum>(
@@ -169,14 +144,6 @@ class SettingsStore extends ChangeNotifier {
     if (value == hapticsEnabled) return;
     hapticsEnabled = value;
     _prefs?.setBool(_hapticsEnabledKey, value);
-    notifyListeners();
-  }
-
-  /// Sets which voice says YAMADA, persists it, and notifies listeners.
-  void setYamadaVoice(YamadaVoice value) {
-    if (value == yamadaVoice) return;
-    yamadaVoice = value;
-    _persist(_yamadaVoiceKey, value.name);
     notifyListeners();
   }
 }

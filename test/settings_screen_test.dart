@@ -10,20 +10,15 @@ import 'package:turtle_king/settings_screen.dart';
 import 'package:turtle_king/theme.dart';
 
 /// A recording [GameFeedback] that proves the Settings screen itself never
-/// fires sound/haptic feedback while being built or rebuilt, and that the
-/// YAMADA preview buttons only preview voices.
+/// fires sound/haptic feedback while being built or rebuilt.
 class _RecordingFeedback implements GameFeedback {
   final List<FeedbackEvent> events = [];
-  final List<YamadaVoice> previewed = [];
 
   @override
   void play(FeedbackEvent event) => events.add(event);
 
   @override
   void preload() {}
-
-  @override
-  void previewYamadaVoice(YamadaVoice voice) => previewed.add(voice);
 }
 
 void main() {
@@ -171,46 +166,6 @@ void main() {
       expect(store.cardDesign, CardDesign.noir);
     });
 
-    testWidgets('YAMADA Voice selector shows the selection and updates it', (
-      tester,
-    ) async {
-      final store = await storeWithPrefs();
-      await pumpSettings(tester, store);
-
-      // Default: Deep Voice selected.
-      await tester.scrollUntilVisible(find.text('YAMADA Voice'), 200);
-      await tester.pumpAndSettle();
-      expect(find.text('YAMADA Voice'), findsOneWidget);
-      expect(find.text('Deep Voice'), findsOneWidget);
-      expect(find.text('Anime Girl'), findsOneWidget);
-      bool selected(String label) {
-        final tile = tester.widget<RadioListTile<YamadaVoice>>(
-          find.ancestor(
-            of: find.text(label),
-            matching: find.byWidgetPredicate(
-              (w) => w is RadioListTile<YamadaVoice>,
-            ),
-          ),
-        );
-        return tile.value == store.yamadaVoice;
-      }
-
-      expect(selected('Deep Voice'), isTrue);
-      expect(selected('Anime Girl'), isFalse);
-
-      // Selecting Anime Girl updates the store immediately.
-      await tester.tap(find.text('Anime Girl'));
-      await tester.pump();
-      expect(store.yamadaVoice, YamadaVoice.animeGirl);
-      expect(selected('Anime Girl'), isTrue);
-      expect(selected('Deep Voice'), isFalse);
-
-      // And back to Deep Voice.
-      await tester.tap(find.text('Deep Voice'));
-      await tester.pump();
-      expect(store.yamadaVoice, YamadaVoice.deep);
-    });
-
     testWidgets('shows face and back previews for every design', (
       tester,
     ) async {
@@ -302,19 +257,6 @@ void main() {
         await tester.scrollUntilVisible(find.text('Classic Poker'), 200);
         await tester.pumpAndSettle();
         expect(feedback.events, isEmpty);
-
-        // Selecting a YAMADA voice rebuilds the selector — still zero feedback.
-        await tester.scrollUntilVisible(find.text('YAMADA Voice'), 200);
-        await tester.pumpAndSettle();
-        expect(feedback.events, isEmpty);
-        await tester.tap(find.text('Anime Girl'));
-        await tester.pumpAndSettle();
-        expect(store.yamadaVoice, YamadaVoice.animeGirl);
-        expect(feedback.events, isEmpty);
-        await tester.tap(find.text('Deep Voice'));
-        await tester.pumpAndSettle();
-        expect(store.yamadaVoice, YamadaVoice.deep);
-        expect(feedback.events, isEmpty);
       },
     );
 
@@ -345,9 +287,9 @@ void main() {
       expect(tester.widget<SwitchListTile>(soundSwitch).value, isTrue);
       expect(tester.widget<SwitchListTile>(hapticSwitch).value, isTrue);
 
-      // Both on → sound and haptics play (default Deep Voice YAMADA).
+      // Both on → sound and haptics play (the YAMADA game sting).
       service.play(FeedbackEvent.yamada);
-      expect(sounds, ['assets/sounds/yamada_deep.wav']);
+      expect(sounds, ['assets/sounds/yamada.wav']);
       expect(haptics, [FeedbackHaptic.heavy]);
 
       // Sound off (via the switch) → haptics only, immediately.
@@ -370,158 +312,6 @@ void main() {
       service.play(FeedbackEvent.cardReveal);
       expect(sounds.last, 'assets/sounds/card_reveal.wav');
       expect(haptics, hasLength(2)); // No new haptic request.
-    });
-  });
-
-  group('YAMADA voice preview buttons', () {
-    Future<void> pumpSettingsWithService(
-      WidgetTester tester,
-      SettingsStore store,
-      GameFeedbackService service,
-    ) async {
-      await tester.pumpWidget(
-        SettingsScope(
-          store: store,
-          child: GameFeedbackScope(
-            feedback: service,
-            child: MaterialApp(
-              theme: buildTheme(),
-              home: const SettingsScreen(),
-            ),
-          ),
-        ),
-      );
-    }
-
-    Future<void> scrollToVoiceSelector(WidgetTester tester) async {
-      await tester.scrollUntilVisible(find.text('YAMADA Voice'), 200);
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('both voice options expose clearly labeled Preview buttons', (
-      tester,
-    ) async {
-      final semantics = tester.ensureSemantics();
-      await pumpSettings(tester, await storeWithPrefs());
-      await scrollToVoiceSelector(tester);
-
-      expect(find.byTooltip('Preview Deep Voice'), findsOneWidget);
-      expect(find.byTooltip('Preview Anime Girl'), findsOneWidget);
-      // Clear accessibility labels, not just icons/colors.
-      expect(find.bySemanticsLabel('Preview Deep Voice'), findsOneWidget);
-      expect(find.bySemanticsLabel('Preview Anime Girl'), findsOneWidget);
-
-      semantics.dispose();
-    });
-
-    testWidgets('preview plays only that voice asset — no haptics, no events', (
-      tester,
-    ) async {
-      final store = await storeWithPrefs();
-      final sounds = <String>[];
-      final haptics = <FeedbackHaptic>[];
-      final service = GameFeedbackService(
-        store,
-        playSound: sounds.add,
-        playHaptic: haptics.add,
-      );
-      await pumpSettingsWithService(tester, store, service);
-      await scrollToVoiceSelector(tester);
-
-      await tester.tap(find.byTooltip('Preview Deep Voice'));
-      await tester.pump();
-      expect(sounds, ['assets/sounds/yamada_deep.wav']);
-      expect(haptics, isEmpty);
-
-      await tester.tap(find.byTooltip('Preview Anime Girl'));
-      await tester.pump();
-      expect(sounds, [
-        'assets/sounds/yamada_deep.wav',
-        'assets/sounds/yamada_anime.wav',
-      ]);
-      expect(haptics, isEmpty);
-    });
-
-    testWidgets('preview works immediately after changing the selected voice', (
-      tester,
-    ) async {
-      final store = await storeWithPrefs();
-      final sounds = <String>[];
-      final service = GameFeedbackService(store, playSound: sounds.add);
-      await pumpSettingsWithService(tester, store, service);
-      await scrollToVoiceSelector(tester);
-
-      // Switch the selection, then preview each voice right away.
-      await tester.tap(find.text('Anime Girl'));
-      await tester.pump();
-      expect(store.yamadaVoice, YamadaVoice.animeGirl);
-
-      await tester.tap(find.byTooltip('Preview Anime Girl'));
-      await tester.pump();
-      expect(sounds.last, 'assets/sounds/yamada_anime.wav');
-
-      await tester.tap(find.byTooltip('Preview Deep Voice'));
-      await tester.pump();
-      expect(sounds.last, 'assets/sounds/yamada_deep.wav');
-    });
-
-    testWidgets('Sound OFF suppresses preview playback', (tester) async {
-      final store = await storeWithPrefs();
-      final sounds = <String>[];
-      final service = GameFeedbackService(store, playSound: sounds.add);
-      await pumpSettingsWithService(tester, store, service);
-
-      final soundSwitch = find.widgetWithText(SwitchListTile, 'Sound Effects');
-      await tester.scrollUntilVisible(soundSwitch, 200);
-      await tester.pumpAndSettle();
-      await tester.tap(soundSwitch);
-      await tester.pump();
-      expect(store.soundEnabled, isFalse);
-
-      await scrollToVoiceSelector(tester);
-      await tester.tap(find.byTooltip('Preview Deep Voice'));
-      await tester.pump();
-      await tester.tap(find.byTooltip('Preview Anime Girl'));
-      await tester.pump();
-      expect(sounds, isEmpty);
-    });
-
-    testWidgets('preview never changes the selection or fires feedback', (
-      tester,
-    ) async {
-      final store = await storeWithPrefs();
-      final feedback = _RecordingFeedback();
-      await pumpSettingsWithFeedback(tester, store, feedback);
-      await scrollToVoiceSelector(tester);
-
-      await tester.tap(find.byTooltip('Preview Deep Voice'));
-      await tester.pump();
-      await tester.tap(find.byTooltip('Preview Anime Girl'));
-      await tester.pump();
-
-      // The selection is untouched (still the Deep Voice default)...
-      expect(store.yamadaVoice, YamadaVoice.deep);
-      // ...and no gameplay feedback events fired — only previews.
-      expect(feedback.events, isEmpty);
-      expect(feedback.previewed, [YamadaVoice.deep, YamadaVoice.animeGirl]);
-    });
-
-    testWidgets('an audio failure while previewing cannot crash the settings '
-        'screen', (tester) async {
-      final store = await storeWithPrefs();
-      final service = GameFeedbackService(
-        store,
-        playSound: (_) => throw StateError('no audio'),
-      );
-      await pumpSettingsWithService(tester, store, service);
-      await scrollToVoiceSelector(tester);
-
-      await tester.tap(find.byTooltip('Preview Deep Voice'));
-      await tester.pump();
-      await tester.tap(find.byTooltip('Preview Anime Girl'));
-      await tester.pump();
-
-      expect(tester.takeException(), isNull);
     });
   });
 
