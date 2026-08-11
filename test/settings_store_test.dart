@@ -123,6 +123,19 @@ void main() {
         expect(store.hapticsEnabled, isTrue);
       },
     );
+
+    test('a stale stored YAMADA voice key is ignored (M17.5 removal)', () async {
+      // M17.5 removed the YAMADA voice setting. A leftover key from an older
+      // install must not break loading or alter any other preference.
+      SharedPreferences.setMockInitialValues({
+        'settings.yamadaVoice': 'animeGirl',
+        'settings.soundEnabled': false,
+      });
+      final store = await SettingsStore.load();
+      // The removed setting is simply gone; sound/haptics still load normally.
+      expect(store.soundEnabled, isFalse);
+      expect(store.hapticsEnabled, isTrue);
+    });
   });
 
   group('separation from gameplay state', () {
@@ -141,6 +154,8 @@ void main() {
       store.setThemeMode(ThemeModePref.dark);
       store.setColorTheme(AppColorTheme.crimson);
       store.setCardDesign(CardDesign.noir);
+      store.setSoundEnabled(false);
+      store.setHapticsEnabled(false);
 
       // The game state is untouched by presentation changes.
       expect(game.players.length, before);

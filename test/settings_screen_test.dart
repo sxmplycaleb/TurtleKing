@@ -16,6 +16,9 @@ class _RecordingFeedback implements GameFeedback {
 
   @override
   void play(FeedbackEvent event) => events.add(event);
+
+  @override
+  void preload() {}
 }
 
 void main() {
@@ -204,26 +207,24 @@ void main() {
     });
   });
 
-  group('Settings screen never triggers feedback', () {
-    Future<void> pumpSettingsWithFeedback(
-      WidgetTester tester,
-      SettingsStore store,
-      GameFeedback feedback,
-    ) async {
-      await tester.pumpWidget(
-        SettingsScope(
-          store: store,
-          child: GameFeedbackScope(
-            feedback: feedback,
-            child: MaterialApp(
-              theme: buildTheme(),
-              home: const SettingsScreen(),
-            ),
-          ),
+  /// Pumps the settings screen inside both the settings and feedback scopes.
+  Future<void> pumpSettingsWithFeedback(
+    WidgetTester tester,
+    SettingsStore store,
+    GameFeedback feedback,
+  ) async {
+    await tester.pumpWidget(
+      SettingsScope(
+        store: store,
+        child: GameFeedbackScope(
+          feedback: feedback,
+          child: MaterialApp(theme: buildTheme(), home: const SettingsScreen()),
         ),
-      );
-    }
+      ),
+    );
+  }
 
+  group('Settings screen never triggers feedback', () {
     testWidgets(
       'building, rebuilding, and changing unrelated settings play nothing',
       (tester) async {
@@ -286,7 +287,7 @@ void main() {
       expect(tester.widget<SwitchListTile>(soundSwitch).value, isTrue);
       expect(tester.widget<SwitchListTile>(hapticSwitch).value, isTrue);
 
-      // Both on → sound and haptics play.
+      // Both on → sound and haptics play (the YAMADA game sting).
       service.play(FeedbackEvent.yamada);
       expect(sounds, ['assets/sounds/yamada.wav']);
       expect(haptics, [FeedbackHaptic.heavy]);

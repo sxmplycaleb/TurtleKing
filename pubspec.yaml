@@ -27,6 +27,9 @@ dev_dependencies:
   # platforms so the real AudioplayersEngine runs deterministically without
   # audio hardware. Already in the dependency graph via audioplayers.
   audioplayers_platform_interface: ^7.2.0
+  # Test-only: SHA-256 for pinning the preserved Hold Out asset and checking
+  # that the seven sounds are distinct. Already in the dependency graph.
+  crypto: ^3.0.6
 
 flutter:
   uses-material-design: true
