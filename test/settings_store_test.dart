@@ -16,6 +16,9 @@ void main() {
       expect(store.themeMode, ThemeModePref.system);
       expect(store.colorTheme, AppColorTheme.turtleKingGold);
       expect(store.cardDesign, CardDesign.classicPoker);
+      // Sound and haptics default to enabled.
+      expect(store.soundEnabled, isTrue);
+      expect(store.hapticsEnabled, isTrue);
     });
 
     test('loading with empty prefs returns the defaults', () async {
@@ -24,6 +27,8 @@ void main() {
       expect(store.themeMode, ThemeModePref.system);
       expect(store.colorTheme, AppColorTheme.turtleKingGold);
       expect(store.cardDesign, CardDesign.classicPoker);
+      expect(store.soundEnabled, isTrue);
+      expect(store.hapticsEnabled, isTrue);
     });
   });
 
@@ -94,7 +99,30 @@ void main() {
       expect(store.themeMode, ThemeModePref.system);
       expect(store.colorTheme, AppColorTheme.turtleKingGold);
       expect(store.cardDesign, CardDesign.classicPoker);
+      expect(store.soundEnabled, isTrue);
+      expect(store.hapticsEnabled, isTrue);
     });
+
+    test(
+      'sound and haptic toggles persist across a simulated restart',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+
+        var store = await SettingsStore.load();
+        store.setSoundEnabled(false);
+        store.setHapticsEnabled(false);
+
+        store = await SettingsStore.load();
+        expect(store.soundEnabled, isFalse);
+        expect(store.hapticsEnabled, isFalse);
+
+        store.setSoundEnabled(true);
+        store.setHapticsEnabled(true);
+        store = await SettingsStore.load();
+        expect(store.soundEnabled, isTrue);
+        expect(store.hapticsEnabled, isTrue);
+      },
+    );
   });
 
   group('separation from gameplay state', () {

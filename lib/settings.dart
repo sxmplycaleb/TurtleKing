@@ -29,11 +29,15 @@ class SettingsStore extends ChangeNotifier {
     required this.themeMode,
     required this.colorTheme,
     required this.cardDesign,
+    required this.soundEnabled,
+    required this.hapticsEnabled,
   });
 
   static const _themeModeKey = 'settings.themeMode';
   static const _colorThemeKey = 'settings.colorTheme';
   static const _cardDesignKey = 'settings.cardDesign';
+  static const _soundEnabledKey = 'settings.soundEnabled';
+  static const _hapticsEnabledKey = 'settings.hapticsEnabled';
 
   final SharedPreferences? _prefs;
 
@@ -45,6 +49,12 @@ class SettingsStore extends ChangeNotifier {
 
   /// The selected card design.
   CardDesign cardDesign;
+
+  /// Whether gameplay sound effects play (default: on).
+  bool soundEnabled;
+
+  /// Whether gameplay haptic feedback plays (default: on).
+  bool hapticsEnabled;
 
   /// Loads the persisted preferences (defaults when unset).
   static Future<SettingsStore> load() async {
@@ -66,6 +76,8 @@ class SettingsStore extends ChangeNotifier {
         CardDesign.values,
         CardDesign.classicPoker,
       ),
+      soundEnabled: prefs.getBool(_soundEnabledKey) ?? true,
+      hapticsEnabled: prefs.getBool(_hapticsEnabledKey) ?? true,
     );
   }
 
@@ -75,6 +87,8 @@ class SettingsStore extends ChangeNotifier {
     themeMode: ThemeModePref.system,
     colorTheme: AppColorTheme.turtleKingGold,
     cardDesign: CardDesign.classicPoker,
+    soundEnabled: true,
+    hapticsEnabled: true,
   );
 
   static T _readEnum<T extends Enum>(
@@ -114,6 +128,22 @@ class SettingsStore extends ChangeNotifier {
     if (value == cardDesign) return;
     cardDesign = value;
     _persist(_cardDesignKey, value.name);
+    notifyListeners();
+  }
+
+  /// Enables/disables sound effects, persists it, and notifies listeners.
+  void setSoundEnabled(bool value) {
+    if (value == soundEnabled) return;
+    soundEnabled = value;
+    _prefs?.setBool(_soundEnabledKey, value);
+    notifyListeners();
+  }
+
+  /// Enables/disables haptic feedback, persists it, and notifies listeners.
+  void setHapticsEnabled(bool value) {
+    if (value == hapticsEnabled) return;
+    hapticsEnabled = value;
+    _prefs?.setBool(_hapticsEnabledKey, value);
     notifyListeners();
   }
 }

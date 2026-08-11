@@ -684,8 +684,119 @@ New Game clears, corrupt-save discard, Save & Exit, completion clears),
 M14's home golden baselines were regenerated for the (purely layout) home
 scroll wrapper.
 
-**Out of scope** — no gameplay rule changed; no database; no cross-device
-sync; history remains in-memory for the current session.
+## Milestone 17 — Sound Effects & Haptics
+
+This milestone adds lightweight, optional sound and haptic feedback for
+important game moments — purely presentational, with zero new dependencies
+and zero audio assets.
+
+**Feedback layer** (`lib/feedback.dart`):
+
+- `FeedbackEvent` — the gameplay moments that can produce feedback (card
+  reveal, handoff pass, YAMADA, hold out, group reveal, elimination,
+  Turtle King victory). Events carry no card information: the API takes
+  only the event enum, so hidden-card state can never influence which
+  sound or haptic plays.
+- `feedbackPatternFor(event)` — a pure, unit-tested mapping from event to a
+  (sound, haptic) pair. Intensity scales with the moment: light taps for
+  reveals/hold-outs, system alert + heavy impact for YAMADA and
+  elimination, a celebratory vibration for the Turtle King victory.
+- `SystemGameFeedback` — plays Flutter's built-in `SystemSound`
+  (click/alert) and `HapticFeedback` (selection/light/medium/heavy/
+  vibrate). No audio files, no licensing concerns, nothing to download.
+  Both playback hooks are injectable so tests use recording fakes instead
+  of real hardware.
+- `GameFeedbackScope` — an optional `InheritedWidget` that provides the
+  service to the game screen. Without a scope the app plays nothing, so
+  plain widget tests are unaffected. The service reads the sound/haptic
+  toggles live from the `SettingsStore`, so toggling takes effect
+  immediately.
+
+**Settings** (`lib/settings.dart`, `lib/settings_screen.dart`): two new
+persisted preferences — **Sound Effects** and **Haptic Feedback** — both
+on by default, exposed as `SwitchListTile`s in a new *Feedback* section of
+the Settings screen. They persist through the existing
+`shared_preferences` store (no second persistence layer).
+
+**Integration** (`lib/game_start_screen.dart`): feedback fires only from
+action handlers — never from `build` — for the reveal action, the pass
+action, YAMADA, hold-out, the simultaneous reveal, eliminations (detected
+by new elimination records), and the final victory. The neutral handoff
+"Continue" intentionally plays nothing.
+
+**Safety**: every playback is fire-and-forget and wrapped so that a missing
+sound channel, unsupported haptics, or even a throwing feedback service
+can never crash or interrupt gameplay. Feedback is never the only way an
+event is communicated — all information stays in the existing UI.
+
+**Tests** (`test/feedback_test.dart`): pattern mapping, sound/haptic
+gating (disabled sound → no playback requests while haptics still play,
+and vice versa), immediate toggle effect, failure safety, no feedback
+during rebuilds, silent fallback without a scope, widget-level triggers
+for reveal/pass/YAMADA/hold-out/reveal/elimination/victory, and
+card-agnostic feedback (identical output regardless of the hidden cards).
+`test/settings_store_test.dart` and `test/settings_screen_test.dart` were
+extended for the new defaults, persistence, and switches.
+
+## Milestone 17.1 — Real Audio Feedback
+
+M17.1 replaces the platform `SystemSound` backend with real, bundled audio
+assets. The `GameFeedback` abstraction, `FeedbackEvent` enum, settings, and
+haptic behavior are unchanged — only the sound backend was swapped.
+
+**Audio package** (`pubspec.yaml`): `audioplayers` (^6.8.1) — the current
+stable, actively-maintained solution for short local effects. Each asset is
+pre-loaded once into a small `AudioPool` (one to two players), so replays and
+brief overlaps never create a new native player per event. On Android it uses
+media3/ExoPlayer; on iOS/macOS it uses AVAudioPlayer. It is the maintained
+successor to the discontinued `soundpool` package, whose only release
+(2.4.1) cannot compile against current Flutter because its legacy v1 plugin
+API was removed. No other audio package is used.
+
+**Audio assets** (`assets/sounds/`): seven short original WAV files (16-bit
+PCM, mono, 22050 Hz, ~115 KB total), synthesized in-repo by
+`tool/generate_sounds.dart` from basic waveforms. Because the audio is
+original generated work, there are no third-party licenses or attribution
+requirements — see `assets/sounds/README.md` for the full asset table.
+
+**Event → sound mapping:**
+
+| Event | Asset | Haptic |
+| --- | --- | --- |
+| Card reveal | `card_reveal.wav` (papery snap) | light |
+| Handoff pass | `handoff.wav` (soft tap) | selection |
+| Hold out | `hold_out.wav` (two-note confirmation) | light |
+| YAMADA | `yamada.wav` (dramatic descending wah) | heavy |
+| Group reveal | `reveal.wav` (suspense riser) | medium |
+| Elimination | `elimination.wav` (low thud) | heavy |
+| Victory | `victory.wav` (celebratory arpeggio) | vibrate |
+
+**Architecture** (`lib/feedback.dart`): `GameFeedbackService` owns a
+lazily-created `SoundEngine` (default `AudioplayersEngine`, abstract so tests
+inject a fake). Assets are preloaded once on first use so the first play has
+no latency; playback is fire-and-forget, non-blocking, and exception-safe —
+a missing asset, failed load, failed play, or disposed engine all degrade
+silently and can never crash or interrupt gameplay. The service is created
+once by the app (`lib/main.dart`) and disposed with it. `GameFeedbackScope`
+and the silent fallback are unchanged.
+
+**Settings**: unchanged from M17 — Sound Effects and Haptic Feedback toggles
+persist, default ON, apply immediately, and gate sound and haptics
+independently (sound off + haptics on plays haptics only, and vice versa).
+
+**Privacy**: feedback selection depends only on `FeedbackEvent`; the audio
+layer never receives a card, rank, suit, or hand. Two games with different
+hidden cards produce identical audio for the same event (regression-tested).
+
+**Tests**: `test/feedback_test.dart` reworked for asset mapping (each event →
+its asset, all distinct, files exist), sound/haptic gating, toggle
+immediacy, hook and engine failure safety (missing asset, playback failure,
+dispose), no feedback during rebuilds, silent fallback, widget triggers, and
+card-agnostic feedback. `test/audio_assets_test.dart` validates the assets
+on disk (existence, size, RIFF magic, pubspec declaration, exact set).
+
+**Out of scope** — no gameplay rule changed; no background music, loops, or
+long tracks; no haptic changes; no second feedback system.
 
 ## Prerequisites
 
@@ -740,7 +851,7 @@ lib/
   main.dart               # App entry point (loads settings, splash -> home)
   theme.dart              # Brand palette, accent themes, card designs, theme extensions
   settings.dart           # SettingsStore (persisted preferences) + SettingsScope
-  settings_screen.dart    # Personalization screen (theme mode, colors, card designs)
+  settings_screen.dart    # Personalization + feedback screen (themes, cards, sound/haptics)
   splash_screen.dart      # Branded launch screen (full artwork -> home)
   home_screen.dart        # Home screen (emblem brand mark + Resume Game + New Game + How to Play)
   how_to_play_screen.dart # Rules documentation (How to Play screen)
@@ -757,10 +868,13 @@ lib/
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result, event log
+  feedback.dart           # Sound/haptic feedback: events, patterns, GameFeedbackService, engine, scope
 assets/
   branding/               # Turtle King artwork (splash, emblem, icon)
+  sounds/                 # Original generated sound-effect WAVs (+ license README)
 tool/
   generate_branding.ps1   # Regenerates all branding derivatives
+  generate_sounds.dart    # Regenerates the original sound-effect WAVs
 test/
   home_screen_test.dart        # Home screen branding + navigation
   splash_screen_test.dart      # Launch screen artwork + transition
@@ -783,5 +897,7 @@ test/
   how_to_play_screen_test.dart # How to Play content, scrolling, navigation
   game_save_test.dart          # Save codec round-trips, rejection paths, store lifecycle
   resume_flow_test.dart        # Home resume card, save lifecycle, corrupt-save recovery
+  feedback_test.dart           # Feedback asset mapping, gating, engine safety, triggers, privacy
+  audio_assets_test.dart       # Bundled sound assets exist, are small, and are declared
   small_screen_test.dart       # Every screen at 320-412px viewports, full 320x568 game
 ```

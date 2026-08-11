@@ -30,11 +30,14 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _SectionTitle(title: 'Cards'),
             const _CardDesignSelector(),
+            const SizedBox(height: 24),
+            _SectionTitle(title: 'Feedback'),
+            const _FeedbackToggles(),
             const SizedBox(height: 16),
             Text(
-              'These settings only change how the game looks — they never '
-              'affect cards, hands, rounds, drinks, eliminations, or the '
-              'winner.',
+              'These settings only change how the game looks and sounds — '
+              'they never affect cards, hands, rounds, drinks, '
+              'eliminations, or the winner.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -187,6 +190,39 @@ class _SwatchTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The sound/haptic feedback switches.
+class _FeedbackToggles extends StatelessWidget {
+  const _FeedbackToggles();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = SettingsScope.of(context);
+    return Column(
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.volume_up_outlined),
+          title: const Text('Sound Effects'),
+          subtitle: const Text(
+            'Play sounds for card reveals, YAMADA, '
+            'eliminations, and the Turtle King victory',
+          ),
+          value: store.soundEnabled,
+          onChanged: (value) => store.setSoundEnabled(value),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.vibration_outlined),
+          title: const Text('Haptic Feedback'),
+          subtitle: const Text('Vibrate on important game moments'),
+          value: store.hapticsEnabled,
+          onChanged: (value) => store.setHapticsEnabled(value),
+        ),
+      ],
     );
   }
 }

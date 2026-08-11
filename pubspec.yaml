@@ -12,13 +12,24 @@ dependencies:
   # Minimal, standard persistence for the personalization settings
   # (theme mode, color theme, card design) across app restarts.
   shared_preferences: ^2.5.3
+  # Lightweight short-sound-effect playback for the M17/M17.1 sound
+  # feedback (Android media3/ExoPlayer, iOS/macOS AVAudioPlayer).
+  # audioplayers is the maintained successor to the discontinued `soundpool`
+  # package, which is incompatible with current Flutter (legacy v1
+  # embedding API was removed).
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Test-only: lets the engine contract test substitute fake audioplayers
+  # platforms so the real AudioplayersEngine runs deterministically without
+  # audio hardware. Already in the dependency graph via audioplayers.
+  audioplayers_platform_interface: ^7.2.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/branding/
+    - assets/sounds/
