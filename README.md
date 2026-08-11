@@ -766,7 +766,7 @@ requirements — see `assets/sounds/README.md` for the full asset table.
 | Card reveal | `card_reveal.wav` (papery snap) | light |
 | Handoff pass | `handoff.wav` (soft tap) | selection |
 | Hold out | `hold_out.wav` (two-note confirmation) | light |
-| YAMADA | `yamada.wav` (dramatic descending wah) | heavy |
+| YAMADA | voice asset (see M17.3) | heavy |
 | Group reveal | `reveal.wav` (suspense riser) | medium |
 | Elimination | `elimination.wav` (low thud) | heavy |
 | Victory | `victory.wav` (celebratory arpeggio) | vibrate |
@@ -797,6 +797,254 @@ on disk (existence, size, RIFF magic, pubspec declaration, exact set).
 
 **Out of scope** — no gameplay rule changed; no background music, loops, or
 long tracks; no haptic changes; no second feedback system.
+
+## Milestone 17.2 — Audio Refinement & Timing
+
+M17.2 refines the M17.1 sounds and removes perceived audio latency. The
+`GameFeedback` abstraction, `FeedbackEvent` API, event mapping architecture,
+settings, haptics, and privacy contract are unchanged — only the assets and
+the preload timing were touched.
+
+**Sounds** — the approved **Hold Out** sound (`hold_out.wav`) is preserved
+byte-for-byte (pinned by SHA-256 in `test/audio_assets_test.dart`). The other
+six WAVs were refined in place by `tool/generate_sounds.dart` (still original
+project-owned generated audio, seeded and byte-reproducible, ~109 KB total):
+
+| Event | Asset | Character |
+| --- | --- | --- |
+| Card reveal | `card_reveal.wav` | short crisp paper snap (0.08 s) |
+| Handoff pass | `handoff.wav` | very short soft tactile tap (0.045 s) |
+| Hold out | `hold_out.wav` | two-note confirmation (0.30 s) — **unchanged** |
+| YAMADA | voice asset (see M17.3) | original synthesized "Yamadaa!!!" (voice selection) |
+| Group reveal | `reveal.wav` | suspense riser with whoosh + reveal tick (0.60 s) — *replaced in the M17.3 polish, see below* |
+| Elimination | `elimination.wav` | deep pitch-bending impact + second thump (0.32 s) |
+| Victory | `victory.wav` | C-major arpeggio resolving into a chord (0.70 s) |
+
+All seven sounds are distinct in content and duration; a test asserts unique
+hashes and unique sample counts.
+
+**Timing / latency** — the feedback pipeline (UI action → `GameFeedback.play`
+→ `SoundEngine` → `AudioPool` → `AudioPlayer`) already dispatched
+synchronously at the action boundary, so the perceived latency came from the
+sound engine being created lazily on the *first* event, which forced an
+on-demand asset load at event time. M17.2 fixes this by preloading:
+
+- `GameFeedback` gains `preload()` (no-op for the silent fallback);
+  `GameFeedbackService.preload()` creates the engine and preloads all seven
+  assets exactly once (idempotent, never throws).
+- The game screen calls `preload()` in `initState` — before any gameplay
+  action can fire feedback — so every `AudioPool` is created and its source
+  prepared before the first reveal/pass/YAMADA/hold-out can trigger a sound.
+- Playback stays fire-and-forget and non-blocking: nothing is awaited before
+  a gameplay action, `_playAsset` still falls back to load-and-play only if
+  a play ever raced the preload, and async playback failures remain
+  contained. `AudioPlayer` players are never created per event (bounded
+  `AudioPool` reuse preserved); the redundant per-play volume call was
+  dropped from the dispatch path.
+- Feedback still fires only from action handlers — never from `build()`, and
+  never more than once per action (regression-tested).
+
+**Behavioral guarantees (unchanged from M17/M17.1)** — haptic mapping intact;
+sound and haptics independently toggleable and persistent; audio receives
+only `FeedbackEvent`/declared asset paths (never card identity); no gameplay,
+privacy, save/resume, or history changes.
+
+**Tests** — `test/feedback_test.dart` adds preload tests (all assets loaded
+exactly once, plays reuse cached ids, preload failure contained), a
+game-screen preloads-once-before-gameplay test, and an exactly-one-event-per-
+action test. `test/audio_engine_test.dart` adds a real-engine preload test
+(one ready pool per asset before gameplay; plays after preload reuse the
+pool) and reworks the rapid-replay test around preloaded pools.
+`test/audio_assets_test.dart` pins `hold_out.wav`'s exact bytes and asserts
+all seven sounds are distinct.
+
+**Out of scope** — no gameplay rule changed; no haptic changes; no settings
+changes; no new runtime dependencies (the test-only `crypto` dev dependency
+was added for the asset pin).
+
+## Milestone 17.3 — YAMADA Voice Selection
+
+M17.3 adds a persistent **YAMADA Voice** setting: players choose who says
+"Yamadaa!!!" when someone calls YAMADA — **Deep Voice** (default) or
+**Anime Girl**. Everything else (the other six event sounds, the
+`FeedbackEvent` API, event mapping architecture, haptics, settings,
+privacy contract) is unchanged.
+
+**Voice assets** (`assets/sounds/yamada_deep.wav`, `assets/sounds/yamada_anime.wav`)
+— two original in-repo synthesized speech clips (~0.8–1.5 s each) generated
+by `tool/generate_sounds.dart` via additive harmonic voice synthesis (glottal
+pulse train shaped by vocal-tract formants). They say "Yamadaa!!!" — the deep
+voice low, dark, and powerful (100→155 Hz, sub-octave body, ~1.0 s); the
+anime-inspired voice bright and energetic (285→410 Hz, extended final
+"daa", breathy exclamation, ~1.2 s). Both are original synthesis that
+imitates no specific anime character, voice actor, or copyrighted
+performance, and remain project-owned with no attribution requirements (see
+`assets/sounds/README.md`). The previous non-voice `yamada.wav` was removed.
+
+**Mapping** — `FeedbackEvent.yamada` resolves to the selected voice's asset
+via `yamadaAssetPath(YamadaVoice)`; all other events keep their M17.2
+assets. The audio layer still receives only the declared asset path — never
+voice-selection data, player identity, card identity, rank, suit, or
+`GameState`.
+
+**Settings** — new **YAMADA Voice** section below **Sound Effects** with a
+radio selector (Deep Voice / Anime Girl) showing the current selection.
+Persisted via `SettingsStore`/`shared_preferences` (`settings.yamadaVoice`),
+defaults to Deep Voice, and takes effect immediately. The setting is
+presentation-only and never touches gameplay state.
+
+**Behavior matrix** — Sound OFF: no YAMADA voice (either selection); Sound ON
++ Deep Voice: deep "Yamadaa!!!"; Sound ON + Anime Girl: anime-inspired
+"Yamadaa!!!". Haptic feedback remains completely independent.
+
+**Tests** — `test/settings_store_test.dart` covers the Deep Voice default,
+selecting Anime Girl, persistence across a simulated restart, fallback on
+unrecognized stored values, and separation from `GameState`.
+`test/feedback_test.dart` covers both voice → asset mappings, immediate
+switchover, sound-OFF silencing either voice while haptics still fire, and
+no card/player identity reaching audio with any voice. `test/audio_assets_test.dart`
+validates both voice assets (existence, 0.8–1.5 s duration, distinctness) and
+that every event resolves to a declared, on-disk asset for every voice.
+`test/settings_screen_test.dart` covers the selector UI (default selection,
+immediate updates) and that selecting a voice triggers no feedback.
+
+**Out of scope** — no gameplay rule changed; no haptic changes; the six
+non-YAMADA sounds are untouched; no new runtime dependencies (only test
+updates).
+
+### M17.3 final polish — YAMADA Voice preview + full audio audit
+
+**Preview** — each YAMADA Voice option in Settings now has a small play
+button (accessibility-labeled **"Preview Deep Voice"** / **"Preview Anime
+Girl"**) that plays only that voice's asset. Preview is sound-only: it never
+fires a gameplay feedback event, never triggers haptics, never touches game
+state or history, respects the Sound Effects toggle, works immediately after
+changing the selection, reuses the preloaded `AudioPool`, and fails silently.
+It goes through the existing `GameFeedback` abstraction
+(`GameFeedback.previewYamadaVoice(voice)` via `GameFeedbackScope`) — no
+second audio engine and no duplicated asset-loading logic.
+
+**Audio audit (all eight assets measured)** — every bundled WAV was measured
+for duration, RMS/loudness, peak/clipping, leading/trailing silence, sample
+rate/format, and file size, then checked against its intended character. No
+sound has any leading silence (no measured latency contribution); all peaks
+are below full scale; every tail fades to silence. Findings and fixes (all
+through the seeded, byte-reproducible generator; still project-owned):
+
+| Sound | Finding | Fix |
+| --- | --- | --- |
+| `card_reveal.wav` | crackle envelope used `exp(+(t−0.03)·400)` before 30 ms — a clamped full-scale noise blow-up (peak 1.000, 0 dBFS) instead of a subtle snap | envelope corrected to a symmetric spike; gains trimmed (peak 0.59, RMS 0.11) |
+| `reveal.wav` | long suspense riser mismatched the intended bright, clean anime/game-style reveal; also the loudest sound, and ended with a hard cut (trail 0 ms) | rewritten as a short bright C6→E6→G6→C7 sparkle + reveal chime (0.40 s, RMS 0.12), faded out |
+| `elimination.wav` | peak at 0 dBFS | gains trimmed below full scale (peak 0.89) |
+| `victory.wav` | ended mid-chord with an audible hard cut (trail 0 ms) | tail faded to silence (0.75 s) |
+| `yamada_deep.wav` / `yamada_anime.wav` | quieter than hold-out/victory — the most dramatic event was among the quietest | level boosted (peaks 0.36 / 0.33), durations and rhythm unchanged |
+| `hold_out.wav` | — | **untouched — byte-for-byte identical (SHA-256 pinned)** |
+| `handoff.wav` | — | untouched (already appropriately subtle) |
+
+Post-audit metrics: all peaks ≤ 0.89, zero clipping, zero leading silence,
+every tail fades to silence, and all eight durations remain mutually
+distinct.
+
+**Timing** — the audit confirmed no measurable latency sources remain in the
+code path: zero leading silence in every WAV, all eight assets preloaded
+before gameplay (`GameStartScreen.initState`), playback dispatched
+synchronously from the action handler (no awaits before the sound request),
+and no `Future.delayed`/sleeps/guessed offsets anywhere. The preview path
+reuses the same preloaded pools (a first-tap preview before any preload has
+run warms the full preload in the background and falls back to load-and-play
+for that one asset only).
+
+**Tests** — `test/feedback_test.dart` adds service-level preview tests
+(only the requested voice plays; preview never fires haptics; sound OFF
+silences previews; preview failure never throws; preview never fires
+gameplay events). `test/settings_screen_test.dart` adds widget tests for the
+Preview buttons (both present with clear semantic labels; correct asset per
+voice; no haptics; sound-OFF suppression; works immediately after switching
+voices; selection unchanged; no feedback events; audio failure cannot crash
+Settings). `test/audio_engine_test.dart` proves previews reuse the preloaded
+pool with the real engine and never fire haptics.
+
+**Out of scope** — no gameplay rule changed; haptic mapping, settings,
+privacy contract, save/resume, and history/replay untouched; no new
+dependencies.
+
+## Milestone 17.4 — YAMADA Voice Intelligibility + Reveal Sound
+
+M17.4 fixes two audio-quality problems: the YAMADA voices are now clearly
+intelligible as **"YAH-mah-DAH!!!"** (two beats: `YAMA` → `DA`), and
+`reveal.wav` was replaced with a better bright game-reveal sound. No
+`FeedbackEvent`/settings/haptic/playback code changed — only the two voice
+assets, the reveal asset, and their documentation/tests.
+
+**YAMADA pronunciation** — the previous formant synthesis blended vowels and
+weak consonants into an unclear "ya-ma-da". The synthesis engine
+(`tool/generate_sounds.dart`) was redesigned around explicit phoneme
+segments with articulatory timing:
+
+| Segment | Length | Synthesis |
+| --- | ---: | --- |
+| `/j/` glide | 35 ms | rising fricative that hands off to the vowel — "Ya" has an explicit initial consonant, not a bare "Ah" |
+| YAH vowel | 150 ms | stressed first beat, clear `/a/` (F1 ≈ 720–830 Hz), pitch rising slightly |
+| `/m/` nasal | 50 ms | brief lips-closed hum with a pitch dip, **glued to YAH** so the pair reads as one "YAMA" unit |
+| mah vowel | 110 ms | lighter `/a/` tail of the YAMA beat |
+| stop occlusion | 30 ms | near-silence before the `/d/` — a true stop consonant, so "DA" snaps |
+| `/d/` burst | 8 ms | crisp broadband release transient |
+| DAH!!! | daaDur (0.55 s deep / 0.72 s anime) | emphasized final beat: strong attack, rising pitch, vibrato, breath growing toward "!!!" |
+
+Both clips stay 0.8–1.5 s (0.93 s deep / 1.10 s anime), deterministic, and
+project-owned.
+
+**Deep Voice changes** — `/a/` formants moved from F1 620 Hz (which read as
+"uh") to F1 720 Hz for a clear "YAH/DAH"; the sub-octave "power" gain was
+cut from 0.25 to 0.14 so it no longer masks the vowels; breath reduced to
+0.015; pitch 105→165 Hz with a rising final beat. Spectral balance is now
+9% low / 23% mid / 42% high / 19% very-high — the voice stays present on
+phone speakers instead of disappearing into low frequencies.
+
+**Anime Girl changes** — `/a/` formants (F1 830 Hz) for a clear bright
+vowel; gentler high-formant gains and breath (0.02, down from 0.035) so it
+stays energetic without getting harsh or piercing; pitch 300→440 Hz; final
+"daa" extended to 0.72 s. Spectral balance 3% low / 18% mid / 50% high /
+25% very-high.
+
+**New reveal sound** — `reveal.wav` was replaced (the previous bell arpeggio
+was judged unsatisfactory). The new sound is a quick upward bell sparkle —
+G6 → A6 → C7, staccato with octave + third partials — landing on a bright
+C7 "ding" with a soft magical body underneath: a clean, satisfying
+mobile-game "the cards are being revealed" cue at **0.36 s** (target
+0.3–0.5 s). It is distinct from every other event (unique pitch set, rhythm,
+and length vs. the victory arpeggio) and fades to silence.
+
+**Hold Out** — `hold_out.wav` was **not touched**; its SHA-256 pin
+(`5db1bd…c7829bad`) still passes.
+
+**Audio audit (all eight assets)** — duration, RMS, peak/clipping, leading
+silence, tail, size:
+
+| Asset | Duration | RMS | Peak | Clipping | Leading silence | Tail | Size | Verdict |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `card_reveal.wav` | 80 ms | 0.105 | 0.591 | none | 0 ms | 15 ms | 3.6 KB | ✓ unchanged (M17.3 polish) |
+| `handoff.wav` | 45 ms | 0.043 | 0.233 | none | 0 ms | 8 ms | 2.0 KB | ✓ unchanged |
+| `hold_out.wav` | 300 ms | 0.126 | 0.494 | none | 0 ms | 60 ms | 13.3 KB | ✓ approved, untouched |
+| `yamada_deep.wav` | 933 ms | 0.092 | 0.410 | none | 0 ms | 2 ms | 41.2 KB | ✓ **changed** — intelligibility redesign |
+| `yamada_anime.wav` | 1103 ms | 0.111 | 0.396 | none | 0 ms | 0 ms | 48.7 KB | ✓ **changed** — intelligibility redesign |
+| `reveal.wav` | 360 ms | 0.108 | 0.535 | none | 0 ms | 16 ms | 15.9 KB | ✓ **changed** — replaced with new reveal |
+| `elimination.wav` | 320 ms | 0.157 | 0.894 | none | 0 ms | 80 ms | 14.2 KB | ✓ unchanged (M17.3 polish) |
+| `victory.wav` | 750 ms | 0.108 | 0.585 | none | 0 ms | 17 ms | 33.1 KB | ✓ unchanged (M17.3 polish) |
+
+No sound has leading silence; none clips; every tail fades to silence; all
+eight durations remain mutually distinct.
+
+**Tests** — `test/audio_assets_test.dart` adds measured-data checks: both
+YAMADA voices have zero leading silence, no clipping/full-scale samples,
+a clearly audible level (RMS > 0.06), and a clean final-millisecond fade;
+`reveal.wav` exists, is 0.30–0.50 s, has zero leading silence, no clipping,
+and an audible level. All existing mapping/preview/gating/settings tests
+pass unchanged.
+
+**Out of scope** — no gameplay rule changed; `GameFeedback` API, haptics,
+settings (voice selection, previews, toggles), privacy contract,
+save/resume, and history/replay untouched; no new dependencies.
 
 ## Prerequisites
 
