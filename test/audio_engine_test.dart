@@ -203,6 +203,18 @@ void main() {
     });
   }
 
+  /// Calls [service].preload() inside the real-async zone so the full
+  /// preload chain completes deterministically.
+  Future<void> preloadAndSettle(
+    WidgetTester tester,
+    GameFeedbackService service,
+  ) async {
+    await tester.runAsync(() async {
+      service.preload();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    });
+  }
+
   /// Disposes [engine] inside the real-async zone so the async player
   /// teardown (stream closes, platform calls) fully completes before the
   /// test ends — otherwise the players' frame callbacks outlive the test.
@@ -348,28 +360,52 @@ void main() {
       await disposeService(tester, service);
     });
 
-    testWidgets('rapid repeated plays are contained and never block', (
+    testWidgets('preload() creates one ready pool per asset before gameplay', (
       tester,
     ) async {
       final store = SettingsStore.inMemory();
       final engine = AudioplayersEngine();
       final service = GameFeedbackService(store, engine: engine);
 
-      // Preload deterministically inside the real-async zone.
-      await playAndSettle(tester, service, FeedbackEvent.victory);
-      expect(audioCache.requested, ['sounds/victory.wav']);
-      expect(playerPlatform.created, hasLength(1));
+      await preloadAndSettle(tester, service);
 
-      // Ten rapid replays (the real gameplay pattern is quick sequential
-      // actions, not simultaneous ones) must be contained, reuse the single
-      // preloaded player, and never re-initialize the asset.
+      // Every bundled asset is preloaded into its own pool, ready to play.
+      expect(
+        audioCache.requested,
+        allSoundAssetPaths.map(_relativeAssetPath).toList(),
+      );
+      expect(playerPlatform.created, hasLength(allSoundAssetPaths.length));
+
+      // A play after preload reuses the pool — no new load, no new pool.
+      await playAndSettle(tester, service, FeedbackEvent.cardReveal);
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.created, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.resumed, isNotEmpty);
+
+      await disposeService(tester, service);
+    });
+
+    testWidgets('rapid repeated plays reuse the preloaded pool', (
+      tester,
+    ) async {
+      final store = SettingsStore.inMemory();
+      final engine = AudioplayersEngine();
+      final service = GameFeedbackService(store, engine: engine);
+
+      // Preload every asset, exactly as the game screen does before play.
+      await preloadAndSettle(tester, service);
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.created, hasLength(allSoundAssetPaths.length));
+
+      // Ten rapid replays (quick sequential actions, the real gameplay
+      // pattern) must reuse the one victory pool and never re-initialize it.
       for (var i = 0; i < 10; i++) {
         await playAndSettle(tester, service, FeedbackEvent.victory);
       }
 
-      expect(audioCache.requested, ['sounds/victory.wav']);
-      expect(playerPlatform.created, hasLength(1));
-      expect(playerPlatform.resumed, hasLength(11));
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.created, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.resumed, hasLength(10));
       expect(tester.takeException(), isNull);
       await disposeService(tester, service);
     });
@@ -431,11 +467,46 @@ void main() {
         playHaptic: haptics.add,
       );
 
+      await preloadAndSettle(tester, service);
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
+
       await playAndSettle(tester, service, FeedbackEvent.cardReveal);
 
       expect(haptics, isEmpty);
-      expect(audioCache.requested, ['sounds/card_reveal.wav']);
+      // The preloaded pool was reused — no new asset request.
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
       expect(playerPlatform.resumed, isNotEmpty);
+      await disposeService(tester, service);
+    });
+
+    testWidgets('previewing a voice reuses the preloaded pool and never '
+        'fires haptics', (tester) async {
+      final haptics = <FeedbackHaptic>[];
+      final store = SettingsStore.inMemory();
+      final engine = AudioplayersEngine();
+      final service = GameFeedbackService(
+        store,
+        engine: engine,
+        playHaptic: haptics.add,
+      );
+
+      await preloadAndSettle(tester, service);
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
+
+      await tester.runAsync(() async {
+        service.previewYamadaVoice(YamadaVoice.deep);
+        service.previewYamadaVoice(YamadaVoice.animeGirl);
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      });
+
+      // Both voices played from their preloaded pools — no new loads or
+      // native players were created for the previews.
+      expect(audioCache.requested, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.created, hasLength(allSoundAssetPaths.length));
+      expect(playerPlatform.resumed, isNotEmpty);
+      // Preview is sound only — no haptics ever fire.
+      expect(haptics, isEmpty);
+      expect(tester.takeException(), isNull);
       await disposeService(tester, service);
     });
   });

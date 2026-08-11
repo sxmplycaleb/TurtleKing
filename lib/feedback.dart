@@ -34,17 +34,27 @@ enum FeedbackEvent {
   victory,
 }
 
-/// Every bundled sound asset in play order (also used by the asset
-/// validation tests and preloading).
+/// Every bundled sound asset (also used by the asset validation tests and
+/// preloading). The YAMADA event has two voice variants; the other events
+/// have one asset each.
 const List<String> allSoundAssetPaths = [
   'assets/sounds/card_reveal.wav',
   'assets/sounds/handoff.wav',
   'assets/sounds/hold_out.wav',
-  'assets/sounds/yamada.wav',
+  'assets/sounds/yamada_deep.wav',
+  'assets/sounds/yamada_anime.wav',
   'assets/sounds/reveal.wav',
   'assets/sounds/elimination.wav',
   'assets/sounds/victory.wav',
 ];
+
+/// The bundled voice asset for a [YamadaVoice]. Both are original,
+/// in-repo synthesized "Yamadaa!!!" clips (see `tool/generate_sounds.dart`);
+/// the choice never carries card, hand, or player identity.
+String yamadaAssetPath(YamadaVoice voice) => switch (voice) {
+  YamadaVoice.deep => 'assets/sounds/yamada_deep.wav',
+  YamadaVoice.animeGirl => 'assets/sounds/yamada_anime.wav',
+};
 
 /// The haptic intensities used (Flutter's built-in [HapticFeedback]).
 enum FeedbackHaptic { selection, light, medium, heavy, vibrate }
@@ -62,8 +72,12 @@ class FeedbackPattern {
 /// Maps a gameplay event to its feedback pattern.
 ///
 /// Pure and side-effect free so it can be unit-tested directly. The mapping
-/// depends only on the event — never on cards, hands, or player identity.
-FeedbackPattern feedbackPatternFor(FeedbackEvent event) {
+/// depends only on the event and the selected [YamadaVoice] (which affects
+/// only the YAMADA asset) — never on cards, hands, or player identity.
+FeedbackPattern feedbackPatternFor(
+  FeedbackEvent event, {
+  YamadaVoice yamadaVoice = YamadaVoice.deep,
+}) {
   return switch (event) {
     FeedbackEvent.cardReveal => const FeedbackPattern(
       assetPath: 'assets/sounds/card_reveal.wav',
@@ -73,8 +87,8 @@ FeedbackPattern feedbackPatternFor(FeedbackEvent event) {
       assetPath: 'assets/sounds/handoff.wav',
       haptic: FeedbackHaptic.selection,
     ),
-    FeedbackEvent.yamada => const FeedbackPattern(
-      assetPath: 'assets/sounds/yamada.wav',
+    FeedbackEvent.yamada => FeedbackPattern(
+      assetPath: yamadaAssetPath(yamadaVoice),
       haptic: FeedbackHaptic.heavy,
     ),
     FeedbackEvent.holdOut => const FeedbackPattern(
@@ -105,6 +119,18 @@ abstract class GameFeedback {
   /// Plays the feedback for [event], honoring the current sound/haptic
   /// settings. Never throws.
   void play(FeedbackEvent event);
+
+  /// Preloads any audio needed for [play] so the first feedback event has no
+  /// load latency. Must be safe to call before gameplay starts and to call
+  /// repeatedly; never throws.
+  void preload();
+
+  /// Plays only the YAMADA voice for [voice] as a settings preview.
+  ///
+  /// Sound only: it never fires a gameplay feedback event, never triggers
+  /// haptics, never touches game state, and honors the Sound Effects toggle.
+  /// Never throws.
+  void previewYamadaVoice(YamadaVoice voice);
 }
 
 /// Plays nothing. Used when no feedback scope is present (e.g. plain widget
@@ -114,6 +140,12 @@ class SilentGameFeedback implements GameFeedback {
 
   @override
   void play(FeedbackEvent event) {}
+
+  @override
+  void preload() {}
+
+  @override
+  void previewYamadaVoice(YamadaVoice voice) {}
 }
 
 /// The minimal playback surface the service needs, abstracted so tests can
@@ -172,8 +204,10 @@ class AudioplayersEngine implements SoundEngine {
 
   @override
   Future<int> play(int soundId) async {
+    // start() defaults to volume 1.0, which is the players' default too, so
+    // no extra platform call is needed on the dispatch path.
     final pool = _pools[soundId];
-    await pool.start(volume: 1.0);
+    await pool.start();
     return soundId;
   }
 
@@ -227,19 +261,27 @@ class GameFeedbackService implements GameFeedback {
   SoundEngine? _engine;
   final Map<String, int> _soundIds = {};
   bool _initFailed = false;
+  bool _preloadStarted = false;
   bool _disposed = false;
 
-  /// Creates the engine lazily (never during construction) and preloads all
-  /// assets so the first play has no latency. Failures disable audio.
+  /// Creates the engine lazily (never during construction). Failures disable
+  /// audio. Preloading is started separately by [preload].
   void _ensureEngine() {
     if (_engine != null || _initFailed || _disposed) return;
     try {
-      final engine = AudioplayersEngine();
-      _engine = engine;
-      unawaited(_preloadAll(engine));
+      _engine = AudioplayersEngine();
     } catch (_) {
       _initFailed = true;
     }
+  }
+
+  @override
+  void preload() {
+    _ensureEngine();
+    final engine = _engine;
+    if (engine == null || _preloadStarted || _disposed) return;
+    _preloadStarted = true;
+    unawaited(_preloadAll(engine));
   }
 
   Future<void> _preloadAll(SoundEngine engine) async {
@@ -279,11 +321,18 @@ class GameFeedbackService implements GameFeedback {
     _ensureEngine();
     final engine = _engine;
     if (engine == null || _disposed) return;
+    // Safety net: if the game screen's preload has not run (or raced), start
+    // the full preload now so the fallback below is the only on-demand path.
+    if (!_preloadStarted) {
+      _preloadStarted = true;
+      unawaited(_preloadAll(engine));
+    }
     final id = _soundIds[assetPath];
     if (id != null) {
       unawaited(_play(engine, id));
     } else {
-      // Not preloaded yet (e.g. a play raced the preload): load-and-play.
+      // A play raced the preload: load-and-play just this asset. Never blocks
+      // gameplay; failures degrade to silence.
       unawaited(_loadAndPlay(engine, assetPath));
     }
   }
@@ -310,8 +359,10 @@ class GameFeedbackService implements GameFeedback {
   @override
   void play(FeedbackEvent event) {
     // Never throw: feedback is an optional UX enhancement and must not
-    // interrupt gameplay, even if a hook (or the platform) fails.
-    final pattern = feedbackPatternFor(event);
+    // interrupt gameplay, even if a hook (or the platform) fails. The YAMADA
+    // asset follows the user's selected voice, read live so the choice takes
+    // effect immediately.
+    final pattern = feedbackPatternFor(event, yamadaVoice: _store.yamadaVoice);
     if (_store.soundEnabled) {
       try {
         (_playSound ?? _playAsset)(pattern.assetPath);
@@ -321,6 +372,22 @@ class GameFeedbackService implements GameFeedback {
       try {
         (_playHaptic ?? _defaultPlayHaptic)(pattern.haptic);
       } catch (_) {}
+    }
+  }
+
+  /// Plays the YAMADA voice for [voice] as a settings preview.
+  ///
+  /// Sound only and gated by the Sound Effects toggle: it never fires a
+  /// gameplay feedback event, never triggers haptics, and never touches game
+  /// state. Reuses the preloaded pool (via [_playAsset]) when available and
+  /// degrades to silence when audio is unavailable. Never throws.
+  @override
+  void previewYamadaVoice(YamadaVoice voice) {
+    if (_disposed || !_store.soundEnabled) return;
+    try {
+      (_playSound ?? _playAsset)(yamadaAssetPath(voice));
+    } catch (_) {
+      // A preview is an optional UX enhancement: never crash the settings UI.
     }
   }
 

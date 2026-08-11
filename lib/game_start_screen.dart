@@ -69,6 +69,19 @@ class _GameStartScreenState extends State<GameStartScreen> {
     // Persist as soon as the game exists so a freshly started game is always
     // resumable, even before the first action.
     _persistGame();
+    // Preload every bundled sound before the first gameplay action can fire
+    // feedback, so the first sound has no load latency.
+    _preloadFeedback();
+  }
+
+  /// Preloads audio before gameplay can trigger feedback. Guarded: a missing
+  /// scope or failing audio must never prevent the game from starting.
+  void _preloadFeedback() {
+    try {
+      GameFeedbackScope.of(context).preload();
+    } catch (_) {
+      // Audio preloading is an optional UX enhancement: never interrupt.
+    }
   }
 
   /// Plays feedback for [event], guarding gameplay from any feedback failure.

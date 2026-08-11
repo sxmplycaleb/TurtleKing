@@ -14,16 +14,30 @@ import 'package:turtle_king/settings.dart';
 /// A recording [GameFeedback] fake for widget tests.
 class RecordingFeedback implements GameFeedback {
   final List<FeedbackEvent> events = [];
+  final List<YamadaVoice> previewed = [];
+  int preloadCalls = 0;
 
   @override
   void play(FeedbackEvent event) => events.add(event);
+
+  @override
+  void preload() => preloadCalls++;
+
+  @override
+  void previewYamadaVoice(YamadaVoice voice) => previewed.add(voice);
 }
 
-/// A feedback service whose [play] always throws, to prove failures never
-/// interrupt gameplay.
+/// A feedback service whose [play], [preload], and [previewYamadaVoice]
+/// always throw, to prove failures never interrupt gameplay.
 class ThrowingFeedback implements GameFeedback {
   @override
   void play(FeedbackEvent event) => throw StateError('boom');
+
+  @override
+  void preload() => throw StateError('boom');
+
+  @override
+  void previewYamadaVoice(YamadaVoice voice) => throw StateError('boom');
 }
 
 /// A fake [SoundEngine] that records loads/plays and can simulate failures.
@@ -107,7 +121,9 @@ void main() {
         FeedbackEvent.cardReveal: 'assets/sounds/card_reveal.wav',
         FeedbackEvent.handoffPass: 'assets/sounds/handoff.wav',
         FeedbackEvent.holdOut: 'assets/sounds/hold_out.wav',
-        FeedbackEvent.yamada: 'assets/sounds/yamada.wav',
+        // The default (Deep Voice) YAMADA asset; the voice-aware mapping is
+        // covered in the 'YAMADA voice selection' group.
+        FeedbackEvent.yamada: 'assets/sounds/yamada_deep.wav',
         FeedbackEvent.roundReveal: 'assets/sounds/reveal.wav',
         FeedbackEvent.elimination: 'assets/sounds/elimination.wav',
         FeedbackEvent.victory: 'assets/sounds/victory.wav',
@@ -128,6 +144,55 @@ void main() {
         final path = feedbackPatternFor(event).assetPath;
         expect(File(path).existsSync(), isTrue, reason: '$path is missing');
         expect(File(path).lengthSync(), greaterThan(44), reason: '$path empty');
+      }
+    });
+
+    test('the six non-YAMADA mappings are unchanged (M17.2)', () {
+      // Only the YAMADA asset may be voice-dependent; everything else stays
+      // exactly as defined by M17.2 for every possible voice selection.
+      for (final voice in YamadaVoice.values) {
+        expect(
+          feedbackPatternFor(
+            FeedbackEvent.cardReveal,
+            yamadaVoice: voice,
+          ).assetPath,
+          'assets/sounds/card_reveal.wav',
+        );
+        expect(
+          feedbackPatternFor(
+            FeedbackEvent.handoffPass,
+            yamadaVoice: voice,
+          ).assetPath,
+          'assets/sounds/handoff.wav',
+        );
+        expect(
+          feedbackPatternFor(
+            FeedbackEvent.holdOut,
+            yamadaVoice: voice,
+          ).assetPath,
+          'assets/sounds/hold_out.wav',
+        );
+        expect(
+          feedbackPatternFor(
+            FeedbackEvent.roundReveal,
+            yamadaVoice: voice,
+          ).assetPath,
+          'assets/sounds/reveal.wav',
+        );
+        expect(
+          feedbackPatternFor(
+            FeedbackEvent.elimination,
+            yamadaVoice: voice,
+          ).assetPath,
+          'assets/sounds/elimination.wav',
+        );
+        expect(
+          feedbackPatternFor(
+            FeedbackEvent.victory,
+            yamadaVoice: voice,
+          ).assetPath,
+          'assets/sounds/victory.wav',
+        );
       }
     });
 
@@ -152,6 +217,62 @@ void main() {
         feedbackPatternFor(FeedbackEvent.victory).haptic,
         FeedbackHaptic.vibrate,
       );
+    });
+  });
+
+  group('GameFeedbackService preload', () {
+    test('preload() loads every bundled asset exactly once', () async {
+      final store = SettingsStore.inMemory();
+      final engine = FakeSoundEngine();
+      final service = GameFeedbackService(store, engine: engine);
+
+      service.preload();
+      service.preload(); // Idempotent.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(engine.loaded, allSoundAssetPaths); // All 7, in order, once.
+    });
+
+    test(
+      'plays after preload reuse the cached ids — no load at event time',
+      () async {
+        final store = SettingsStore.inMemory();
+        final engine = FakeSoundEngine();
+        final service = GameFeedbackService(store, engine: engine);
+
+        service.preload();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        final loadCount = engine.loaded.length;
+
+        service.play(FeedbackEvent.cardReveal);
+        service.play(FeedbackEvent.victory);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        // Playback did not trigger any new asset load.
+        expect(engine.loaded, hasLength(loadCount));
+        expect(engine.played, isNotEmpty);
+      },
+    );
+
+    test('preload failure never throws or blocks', () async {
+      final store = SettingsStore.inMemory();
+      final engine = FakeSoundEngine()..failLoads = true;
+      final service = GameFeedbackService(store, engine: engine);
+
+      expect(() => service.preload(), returnsNormally);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      // Haptics (and gameplay) still work after a failed preload. Hooks are
+      // used so no real audio platform is involved in this unit test.
+      final haptics = <FeedbackHaptic>[];
+      final store2 = SettingsStore.inMemory();
+      final service2 = GameFeedbackService(
+        store2,
+        playSound: (_) {},
+        playHaptic: haptics.add,
+      );
+      service2.play(FeedbackEvent.yamada);
+      expect(haptics, [FeedbackHaptic.heavy]);
     });
   });
 
@@ -220,6 +341,28 @@ void main() {
       expect(sounds, hasLength(1)); // No additional playback request.
     });
 
+    test('play() depends only on the event, never on card identity', () {
+      final store = SettingsStore.inMemory();
+      final sounds = <String>[];
+      final haptics = <FeedbackHaptic>[];
+      final feedback = GameFeedbackService(
+        store,
+        playSound: sounds.add,
+        playHaptic: haptics.add,
+      );
+
+      // Two separate plays of the same event are identical; the API takes no
+      // card argument at all, so hidden-card state cannot influence feedback.
+      feedback.play(FeedbackEvent.cardReveal);
+      feedback.play(FeedbackEvent.cardReveal);
+
+      expect(sounds, [
+        'assets/sounds/card_reveal.wav',
+        'assets/sounds/card_reveal.wav',
+      ]);
+      expect(haptics, [FeedbackHaptic.light, FeedbackHaptic.light]);
+    });
+
     test('a failing playback hook never throws out of play()', () {
       final store = SettingsStore.inMemory();
       final feedback = GameFeedbackService(
@@ -251,6 +394,195 @@ void main() {
         'assets/sounds/card_reveal.wav',
       ]);
       expect(haptics, [FeedbackHaptic.light, FeedbackHaptic.light]);
+    });
+  });
+
+  group('YAMADA voice selection', () {
+    test('Deep Voice (default) makes YAMADA use the deep asset', () {
+      final store = SettingsStore.inMemory();
+      final sounds = <String>[];
+      final feedback = GameFeedbackService(store, playSound: sounds.add);
+
+      expect(store.yamadaVoice, YamadaVoice.deep);
+      feedback.play(FeedbackEvent.yamada);
+      expect(sounds, ['assets/sounds/yamada_deep.wav']);
+    });
+
+    test('selecting Anime Girl makes YAMADA use the anime asset', () {
+      final store = SettingsStore.inMemory()
+        ..setYamadaVoice(YamadaVoice.animeGirl);
+      final sounds = <String>[];
+      final haptics = <FeedbackHaptic>[];
+      final feedback = GameFeedbackService(
+        store,
+        playSound: sounds.add,
+        playHaptic: haptics.add,
+      );
+
+      feedback.play(FeedbackEvent.yamada);
+      expect(sounds, ['assets/sounds/yamada_anime.wav']);
+      // Haptics unaffected by the voice choice.
+      expect(haptics, [FeedbackHaptic.heavy]);
+    });
+
+    test('switching the voice takes effect immediately', () {
+      final store = SettingsStore.inMemory();
+      final sounds = <String>[];
+      final feedback = GameFeedbackService(store, playSound: sounds.add);
+
+      feedback.play(FeedbackEvent.yamada);
+      store.setYamadaVoice(YamadaVoice.animeGirl);
+      feedback.play(FeedbackEvent.yamada);
+      store.setYamadaVoice(YamadaVoice.deep);
+      feedback.play(FeedbackEvent.yamada);
+
+      expect(sounds, [
+        'assets/sounds/yamada_deep.wav',
+        'assets/sounds/yamada_anime.wav',
+        'assets/sounds/yamada_deep.wav',
+      ]);
+    });
+
+    test('sound OFF prevents either voice; haptics still play', () {
+      for (final voice in YamadaVoice.values) {
+        final store = SettingsStore.inMemory()
+          ..setSoundEnabled(false)
+          ..setYamadaVoice(voice);
+        final sounds = <String>[];
+        final haptics = <FeedbackHaptic>[];
+        final feedback = GameFeedbackService(
+          store,
+          playSound: sounds.add,
+          playHaptic: haptics.add,
+        );
+
+        feedback.play(FeedbackEvent.yamada);
+        // No sound request for either voice...
+        expect(sounds, isEmpty, reason: '$voice should be silent');
+        // ...but the haptic still fires.
+        expect(haptics, [FeedbackHaptic.heavy]);
+      }
+    });
+
+    test('the voice choice never changes non-YAMADA events', () {
+      final store = SettingsStore.inMemory()
+        ..setYamadaVoice(YamadaVoice.animeGirl);
+      final sounds = <String>[];
+      final feedback = GameFeedbackService(store, playSound: sounds.add);
+
+      feedback.play(FeedbackEvent.cardReveal);
+      feedback.play(FeedbackEvent.elimination);
+      expect(sounds, [
+        'assets/sounds/card_reveal.wav',
+        'assets/sounds/elimination.wav',
+      ]);
+    });
+
+    test('no card/player identity reaches the audio layer with any voice', () {
+      final store = SettingsStore.inMemory()
+        ..setYamadaVoice(YamadaVoice.animeGirl);
+      final sounds = <String>[];
+      final feedback = GameFeedbackService(store, playSound: sounds.add);
+
+      // Repeated identical YAMADA plays — only the declared asset path is
+      // ever handed to the sound layer, never card/player data.
+      feedback.play(FeedbackEvent.yamada);
+      feedback.play(FeedbackEvent.yamada);
+      expect(sounds, [
+        'assets/sounds/yamada_anime.wav',
+        'assets/sounds/yamada_anime.wav',
+      ]);
+    });
+  });
+
+  group('YAMADA voice preview', () {
+    test('preview plays only the requested voice asset (deep)', () {
+      final store = SettingsStore.inMemory();
+      final sounds = <String>[];
+      final haptics = <FeedbackHaptic>[];
+      final feedback = GameFeedbackService(
+        store,
+        playSound: sounds.add,
+        playHaptic: haptics.add,
+      );
+
+      feedback.previewYamadaVoice(YamadaVoice.deep);
+
+      expect(sounds, ['assets/sounds/yamada_deep.wav']);
+      // Preview is sound only — never a haptic.
+      expect(haptics, isEmpty);
+    });
+
+    test('preview plays only the requested voice asset (anime)', () {
+      final store = SettingsStore.inMemory();
+      final sounds = <String>[];
+      final haptics = <FeedbackHaptic>[];
+      final feedback = GameFeedbackService(
+        store,
+        playSound: sounds.add,
+        playHaptic: haptics.add,
+      );
+
+      feedback.previewYamadaVoice(YamadaVoice.animeGirl);
+
+      expect(sounds, ['assets/sounds/yamada_anime.wav']);
+      expect(haptics, isEmpty);
+    });
+
+    test('preview follows the requested voice, not the selected voice', () {
+      final store = SettingsStore.inMemory()
+        ..setYamadaVoice(YamadaVoice.animeGirl);
+      final sounds = <String>[];
+      final feedback = GameFeedbackService(store, playSound: sounds.add);
+
+      // Even though Anime Girl is selected, previewing Deep Voice must play
+      // the deep asset, and vice versa.
+      feedback.previewYamadaVoice(YamadaVoice.deep);
+      feedback.previewYamadaVoice(YamadaVoice.animeGirl);
+
+      expect(sounds, [
+        'assets/sounds/yamada_deep.wav',
+        'assets/sounds/yamada_anime.wav',
+      ]);
+    });
+
+    test('sound OFF suppresses preview playback entirely', () {
+      final store = SettingsStore.inMemory()..setSoundEnabled(false);
+      final sounds = <String>[];
+      final haptics = <FeedbackHaptic>[];
+      final feedback = GameFeedbackService(
+        store,
+        playSound: sounds.add,
+        playHaptic: haptics.add,
+      );
+
+      feedback.previewYamadaVoice(YamadaVoice.deep);
+      feedback.previewYamadaVoice(YamadaVoice.animeGirl);
+
+      expect(sounds, isEmpty);
+      expect(haptics, isEmpty); // No haptics either — preview is sound only.
+    });
+
+    test('preview never fires gameplay feedback events', () {
+      final store = SettingsStore.inMemory();
+      final feedback = GameFeedbackService(store, playSound: (_) {});
+
+      // The preview API takes only a voice — there is no FeedbackEvent, so
+      // gameplay feedback (and its haptics) can never be triggered by it.
+      feedback.previewYamadaVoice(YamadaVoice.deep);
+    });
+
+    test('a failing preview never throws out of the settings call', () {
+      final store = SettingsStore.inMemory();
+      final feedback = GameFeedbackService(
+        store,
+        playSound: (_) => throw StateError('no audio'),
+      );
+
+      expect(
+        () => feedback.previewYamadaVoice(YamadaVoice.animeGirl),
+        returnsNormally,
+      );
     });
   });
 
@@ -363,6 +695,38 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(recording.events, isEmpty);
+    });
+
+    testWidgets('the game screen preloads audio once before gameplay', (
+      tester,
+    ) async {
+      final recording = RecordingFeedback();
+      await pumpGame(tester, gameForTwo(), recording);
+
+      // Preloaded exactly once at init, before any event fired.
+      expect(recording.preloadCalls, 1);
+      expect(recording.events, isEmpty);
+
+      // Rebuilds do not re-preload.
+      await tester.pump();
+      await tester.pump();
+      expect(recording.preloadCalls, 1);
+    });
+
+    testWidgets('each action fires exactly one feedback event', (tester) async {
+      final recording = RecordingFeedback();
+      await pumpGame(tester, gameForTwo(), recording);
+
+      await tester.tap(find.text('Reveal My Card'));
+      await tester.pumpAndSettle();
+      expect(recording.events, [FeedbackEvent.cardReveal]);
+
+      await tester.tap(find.text('Pass to Next Player'));
+      await tester.pumpAndSettle();
+      expect(recording.events, [
+        FeedbackEvent.cardReveal,
+        FeedbackEvent.handoffPass,
+      ]);
     });
 
     testWidgets('revealing and passing trigger card feedback', (tester) async {
