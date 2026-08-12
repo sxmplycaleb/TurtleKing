@@ -18,6 +18,13 @@ dependencies:
   # package, which is incompatible with current Flutter (legacy v1
   # embedding API was removed).
   audioplayers: ^6.8.1
+  # M18.5: QR rendering for the host's join QR code (BSD-3-Clause, pure
+  # Dart widget layer over the `qr` codec — no native code).
+  qr_flutter: ^4.1.0
+  # M18.5: QR scanning for the client's "Scan QR" join path (BSD-3-Clause,
+  # CameraX/ML Kit on Android, actively maintained). Adds the camera
+  # permission; see AndroidManifest.xml.
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:

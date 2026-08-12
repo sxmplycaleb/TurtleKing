@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:turtle_king/feedback.dart';
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
+import 'package:turtle_king/multiplayer/driver.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
 import 'package:turtle_king/settings.dart';
@@ -82,7 +83,7 @@ void main() {
     await tester.pumpWidget(
       GameFeedbackScope(
         feedback: feedback,
-        child: MaterialApp(home: GameStartScreen(game: game)),
+        child: MaterialApp(home: GameStartScreen(driver: LocalDriver(game))),
       ),
     );
   }
@@ -457,7 +458,7 @@ void main() {
       'without a scope the game screen plays nothing (silent fallback)',
       (tester) async {
         await tester.pumpWidget(
-          MaterialApp(home: GameStartScreen(game: gameForTwo())),
+          MaterialApp(home: GameStartScreen(driver: LocalDriver(gameForTwo()))),
         );
 
         await tester.tap(find.text('Reveal My Card'));

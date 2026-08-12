@@ -7,6 +7,7 @@ import 'game_save.dart';
 import 'game_state.dart';
 import 'game_table.dart';
 import 'how_to_play_screen.dart';
+import 'multiplayer/driver.dart';
 import 'player.dart';
 import 'round_history_screen.dart';
 import 'theme.dart';
@@ -25,10 +26,13 @@ export 'card_widgets.dart' show CardFace;
 ///
 /// All game logic lives in [GameState]; this screen is presentation only.
 class GameStartScreen extends StatefulWidget {
-  const GameStartScreen({super.key, required this.game, this.saveStore});
+  const GameStartScreen({super.key, required this.driver, this.saveStore});
 
-  /// The dealt game state; owns the players, hands, and turn order.
-  final GameState game;
+  /// The gameplay driver: gameplay actions are routed through this
+  /// abstraction rather than touching a transport directly. Pass-and-play
+  /// uses [LocalDriver] wrapping the dealt game state; a future networked
+  /// driver sends action requests and renders broadcast state.
+  final GameDriver driver;
 
   /// Optional save store. When present the game is persisted automatically
   /// after every action and cleared when the game completes, so the player
@@ -61,7 +65,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
   /// The player who just called YAMADA (drinking the cup).
   Player? _yamadaPlayer;
 
-  GameState get _game => widget.game;
+  /// The authoritative state behind the driver (read-only from the UI's
+  /// perspective; actions go through the driver).
+  GameState get _game => widget.driver.state;
 
   @override
   void initState() {
@@ -126,14 +132,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
   }
 
   void _reveal() {
-    setState(() => _game.revealCurrentPlayer());
+    setState(() => widget.driver.revealCurrentPlayer());
     _persistGame();
     _playFeedback(FeedbackEvent.cardReveal);
   }
 
   void _pass() {
     setState(() {
-      _game.passToNextPlayer();
+      widget.driver.passToNextPlayer();
       // After the final viewer, pouring begins: hand the phone to player 1.
       _showingHandoff = true;
     });
@@ -149,7 +155,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
     final eliminationsBefore = _game.eliminationHistory.length;
     setState(() {
       final player = _game.pourCurrentPlayer;
-      _game.callYamada(player);
+      widget.driver.callYamada(player);
       _yamadaPlayer = player;
       _showingYamadaResult = true;
       _showingHandoff = false;
@@ -167,7 +173,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
   void _holdOut() {
     final eliminationsBefore = _game.eliminationHistory.length;
     setState(() {
-      _game.holdOut(_game.pourCurrentPlayer);
+      widget.driver.holdOut(_game.pourCurrentPlayer);
       _showingYamadaResult = false;
       _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
@@ -204,7 +210,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   void _startNextRound() {
     setState(() {
-      _game.startNextRound();
+      widget.driver.startNextRound();
       _showingHandoff = false;
       _showingYamadaResult = false;
     });

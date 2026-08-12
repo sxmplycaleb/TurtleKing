@@ -1094,6 +1094,69 @@ leading silence, clean tail, audible RMS, 0.4–0.8 s, valid WAV header).
 M13 privacy, M14 personalization, and M16 small-screen behavior untouched;
 no new dependencies.
 
+## Phase 18 — Device-to-Device Multiplayer
+
+Phase 18 adds multiplayer between **separate physical devices** on top of
+the unchanged pass-and-play game. The full design record lives in
+[`docs/multiplayer/m18-architecture.md`](docs/multiplayer/m18-architecture.md);
+this section is only the summary.
+
+**Implemented so far (M18.1–M18.5 + internet relay):** architecture decision,
+the protocol layer + `GameDriver`/`LocalDriver` seam, the LAN transport,
+remote gameplay over the wire, the QR-code / 6-digit-code join UX, and an
+internet relay transport that removes the same-Wi-Fi requirement.
+
+- **Transport:** two interchangeable transports behind one interface. LAN
+  (`dart:io` TCP + UDP multicast beacons on `239.255.77.77:5354`) and the
+  **internet relay** (`lib/multiplayer/relay_server.dart` + `relay_transport.dart`):
+  every device opens one outbound WebSocket to a reachable relay endpoint, so
+  Wi-Fi ↔ Wi-Fi, Wi-Fi ↔ mobile data, and mobile ↔ mobile all work — no port
+  forwarding, no router configuration, no LAN IP in the QR. Protocol messages
+  are newline-delimited canonical JSON (the M18.2 `MessageCodec`); no runtime
+  networking dependency was added (`dart:io` WebSockets are SDK-only).
+- **Discovery:** LAN sessions use built-in UDP multicast beacons
+  (`lib/multiplayer/discovery.dart`); internet sessions resolve the 6-digit
+  code against the relay. The originally-planned `multicast_dns` package was
+  found to be **query-only** and was not added — see `m18-architecture.md`
+  §7.2. Bluetooth (`flutter_blue_plus`) stays rejected: BLE-central-only, no
+  Bluetooth Classic, and a source-available license requiring a commercial
+  license for for-profit use.
+- **Topology:** host-authoritative star. The host owns the existing
+  `GameState` (the single rules engine, unchanged); clients send action
+  requests and render only the sanitized public state the host broadcasts.
+- **Privacy:** only a player's own visible card (private point-to-point
+  message, rule-authorized) and the authorized group reveal ever cross the
+  network. Cards, hidden hands, the remaining deck, and the save document
+  never leave the host. `PublicStateView`/`PrivateStateView` are the only
+  state that may be serialized — over LAN and over the relay alike.
+- **UI:** `Multiplayer` on the home screen → Host Game shows the 6-digit
+  join code + QR code (with a copy action) and the roster lobby; Join Game
+  makes **Scan QR** and **Enter code** the primary paths (relay-first), with
+  discovered sessions and a collapsed manual host-IP **Developer options**
+  section as debug fallbacks.
+- **Remote gameplay (M18.4):** the host routes client actions through the
+  authoritative `GameState` and broadcasts sanitized public state; clients
+  render only `PublicStateView` plus their own private card and never
+  construct a `GameState`. Reconnection is identity-preserving with
+  authoritative resync; host loss ends the session cleanly.
+- **QR / join code (M18.5, relay v2):** a versioned, strictly-validated
+  payload (`lib/multiplayer/join_payload.dart`) carries only the session id,
+  the 6-digit code, and the relay endpoint — never cards, hands, deck, or
+  save data. The code is a locator, not a credential; the host still
+  validates every join through the normal protocol. Rendering uses
+  `qr_flutter` (BSD-3-Clause); scanning uses `mobile_scanner` (BSD-3-Clause,
+  adds the camera permission).
+- **Relay deployment:** internet play requires a relay instance reachable at
+  the URL in `lib/multiplayer/relay_config.dart` — build `tool/relay_server_main.dart`
+  with `dart compile exe` and run it on any WebSocket-capable VPS/PaaS (~$4–5/mo
+  small VPS; no database, in-memory TTL-swept sessions). See `m18-architecture.md`
+  §7.4.
+- **Roadmap:** remaining Phase 18 items are the relay deployment plus
+  real-device verification (cross-network join, QR/code join, private-card
+  delivery, reconnect, host loss on physical Android devices).
+- **Non-goals:** accounts, host migration, and any change to the pass-and-play
+  flow.
+
 ## Prerequisites
 
 - Flutter SDK (stable channel) — see https://docs.flutter.dev/get-started/install
