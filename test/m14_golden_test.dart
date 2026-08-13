@@ -10,6 +10,7 @@ import 'package:turtle_king/card_widgets.dart';
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
 import 'package:turtle_king/home_screen.dart';
+import 'package:turtle_king/multiplayer/driver.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
 import 'package:turtle_king/settings.dart';
@@ -148,7 +149,7 @@ void main() {
             brightness: brightness,
             cardDesign: CardDesign.turtleKing,
           ),
-          home: GameStartScreen(game: game),
+          home: GameStartScreen(driver: LocalDriver(game)),
         ),
       );
       await tester.pumpAndSettle();

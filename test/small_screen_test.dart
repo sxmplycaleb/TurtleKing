@@ -7,6 +7,7 @@ import 'package:turtle_king/game_history_screen.dart';
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
 import 'package:turtle_king/home_screen.dart';
+import 'package:turtle_king/multiplayer/driver.dart';
 import 'package:turtle_king/how_to_play_screen.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
@@ -158,7 +159,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildTheme(),
-          home: GameStartScreen(game: game),
+          home: GameStartScreen(driver: LocalDriver(game)),
         ),
       );
       await tester.pump();
@@ -203,7 +204,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: buildTheme(),
-            home: GameStartScreen(game: game),
+            home: GameStartScreen(driver: LocalDriver(game)),
           ),
         );
         await tester.pump();

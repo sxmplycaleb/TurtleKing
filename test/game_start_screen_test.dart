@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:turtle_king/game_history_screen.dart';
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/game_state.dart';
+import 'package:turtle_king/multiplayer/driver.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
 import 'package:turtle_king/round_history_screen.dart';
@@ -23,7 +24,9 @@ void main() {
   );
 
   Future<void> pumpGame(WidgetTester tester, GameState game) async {
-    await tester.pumpWidget(MaterialApp(home: GameStartScreen(game: game)));
+    await tester.pumpWidget(
+      MaterialApp(home: GameStartScreen(driver: LocalDriver(game))),
+    );
   }
 
   List<String> revealedLabels(WidgetTester tester) => tester

@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Phase 18 LAN multiplayer: TCP sockets + UDP discovery beacons.
+         INTERNET is required for any socket use; ACCESS_WIFI_STATE and
+         CHANGE_WIFI_MULTICAST_STATE support reliable multicast beacon
+         reception (the multicast lock is acquired via the
+         turtle_king/multicast_lock method channel in MainActivity). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+    <!-- M18.5: camera access for the "Scan QR" join path (mobile_scanner). -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="Turtle King"
         android:name="${applicationName}"

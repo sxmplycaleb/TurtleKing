@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_version.dart';
 import 'game_save.dart';
 import 'game_start_screen.dart';
 import 'game_state.dart';
 import 'how_to_play_screen.dart';
+import 'multiplayer/driver.dart';
+import 'multiplayer/menu_screen.dart';
 import 'player_setup_screen.dart';
 import 'settings_screen.dart';
 
@@ -95,7 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (saved == null) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => GameStartScreen(game: saved, saveStore: _store),
+        builder: (_) =>
+            GameStartScreen(driver: LocalDriver(saved), saveStore: _store),
       ),
     );
   }
@@ -156,6 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    // Version caption: read from the package metadata, never
+                    // hardcoded (see app_version.dart).
+                    const AppVersionText(),
                     const SizedBox(height: 32),
                     if (_saveError != null) ...[
                       _SaveErrorCard(
@@ -190,6 +198,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         textStyle: theme.textTheme.titleMedium,
                       ),
                       child: const Text('How to Play'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const MultiplayerMenuScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.group),
+                      label: const Text('Multiplayer'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 48,
+                          vertical: 16,
+                        ),
+                        textStyle: theme.textTheme.titleMedium,
+                      ),
                     ),
                   ],
                 ),
