@@ -1,0 +1,19 @@
+# Keep the Docker build context small and free of local/generated files.
+.git
+.gitignore
+.dart_tool/
+build/
+.freebuff.backup/
+test/failures/
+
+# Native Flutter platform scaffolding is not needed to compile the relay.
+android/
+ios/
+web/
+windows/
+macos/
+linux/
+
+# Not needed for the relay build.
+docs/
+test/

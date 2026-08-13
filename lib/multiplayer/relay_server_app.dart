@@ -8,7 +8,9 @@ import 'relay_server.dart';
 /// Sources, in increasing precedence:
 /// 1. built-in defaults,
 /// 2. environment variables (`RELAY_BIND_ADDRESS`, `RELAY_PORT`,
-///    `RELAY_MAX_SESSIONS`, `RELAY_SESSION_TTL_MINUTES`),
+///    `RELAY_MAX_SESSIONS`, `RELAY_SESSION_TTL_MINUTES`), plus the
+///    platform-standard `PORT` (Render injects this) used only when
+///    `RELAY_PORT` is absent,
 /// 3. command-line flags (`--bind`, `--port`, `--max-sessions`,
 ///    `--session-ttl-minutes`).
 class RelayServerConfig {
@@ -80,7 +82,9 @@ class RelayServerApp {
 
     final envAddress = read('RELAY_BIND_ADDRESS');
     if (envAddress != null) bindAddress = envAddress;
-    final envPort = read('RELAY_PORT');
+    // Render supplies a platform-chosen `PORT`; it is used only when the
+    // explicit `RELAY_PORT` is absent. CLI `--port` still wins over both.
+    final envPort = read('RELAY_PORT') ?? read('PORT');
     if (envPort != null) port = int.parse(envPort);
     final envMax = read('RELAY_MAX_SESSIONS');
     if (envMax != null) maxSessions = int.parse(envMax);
@@ -146,10 +150,28 @@ class RelayServerApp {
     );
     final shutdown = Completer<void>();
     _shutdown = shutdown;
+    // Watching a signal keeps the event loop alive for as long as the
+    // subscription is open, so the subscriptions must be cancelled once
+    // shutdown is requested — otherwise the process would never exit after
+    // [run] returns (SIGTERM/SIGINT in a container would only hang it).
+    final signalSubscriptions = <StreamSubscription<ProcessSignal>>[];
     for (final signal in const [ProcessSignal.sigint, ProcessSignal.sigterm]) {
-      unawaited(_watchSignal(signal, shutdown));
+      signalSubscriptions.add(
+        signal.watch().listen(
+          (_) {
+            if (!shutdown.isCompleted) shutdown.complete();
+          },
+          onError: (_) {
+            // Signal not supported or not delivered on this platform
+            // (e.g. SIGTERM on Windows) — nothing to watch.
+          },
+        ),
+      );
     }
     await shutdown.future;
+    for (final subscription in signalSubscriptions) {
+      await subscription.cancel();
+    }
     _log('shutting down');
     await relay.stop();
     _server = null;
@@ -160,25 +182,6 @@ class RelayServerApp {
   /// (tests; also the handler behind SIGINT/SIGTERM).
   void requestShutdown() {
     _shutdown?.complete();
-  }
-
-  /// Completes [shutdown] when [signal] arrives. On platforms that cannot
-  /// watch a signal (e.g. SIGTERM on Windows) the stream error surfaces as
-  /// an async error inside the `await for`, which the `try` catches — a
-  /// plain `try` around `listen()` would miss it.
-  Future<void> _watchSignal(
-    ProcessSignal signal,
-    Completer<void> shutdown,
-  ) async {
-    try {
-      await for (final _ in signal.watch()) {
-        if (!shutdown.isCompleted) shutdown.complete();
-      }
-    } on UnsupportedError {
-      // Signal not supported on this platform.
-    } on SignalException {
-      // Signal not delivered on this platform.
-    }
   }
 
   void _log(String message) {

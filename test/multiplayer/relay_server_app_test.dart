@@ -56,6 +56,30 @@ void main() {
       expect(app.config.bindAddress, '10.0.0.5');
     });
 
+    test('Render PORT is honored when RELAY_PORT is not set', () {
+      final app = RelayServerApp.fromArgs(
+        const [],
+        environment: const {'PORT': '9123'},
+      );
+      expect(app.config.port, 9123);
+    });
+
+    test('RELAY_PORT takes precedence over Render PORT', () {
+      final app = RelayServerApp.fromArgs(
+        const [],
+        environment: const {'RELAY_PORT': '9001', 'PORT': '9123'},
+      );
+      expect(app.config.port, 9001);
+    });
+
+    test('CLI --port overrides both RELAY_PORT and Render PORT', () {
+      final app = RelayServerApp.fromArgs(
+        const ['--port', '9090'],
+        environment: const {'RELAY_PORT': '9001', 'PORT': '9123'},
+      );
+      expect(app.config.port, 9090);
+    });
+
     test('an invalid bind address is rejected at run time', () async {
       final app = RelayServerApp.fromArgs(const [
         '--bind',
@@ -66,6 +90,19 @@ void main() {
   });
 
   group('RelayServerApp lifecycle', () {
+    test('app binds the Render PORT end to end', () async {
+      // PORT 0 → ephemeral port, proving the env value flows into the bind.
+      final app = RelayServerApp.fromArgs(
+        const [],
+        environment: const {'PORT': '0'},
+      );
+      final runFuture = app.run();
+      await pumpUntil(() => app.boundPort != null);
+      expect(app.boundPort, isNotNull);
+      app.requestShutdown();
+      await runFuture;
+    });
+
     test(
       'run() serves the relay and shuts down gracefully on request',
       () async {

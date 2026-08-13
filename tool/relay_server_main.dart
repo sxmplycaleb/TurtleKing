@@ -18,7 +18,7 @@ import 'package:turtle_king/multiplayer/relay_server_app.dart';
 /// | Setting        | Env var                    | Flag                 | Default |
 /// | -------------- | -------------------------- | -------------------- | ------- |
 /// | bind address   | `RELAY_BIND_ADDRESS`       | `--bind <addr>`      | `0.0.0.0` |
-/// | port           | `RELAY_PORT`               | `--port <n>`         | `8787` |
+/// | port           | `RELAY_PORT` or `PORT` (Render) | `--port <n>`     | `8787` |
 /// | max sessions   | `RELAY_MAX_SESSIONS`       | `--max-sessions <n>` | `64` |
 /// | session TTL    | `RELAY_SESSION_TTL_MINUTES`| `--session-ttl-minutes <n>` | `30` |
 ///

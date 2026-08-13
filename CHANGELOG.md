@@ -3,6 +3,23 @@
 All notable changes to Turtle King are recorded here. Milestone-by-milestone
 detail lives in the README; this file is the release-level summary.
 
+## [Unreleased] — Relay deployment tooling
+
+### Added
+
+- **`GET /health` liveness endpoint** on the relay — returns a static
+  `{"status":"ok"}` and never exposes join codes, sessions, players, or
+  game data (regression-tested).
+- **Render `PORT` support** in the relay process — honors the platform-
+  standard `PORT` environment variable when `RELAY_PORT` is absent
+  (precedence: `--port` > `RELAY_PORT` > `PORT` > 8787).
+- **Production `Dockerfile`** — multi-stage build (Dart SDK stage compiles
+  the relay to an AOT executable; minimal glibc runtime image, unprivileged
+  user, PORT-driven).
+- **Render deployment guide** in
+  `docs/multiplayer/m18-relay-deployment.md` §3.3 (service config, health
+  check, `wss://<service-name>.onrender.com` endpoint, smoke test).
+
 ## [1.2.0] — Multiplayer release (M18)
 
 Device-to-device multiplayer, release-ready.
