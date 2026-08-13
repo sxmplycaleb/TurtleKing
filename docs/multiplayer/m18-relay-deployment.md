@@ -15,16 +15,17 @@ the app to a public relay.
 - Runner: `tool/relay_server_main.dart`
 - App endpoint: `lib/multiplayer/relay_config.dart` (`RELAY_URL`)
 
-> **Deployment status: IMPLEMENTED, not yet DEPLOYED, not yet PHYSICALLY
+> **Deployment status: IMPLEMENTED + DEPLOYMENT-READY, endpoint NOT yet
 > VERIFIED.** The relay is implemented and validated locally (compiled
-> binary + `tool/relay_smoke_test.dart` + the automated relay test suite),
-> but **no public relay instance has been deployed** and **no two-phone
-> mixed-network test has been performed** in this environment. The single
-> external step — provisioning a VPS/PaaS and a domain, and running the
-> steps below — requires infrastructure access that this environment does
-> not have. Do not claim internet multiplayer is working until the deployed
-> endpoint has been exercised from two physical devices on different
-> networks (see `m18-mixed-network-qa.md`).
+> binary + `tool/relay_smoke_test.dart` + the automated relay test suite).
+> The repo ships a production `Dockerfile` (§3.3) and a `/health` liveness
+> endpoint, and a Render Web Service has been created for this repository;
+> whether a public endpoint is actually live depends on that service
+> building this branch and passing its health check. **No two-phone
+> mixed-network test has been performed.** Do not claim internet
+> multiplayer is working until the deployed endpoint has been exercised
+> from two physical devices on different networks (see
+> `m18-mixed-network-qa.md`).
 
 ---
 
@@ -135,6 +136,57 @@ stays plain `ws://` behind the proxy.
 `proxy_http_version 1.1;` and `proxy_set_header Upgrade $http_upgrade;`
 `proxy_set_header Connection "upgrade";`.)
 
+### 3.3 Deploy on Render (container)
+
+The repository root `Dockerfile` builds the relay as a production
+container: a Dart SDK stage compiles `tool/relay_server_main.dart` into an
+AOT executable (the relay is pure `dart:io` with zero external packages,
+so no Flutter SDK is needed), and a minimal glibc stage runs it as an
+unprivileged user. A Render Web Service connected to this repository picks
+the `Dockerfile` up automatically.
+
+**Render service configuration**
+
+- **Build**: root `Dockerfile` (auto-detected).
+- **Port**: Render injects a platform-chosen `PORT`; the relay honors it
+  (`RELAY_PORT` or `--port` still win — see the configuration table). No
+  port setting is needed.
+- **Health check**: path `/health`, expected status `200`. The relay
+  answers `GET /health` with a static `{"status":"ok"}` that never
+  contains sessions, join codes, players, or game data.
+- **Environment** (all optional; defaults are safe):
+  - `RELAY_BIND_ADDRESS=0.0.0.0` (the default; required so the platform's
+    health check can reach the relay)
+  - `RELAY_MAX_SESSIONS` (default `64`)
+  - `RELAY_SESSION_TTL_MINUTES` (default `30`)
+- **Instance**: any Free/Starter instance is enough for a party-game
+  relay; sessions are in-memory, so keep the service running.
+
+**URLs**
+
+Render assigns a public HTTPS hostname, e.g. `<service-name>.onrender.com`.
+Because Render terminates TLS, the app connects with:
+
+```
+wss://<service-name>.onrender.com
+```
+
+(no port — Render maps `:443` to the service's internal `PORT`; the relay
+itself stays plain WebSocket behind the proxy, exactly like the Caddy setup
+above.)
+
+**Verify the deployed relay**
+
+```bash
+curl https://<service-name>.onrender.com/health   # → {"status":"ok"}
+dart run tool/relay_smoke_test.dart wss://<service-name>.onrender.com
+# → SMOKE TEST PASSED
+```
+
+Then build the app with
+`--dart-define=RELAY_URL=wss://<service-name>.onrender.com` (step 5) and
+run the mixed-network matrix (`m18-mixed-network-qa.md`).
+
 ## 4. Configure the Flutter app with the public WSS endpoint
 
 The endpoint is a **build-time constant** injected with `--dart-define` —
@@ -168,7 +220,7 @@ Sources, in increasing precedence: **defaults → environment → CLI flags**.
 | Setting        | Env var                     | CLI flag                    | Default |
 | -------------- | --------------------------- | --------------------------- | ------- |
 | Bind address   | `RELAY_BIND_ADDRESS`        | `--bind <addr>`             | `0.0.0.0` |
-| Port           | `RELAY_PORT`                | `--port <n>`                | `8787` |
+| Port           | `RELAY_PORT`, or `PORT` (Render) | `--port <n>`            | `8787` |
 | Max sessions   | `RELAY_MAX_SESSIONS`        | `--max-sessions <n>`        | `64` |
 | Session TTL    | `RELAY_SESSION_TTL_MINUTES` | `--session-ttl-minutes <n>` | `30` |
 
@@ -201,5 +253,8 @@ Log lines look like:
   per-target fire-and-forget).
 - **No database, no auth, no accounts.** The 6-digit code is a locator; the
   host remains the authority for joins, actions, and privacy.
-- **Health checks**: the relay answers non-WebSocket requests with HTTP 426.
-  A monitoring probe can rely on `wss://` upgrade success or TCP connect.
+- **Health checks**: `GET /health` returns a static `{"status":"ok"}`
+  (never sessions, join codes, players, or game data — regression-tested in
+  `test/multiplayer/relay_health_test.dart`); non-WebSocket requests to any
+  other path return HTTP 426. Container platforms (Render) can point their
+  health check at `/health`.

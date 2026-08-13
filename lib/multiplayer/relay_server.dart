@@ -143,6 +143,17 @@ class RelayServer {
   }
 
   Future<void> _onHttpRequest(HttpRequest request) async {
+    // Ops liveness probe for container platforms (Render, etc.): a static
+    // body that leaks nothing — no sessions, join codes, players, or game
+    // data. Everything else non-WebSocket keeps the 426 rejection below.
+    if (request.method == 'GET' && request.uri.path == '/health') {
+      final response = request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.json;
+      response.write('{"status":"ok"}');
+      await response.close();
+      return;
+    }
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       request.response.statusCode = HttpStatus.upgradeRequired;
       await request.response.close();
