@@ -1101,10 +1101,15 @@ the unchanged pass-and-play game. The full design record lives in
 [`docs/multiplayer/m18-architecture.md`](docs/multiplayer/m18-architecture.md);
 this section is only the summary.
 
-**Implemented so far (M18.1–M18.5 + internet relay):** architecture decision,
-the protocol layer + `GameDriver`/`LocalDriver` seam, the LAN transport,
-remote gameplay over the wire, the QR-code / 6-digit-code join UX, and an
-internet relay transport that removes the same-Wi-Fi requirement.
+**Implemented through M18.6 (this is the v1.2.0 multiplayer release):**
+architecture decision, the protocol layer + `GameDriver`/`LocalDriver` seam,
+the LAN transport, remote gameplay over the wire, the QR-code / 6-digit-code
+join UX, and an internet relay transport that removes the same-Wi-Fi
+requirement. Milestone progression: M18.1 architecture/transport discovery,
+M18.2 protocol + `GameDriver` foundation, M18.3 LAN transport/discovery,
+M18.4 remote gameplay/reconnection/host-loss, M18.5 QR/code join UX, M18.6
+relay/mixed-network support and production-readiness (see
+`m18-architecture.md` §7.6).
 
 - **Transport:** two interchangeable transports behind one interface. LAN
   (`dart:io` TCP + UDP multicast beacons on `239.255.77.77:5354`) and the
@@ -1132,8 +1137,8 @@ internet relay transport that removes the same-Wi-Fi requirement.
 - **UI:** `Multiplayer` on the home screen → Host Game shows the 6-digit
   join code + QR code (with a copy action) and the roster lobby; Join Game
   makes **Scan QR** and **Enter code** the primary paths (relay-first), with
-  discovered sessions and a collapsed manual host-IP **Developer options**
-  section as debug fallbacks.
+  discovered sessions and a collapsed manual host-IP **For Nerds** section
+  ("Advanced options for curious turtles.") as debug fallbacks.
 - **Remote gameplay (M18.4):** the host routes client actions through the
   authoritative `GameState` and broadcasts sanitized public state; clients
   render only `PublicStateView` plus their own private card and never
@@ -1146,14 +1151,18 @@ internet relay transport that removes the same-Wi-Fi requirement.
   validates every join through the normal protocol. Rendering uses
   `qr_flutter` (BSD-3-Clause); scanning uses `mobile_scanner` (BSD-3-Clause,
   adds the camera permission).
-- **Relay deployment:** internet play requires a relay instance reachable at
-  the URL in `lib/multiplayer/relay_config.dart` — build `tool/relay_server_main.dart`
+- **Relay deployment (M18.6):** internet play requires a relay instance
+  reachable at the URL in `lib/multiplayer/relay_config.dart` (a build-time
+  `--dart-define=RELAY_URL=...` constant). Build `tool/relay_server_main.dart`
   with `dart compile exe` and run it on any WebSocket-capable VPS/PaaS (~$4–5/mo
-  small VPS; no database, in-memory TTL-swept sessions). See `m18-architecture.md`
-  §7.4.
-- **Roadmap:** remaining Phase 18 items are the relay deployment plus
-  real-device verification (cross-network join, QR/code join, private-card
-  delivery, reconnect, host loss on physical Android devices).
+  small VPS; no database, in-memory TTL-swept sessions). Exact deployment
+  commands: `docs/multiplayer/m18-relay-deployment.md`.
+- **Testing status:** the implementation is covered by in-process loopback
+  tests (real TCP for LAN, real WebSockets for the relay) plus a standalone
+  relay smoke test (`tool/relay_smoke_test.dart`). **Two physical phones
+  against a deployed public relay have not yet been tested in this
+  environment** — that is the one outstanding item before
+  `docs/multiplayer/m18-mixed-network-qa.md` can be marked all-Pass.
 - **Non-goals:** accounts, host migration, and any change to the pass-and-play
   flow.
 
@@ -1228,12 +1237,25 @@ lib/
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result, event log
   feedback.dart           # Sound/haptic feedback: events, patterns, GameFeedbackService, engine, scope
+  app_version.dart        # Settings → About: version read from package metadata (never hardcoded)
+  multiplayer/            # Phase 18: host/join lobbies, codec, transports, relay, RemoteDriver
+    session.dart          #   HostSession/ClientSession: join, roster, actions, resync, reconnect
+    protocol.dart, protocol_codec.dart  #   Versioned message types + strict JSON codec
+    driver.dart           #   GameDriver/LocalDriver seam (pass-and-play stays unchanged)
+    remote_driver.dart, remote_game_view.dart, remote_game_controller.dart  #   Client play side
+    public_state.dart, private_state.dart #   Sanitized broadcast view + per-recipient private card
+    tcp_transport.dart, transport.dart, discovery.dart, platform_multicast.dart #  LAN transport
+    relay_server.dart, relay_protocol.dart, relay_transport.dart, relay_config.dart, relay_server_app.dart  #  Relay
+    join_code.dart, join_payload.dart, qr_scan_screen.dart # 6-digit code + QR join
+    host_lobby_screen.dart, join_lobby_screen.dart, menu_screen.dart, remote_game_screen.dart #  UI
 assets/
   branding/               # Turtle King artwork (splash, emblem, icon)
   sounds/                 # Original generated sound-effect WAVs (+ license README)
 tool/
   generate_branding.ps1   # Regenerates all branding derivatives
   generate_sounds.dart    # Regenerates the original sound-effect WAVs
+  relay_server_main.dart  # Standalone multiplayer relay runner (dart compile exe)
+  relay_smoke_test.dart   # Independent smoke test against a live relay process
 test/
   home_screen_test.dart        # Home screen branding + navigation
   splash_screen_test.dart      # Launch screen artwork + transition
@@ -1259,4 +1281,12 @@ test/
   feedback_test.dart           # Feedback asset mapping, gating, engine safety, triggers, privacy
   audio_assets_test.dart       # Bundled sound assets exist, are small, and are declared
   small_screen_test.dart       # Every screen at 320-412px viewports, full 320x568 game
+  app_version_test.dart        # Version label + Settings About section render vX.Y.Z
+  multiplayer/                 # Phase 18: codec, transports, sessions, relay, privacy, UX
+    protocol_codec_test.dart   #   Message round-trips + malformed/unknown-version rejection
+    tcp_transport_test.dart, transport_test.dart, discovery_test.dart  #   LAN transport
+    session_test.dart, remote_driver_test.dart, local_driver_test.dart #   Session/driver behavior
+    e2e_remote_game_test.dart, host_gameplay_test.dart, ui_flow_test.dart, join_ux_test.dart  #   Full loopback games + UX
+    public_state_test.dart, private_state_test.dart, join_payload_test.dart, join_code_test.dart  #   Privacy
+    relay_server_test.dart, relay_protocol_test.dart, relay_session_test.dart, relay_logging_test.dart, relay_server_app_test.dart  #   Relay
 ```

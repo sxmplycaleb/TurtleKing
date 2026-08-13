@@ -269,11 +269,16 @@ void main() {
         await pumpUntil(() => game.roundComplete, timeout: kSlow);
         await pumpUntil(() => miaDriver.view.roundComplete, timeout: kSlow);
 
-        // The host starts the next round; clients track the new round.
+        // The host starts the next round; both clients converge on the new
+        // round number (each client's state update arrives on its own
+        // socket, so wait for both — never assert one client immediately
+        // after waiting on the other).
         game.startNextRound();
         host.broadcastHostAction();
         await pumpUntil(
-          () => miaDriver.view.publicState.roundNumber == 2,
+          () =>
+              miaDriver.view.publicState.roundNumber == 2 &&
+              leoDriver.view.publicState.roundNumber == 2,
           timeout: kSlow,
         );
         expect(leoDriver.view.publicState.roundNumber, 2);

@@ -52,12 +52,12 @@ void main() {
       expect(find.byType(JoinLobbyScreen), findsOneWidget);
     });
 
-    /// Expands the collapsed Developer options section (which holds the LAN
+    /// Expands the collapsed "For Nerds" section (which holds the LAN
     /// discovery list and the manual-IP debug fallback), then the manual-IP
     /// tile, and scrolls its join button into view so tests can drive the
     /// debug join path.
     Future<void> openManualIp(WidgetTester tester) async {
-      await tester.tap(find.text('Developer options'));
+      await tester.tap(find.text('For Nerds'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Manual setup (host IP)'));
       await tester.pumpAndSettle();

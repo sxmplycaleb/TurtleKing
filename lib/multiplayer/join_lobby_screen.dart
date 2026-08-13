@@ -21,7 +21,7 @@ import 'transport.dart';
 /// The primary paths go through the **internet relay** — players do not
 /// need to be on the same Wi-Fi network. LAN discovery and manual host-IP
 /// entry still exist for development/testing, tucked behind a collapsed
-/// "Developer options" section.
+/// "For Nerds" section.
 ///
 /// Both [codeResolver] and [scanPayloadProvider] are injectable test seams
 /// so widget tests never need a camera or a live relay.
@@ -87,7 +87,7 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
     _codeController.clear();
     // Note: no UDP discovery starts here — the normal join path is the
     // internet relay (QR/code). LAN discovery only starts if the user
-    // expands the Developer options section.
+    // expands the "For Nerds" section.
   }
 
   @override
@@ -374,7 +374,9 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
       });
       setState(() => _inLobby = true);
     } else {
-      setState(() => _error = _joinFailureMessage(result));
+      setState(
+        () => _error = _joinFailureMessage(result, relay: relayUrl != null),
+      );
       await client.dispose();
       if (mounted) _client = null;
     }
@@ -384,16 +386,26 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
   /// rejection reasons (name taken, session full, game already started,
   /// session ended) are already written for the user and pass through
   /// unchanged; transport failures are never exposed raw.
-  String _joinFailureMessage(JoinResult result) {
+  ///
+  /// [relay] distinguishes internet joins (the normal flow — failures point
+  /// at the internet connection) from the LAN developer fallback (where
+  /// same-network wording is accurate).
+  String _joinFailureMessage(JoinResult result, {bool relay = false}) {
     switch (result.outcome) {
       case JoinOutcome.rejected:
         return result.reason ?? 'The host rejected the join.';
       case JoinOutcome.connectionFailed:
-        return 'Connection failed — make sure both phones are on the same '
-            'Wi-Fi network.';
+        return relay
+            ? 'Connection failed — check your internet connection and try '
+                  'again.'
+            : 'Connection failed — make sure both phones are on the same '
+                  'Wi-Fi network.';
       case JoinOutcome.timedOut:
-        return 'Connection timed out — the host may be out of range or the '
-            'network is slow. Try again.';
+        return relay
+            ? 'Connection timed out — the relay may be busy or your '
+                  'connection is slow. Try again.'
+            : 'Connection timed out — the host may be out of range or the '
+                  'network is slow. Try again.';
       case JoinOutcome.protocolError:
         return 'Could not join — your app versions may be incompatible.';
       case JoinOutcome.sessionEnded:
@@ -550,7 +562,8 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
           // the internet relay, with no same-Wi-Fi requirement.
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Developer options'),
+            title: const Text('For Nerds'),
+            subtitle: const Text('Advanced options for curious turtles.'),
             leading: const Icon(Icons.bug_report_outlined),
             onExpansionChanged: (expanded) {
               if (expanded) _ensureDiscovery();

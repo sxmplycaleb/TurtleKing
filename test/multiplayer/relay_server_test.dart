@@ -85,11 +85,29 @@ void main() {
     return peer;
   }
 
+  /// Waits until [condition] holds (or the deadline passes), so assertions
+  /// that depend on the relay's asynchronous socket-close handling are
+  /// deterministic instead of racing the close handshake.
+  Future<void> waitUntil(
+    bool Function() condition, {
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (!condition() && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+
   group('session registration', () {
     test('a host registers a session and receives REGISTERED', () async {
       final h = await host('tk-reg');
       expect(h.received, isEmpty);
       await h.close();
+      // Closing a host tears its session down asynchronously (the socket's
+      // close handler runs after the close handshake completes); wait for
+      // the relay to observe the departure instead of asserting
+      // immediately.
+      await waitUntil(() => relay.sessionCount == 0);
       expect(relay.sessionCount, 0, reason: 'session ends when host leaves');
     });
 
@@ -337,5 +355,125 @@ void main() {
       await p.close();
       await ttlRelay.stop();
     });
+  });
+
+  group('duplicate joins', () {
+    test('a connection already in a session cannot join again', () async {
+      final h = await host('tk-double');
+      final c = await RelayTestPeer.connect(url);
+      expect(
+        await c.exchange(const RelayJoinFrame(sessionId: 'tk-double')),
+        isA<RelayJoinAckFrame>(),
+      );
+      final second = await c.exchange(
+        const RelayJoinFrame(sessionId: 'tk-double'),
+      );
+      expect(second, isA<RelayJoinErrFrame>());
+      expect((second as RelayJoinErrFrame).reason, contains('already'));
+      await c.close();
+      await h.close();
+    });
+
+    test(
+      'the host connection cannot join its own session as a member',
+      () async {
+        final h = await host('tk-hostjoin');
+        final response = await h.exchange(
+          const RelayJoinFrame(sessionId: 'tk-hostjoin'),
+        );
+        expect(response, isA<RelayJoinErrFrame>());
+        expect((response as RelayJoinErrFrame).reason, contains('already'));
+        await h.close();
+      },
+    );
+  });
+
+  group('multiple simultaneous sessions', () {
+    test(
+      'sessions are isolated: codes, joins, and routing stay separate',
+      () async {
+        final h1 = await host('tk-msa', code: '222222');
+        final h2 = await host('tk-msb', code: '333333');
+
+        // Code lookups resolve only within the correct session.
+        final p = await RelayTestPeer.connect(url);
+        final a = await p.exchange(const RelayLookupFrame(joinCode: '222222'));
+        expect((a as RelayLookupAckFrame).sessionId, 'tk-msa');
+        final b = await p.exchange(const RelayLookupFrame(joinCode: '333333'));
+        expect((b as RelayLookupAckFrame).sessionId, 'tk-msb');
+
+        // Joins land in the right session and routing never crosses over.
+        final c1 = await RelayTestPeer.connect(url);
+        final c2 = await RelayTestPeer.connect(url);
+        await c1.exchange(const RelayJoinFrame(sessionId: 'tk-msa'));
+        await c2.exchange(const RelayJoinFrame(sessionId: 'tk-msb'));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        h1.received.clear();
+        h2.received.clear();
+        c1.ws.add(
+          const RelaySendFrame(
+            sessionId: 'tk-msa',
+            to: kRelayHostMember,
+            payload: 'for-a',
+          ).encode(),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(
+          h1.received.whereType<RelayPeerFrame>().map((f) => f.payload),
+          contains('for-a'),
+        );
+        expect(h2.received.whereType<RelayPeerFrame>(), isEmpty);
+
+        await c2.close();
+        await c1.close();
+        await p.close();
+        await h2.close();
+        await h1.close();
+        // Closing a host tears its session down asynchronously (the socket's
+        // close handler runs after the close handshake completes); wait for
+        // the relay to observe every departure instead of asserting
+        // immediately.
+        final deadline = DateTime.now().add(const Duration(seconds: 3));
+        while (relay.sessionCount != 0 && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        expect(relay.sessionCount, 0);
+      },
+    );
+  });
+
+  group('relay shutdown', () {
+    test('stop() closes every connection and clears all sessions', () async {
+      final h = await host('tk-stop');
+      final c = await RelayTestPeer.connect(url);
+      await c.exchange(const RelayJoinFrame(sessionId: 'tk-stop'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(relay.sessionCount, 1);
+
+      await relay.stop();
+      expect(relay.sessionCount, 0);
+      expect(relay.connectionCount, 0);
+      final deadline = DateTime.now().add(const Duration(seconds: 3));
+      while ((!h.closed || !c.closed) && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(h.closed, isTrue, reason: 'host socket closed on relay stop');
+      expect(c.closed, isTrue, reason: 'member socket closed on relay stop');
+      await c.close();
+      await h.close();
+    });
+
+    test(
+      'a fresh relay binds and serves after a previous one stopped',
+      () async {
+        final first = RelayServer();
+        final port = await first.start(port: 0);
+        await first.stop();
+        final second = RelayServer();
+        final secondPort = await second.start(port: port);
+        expect(secondPort, port, reason: 'port is reusable after a clean stop');
+        await second.stop();
+      },
+    );
   });
 }

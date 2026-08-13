@@ -22,7 +22,8 @@ class MultiplayerMenuScreen extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Play Turtle King with friends on separate devices. '
-                'Everyone must be on the same Wi-Fi network.',
+                'Share a code or QR — it works over Wi-Fi or mobile data, '
+                'no setup needed.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

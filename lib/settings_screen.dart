@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide Card;
 
+import 'app_version.dart';
 import 'card.dart';
 import 'card_widgets.dart';
 import 'settings.dart';
@@ -42,6 +43,9 @@ class SettingsScreen extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 24),
+            _SectionTitle(title: 'About'),
+            const AppVersionText(),
           ],
         ),
       ),

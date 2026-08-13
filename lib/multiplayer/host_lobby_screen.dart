@@ -84,9 +84,9 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
       setState(() {
         _starting = false;
         _error =
-            'Multiplayer relay is not configured for this build. Build the '
-            'app with --dart-define=RELAY_URL=wss://your-relay and try '
-            'again.';
+            'Multiplayer relay is not configured for this build. Ask the '
+            'app owner for a build with a relay endpoint, or install a '
+            'version that has multiplayer enabled.';
       });
       return;
     }
@@ -224,8 +224,8 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
         children: [
           const SizedBox(height: 8),
           Text(
-            'Start a session and other players on the same Wi-Fi network '
-            'can find it and join.',
+            'Start a session, then share the code or QR code — friends '
+            'can join from anywhere with an internet connection.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -314,6 +314,14 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
           ),
           const SizedBox(height: 8),
           Text(
+            'Share this code with a friend',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
             'On another phone: Join Game → Enter code',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -341,7 +349,15 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
           // The QR code: the zero-typing join path. Its payload identifies
           // the session on the internet relay — no LAN address (see
           // [JoinPayload]).
-          if (qrPayload != null)
+          if (qrPayload != null) ...[
+            Text(
+              'Scan this QR code to join',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
             Center(
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -356,8 +372,8 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
                   semanticsLabel: 'Join QR code for $_gameName',
                 ),
               ),
-            )
-          else
+            ),
+          ] else
             Text(
               'Waiting for the relay…',
               textAlign: TextAlign.center,

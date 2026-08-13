@@ -81,6 +81,7 @@ class RelayServer {
     this.sessionTtl = const Duration(minutes: 30),
     this.maxSessions = 64,
     this.sweepInterval = const Duration(seconds: 30),
+    this.onLog,
   });
 
   /// Sessions are removed after this long without any activity.
@@ -91,11 +92,24 @@ class RelayServer {
 
   final Duration sweepInterval;
 
+  /// Optional lifecycle logger (wired to stdout by the standalone runner).
+  ///
+  /// Emits **routing metadata only** — connection open/close, session
+  /// register/close, member join/leave. Never the join code, never any
+  /// game-protocol payload, never card/private-state content: the relay
+  /// cannot log what it never inspects. Null disables logging entirely
+  /// (tests stay silent).
+  final void Function(String message)? onLog;
+
   HttpServer? _server;
   final Map<String, _RelaySession> _sessions = {};
   final Map<WebSocket, _RelayConnection> _connections = {};
   Timer? _sweepTimer;
   bool _stopped = false;
+
+  void _log(String message) {
+    onLog?.call(message);
+  }
 
   /// The bound port (valid after [start]; useful for ephemeral port 0).
   int? get port => _server?.port;
@@ -140,12 +154,14 @@ class RelayServer {
     } catch (_) {
       return;
     }
-    _handleSocket(ws);
+    final peer = request.connectionInfo?.remoteAddress.address ?? 'unknown';
+    _handleSocket(ws, peer);
   }
 
-  void _handleSocket(WebSocket ws) {
+  void _handleSocket(WebSocket ws, String peer) {
     final connection = _RelayConnection(ws);
     _connections[ws] = connection;
+    _log('connect $peer');
     ws.listen(
       (data) => _onFrame(connection, data),
       onError: (_) => _drop(connection, reason: 'disconnected'),
@@ -228,6 +244,8 @@ class RelayServer {
     _sessions[sessionId] = session;
     connection.sessionId = sessionId;
     connection.member = kRelayHostMember;
+    // Routing metadata only: no join code, no display name, no payload.
+    _log('session $sessionId registered');
     _send(
       connection.ws,
       RelayRegisteredFrame(sessionId: sessionId, member: kRelayHostMember),
@@ -280,6 +298,7 @@ class RelayServer {
     session.touch();
     connection.sessionId = sessionId;
     connection.member = member;
+    _log('member $member joined $sessionId');
     _send(
       connection.ws,
       RelayJoinAckFrame(sessionId: sessionId, member: member),
@@ -388,6 +407,7 @@ class RelayServer {
     if (member != null) {
       session.members.remove(member);
       session.touch();
+      _log('member $member left ${session.id} (left)');
       _send(
         session.host,
         RelayPeerLeftFrame(
@@ -418,6 +438,7 @@ class RelayServer {
     if (member != null) {
       session.members.remove(member);
       session.touch();
+      _log('member $member left $sessionId ($reason)');
       _send(
         session.host,
         RelayPeerLeftFrame(
@@ -431,6 +452,7 @@ class RelayServer {
 
   void _closeSession(_RelaySession session, {required String reason}) {
     _sessions.remove(session.id);
+    _log('session ${session.id} closed ($reason)');
     for (final ws in session.members.values) {
       _send(ws, RelayErrFrame(reason: reason));
       _safeClose(ws);
@@ -447,6 +469,9 @@ class RelayServer {
       }
     }
   }
+
+  /// Number of live device connections (tests/ops).
+  int get connectionCount => _connections.length;
 
   void _send(WebSocket ws, RelayFrame frame) {
     try {

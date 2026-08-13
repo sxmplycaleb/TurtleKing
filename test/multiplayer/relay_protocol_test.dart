@@ -111,6 +111,16 @@ void main() {
       );
     });
 
+    test('rejects an invalid join code in a LOOKUP frame', () {
+      final raw = const RelayLookupFrame(
+        joinCode: '483729',
+      ).encode().replaceFirst('483729', '083729');
+      expect(
+        () => decodeRelayFrame(raw),
+        throwsA(isA<MultiplayerProtocolException>()),
+      );
+    });
+
     test('rejects an empty session id', () {
       final raw = const RelayHostFrame(
         sessionId: 's',

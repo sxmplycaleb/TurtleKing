@@ -1,14 +1,15 @@
 # M18 — Device-to-Device Multiplayer: Architecture & Transport Discovery
 
-> **Milestone M18.1 — architecture/discovery only.** This document is the
-> design record for Phase 18 (multiplayer between separate physical devices).
-> Nothing in this document is implemented yet. **No networking dependency has
-> been added and no gameplay code has been modified.** The existing
-> pass-and-play experience is complete and intentionally untouched.
+> This document is the design record for Phase 18 (multiplayer between
+> separate physical devices). It began as the M18.1 architecture/discovery
+> proposal and now records the implemented milestone progression through
+> **M18.6** (§7.x, §7.6). The pass-and-play experience remains complete and
+> unchanged.
 
-- Status: **proposal (M18.1)**
+- Status: **implemented through M18.6** (this header reflects the original M18.1 proposal; milestone records are appended in §7.x)
 - App: Turtle King — pass-and-play card game (Flutter 3.44.8, Dart 3.12.2, minSdk 24)
 - Branch: `feature/milestone-18-offline-multiplayer`
+- Release: tagged as **v1.2.0** (multiplayer release)
 
 ---
 
@@ -25,9 +26,9 @@ Inspected (M18.1):
 | Privacy contract | throughout | Only `visibleCardOf(player)` may ever be shown; the second card is hidden even from its owner until the group reveal. Events, history, save summaries, and audio never carry card identities (regression-tested). |
 | Audio/haptics | `lib/feedback.dart` | `GameFeedback` seam; `FeedbackEvent` is identity-free; sound/haptic gates independent; playback local and failure-contained. |
 | Navigation | `lib/main.dart`, `lib/splash_screen.dart`, `lib/home_screen.dart`, `lib/player_setup_screen.dart`, `lib/game_start_screen.dart` | `Splash → Home → PlayerSetup → GameStartScreen(game)`. `GameStartScreen` is **presentation-only**: all logic lives in `GameState`; the screen calls state methods directly from its action handlers. |
-| Dependencies | `pubspec.yaml` | Runtime: `shared_preferences ^2.5.3`, `audioplayers ^6.8.1`. Dev: `audioplayers_platform_interface`, `crypto`, `flutter_lints`. |
-| Android config | `android/app/src/main/AndroidManifest.xml`, `android/app/build.gradle.kts` | `minSdk = flutter.minSdkVersion` (= **24**, Flutter default), compile/target = Flutter defaults. Manifest currently has **no `INTERNET` permission** and no networking declarations. |
-| Tests | `test/` | 379 tests; rules/state privacy and determinism heavily covered; widget tests drive the full game flow; `small_screen_test.dart` plays a full game at 320×568. |
+| Dependencies | `pubspec.yaml` | Runtime: `shared_preferences ^2.5.3`, `audioplayers ^6.8.1`, `qr_flutter ^4.1.0` (QR rendering), `mobile_scanner ^7.4.0` (QR scanning). Dev: `audioplayers_platform_interface`, `crypto`, `flutter_lints`. No networking package — `dart:io` TCP/UDP/WebSockets only. |
+| Android config | `android/app/src/main/AndroidManifest.xml`, `android/app/build.gradle.kts` | `minSdk = flutter.minSdkVersion` (= **24**, Flutter default), compile/target = Flutter defaults. Manifest declares `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE` (M18.3) and `CAMERA` (M18.5). |
+| Tests | `test/` (+ `test/multiplayer/`) | 599 tests; rules/state privacy and determinism heavily covered; widget tests drive the full game flow; `small_screen_test.dart` plays a full game at 320×568; the multiplayer suite covers codec, LAN TCP loopback, relay in-process loopback over real WebSockets, privacy, reconnect, host loss, and relay logging. |
 
 ### 1.1 The multiplayer integration boundary
 
@@ -68,7 +69,7 @@ GameState  (authoritative rules engine — UNCHANGED, host-only in multiplayer)
 ## 3. Non-goals (M18 scope)
 
 - **No** changes to `GameState`, deck/card rules, save/resume, history/replay, settings, audio, or pass-and-play.
-- **No** internet play / matchmaking servers / accounts.
+- ~~**No** internet play / matchmaking servers / accounts.~~ **Revised by M18.6:** internet play via a minimal dumb WebSocket relay is now supported (no matchmaking, no accounts); the relay adds no auth and stores no game data.
 - **No** host migration in v1: if the host leaves, the session ends explicitly (see §14).
 - **No** encryption/TLS in v1 (local, trusted-network play; documented in §11/§17).
 - **No** gameplay-rule duplication anywhere on the client.
@@ -81,12 +82,13 @@ GameState  (authoritative rules engine — UNCHANGED, host-only in multiplayer)
 ```
                  ┌─────────────┐
                  │  HOST phone │  owns GameState, session, roster
-                 │  (server)   │  TCP ServerSocket + mDNS advertises service
+                 │  (server)   │  LAN: TCP ServerSocket + beacon advertises
+                 │             │  Relay: one outbound WebSocket (M18.6)
                  └──────┬──────┘
           ┌─────────────┼─────────────┐
           ▼             ▼             ▼
       Client 2       Client 3  ...  Client 10
-      (TCP socket per client; each device is one player)
+      (LAN: TCP socket per client; relay: virtual connection per member)
 ```
 
 - **Host** = the device that creates the session (mirrors the person who starts the game today). Runs the real `GameState`.
@@ -119,7 +121,12 @@ GameState  (authoritative rules engine — UNCHANGED, host-only in multiplayer)
 | Permissions | `NEARBY_WIFI_DEVICES` (API 33+), legacy `ACCESS_WIFI_STATE`/`CHANGE_WIFI_STATE`/`ACCESS_FINE_LOCATION`. |
 | UX | Devices leave their Wi-Fi network; discovery + group negotiation is slow and flaky. |
 
-### 5.3 Local Wi-Fi (LAN TCP + mDNS) — **recommended**
+### 5.3 Local Wi-Fi (LAN TCP + mDNS) — historical M18.1 recommendation
+
+> As delivered (M18.3/M18.6), LAN is the developer/debug fallback: discovery
+> is the in-repo UDP beacon protocol (not `multicast_dns`, which is
+> query-only — §7.2) and the production transport is the WebSocket relay (§6,
+> §7.4). The table below is the original M18.1 research.
 
 | Criterion | Finding |
 | --- | --- |
@@ -138,6 +145,13 @@ GameState  (authoritative rules engine — UNCHANGED, host-only in multiplayer)
 
 ## 6. Recommended transport
 
+> **Revised by M18.4/M18.6:** the LAN transport below remains the developer/
+> debug fallback. The production transport is the **dumb WebSocket relay**
+> (§7.4): every device opens one outbound WebSocket to a public relay, so
+> any mix of Wi-Fi/mobile-data networks works with no same-Wi-Fi
+> requirement. QR + 6-digit code are the primary join mechanisms; LAN
+> discovery/manual IP are collapsed developer options.
+
 **Local Wi-Fi (LAN): TCP sockets (`dart:io`) for transport + mDNS (`multicast_dns`) for service discovery.**
 
 Rationale: zero native surface, SDK-only transport, Flutter-team-maintained BSD-licensed discovery, no pairing, no connection-count limits, clean loopback testing, and no license risk. Bluetooth is kept as a documented future alternative only if the product ever needs it (it would not be BLE-with-`flutter_blue_plus` in a commercial app without license review).
@@ -146,12 +160,17 @@ Rationale: zero native surface, SDK-only transport, Flutter-team-maintained BSD-
 
 | Package | Version | Role | License | Source |
 | --- | --- | --- | --- | --- |
-| *(none — `dart:io`)* | SDK | TCP `ServerSocket`/`Socket` transport | BSD (Dart SDK) | dart.dev |
-| `multicast_dns` | `^0.3.3+1` | mDNS service discovery (`_turtleking._tcp`) | BSD-3-Clause | pub.dev (publisher: **flutter.dev**) |
+| *(none — `dart:io`)* | SDK | TCP `ServerSocket`/`Socket`, UDP multicast beacons, WebSocket relay transport | BSD (Dart SDK) | dart.dev |
 
-- **Not added in M18.1 or M18.2.** It will be added (with `pubspec.yaml` + lock updates) only in the milestone that implements discovery, per M18.2's decision to keep mDNS as an interface stub.
-- No other networking packages. Specifically **do not** use `flutter_blue_plus` (license + BLE-central-only + connection limits) or Wi-Fi Direct plugins (maintenance).
-- Both are compatible with Flutter 3.44.8 / Dart 3.12.2 / minSdk 24.
+- **Final state: no networking package was added.** The originally-planned
+  `multicast_dns` was rejected in M18.3 as **query-only** (it cannot
+  advertise a host service, so it cannot satisfy the host side of
+  discovery) — see §7.2. Discovery is an in-repo UDP multicast beacon
+  protocol (`lib/multiplayer/discovery.dart`), zero dependencies.
+- No other networking packages. Specifically **do not** use
+  `flutter_blue_plus` (source-available license + BLE-central-only +
+  connection limits) or Wi-Fi Direct plugins (maintenance).
+- All of the above is compatible with Flutter 3.44.8 / Dart 3.12.2 / minSdk 24.
 
 ### 7.1 Dependency & license verification (recorded during M18.2, 2026-08-11)
 
@@ -318,8 +337,9 @@ Implemented (all new files under `lib/multiplayer/`, zero new packages — pure
   validates every join through the normal protocol. The 6-digit code stays a
   locator, not a credential.
 - **Lobby UX** — QR/code join is relay-first. Nearby-games (UDP multicast) and the
-  manual IP entry remain, collapsed under a **Developer options** section for
-  debugging/fallback only; normal users never see networking details.
+  manual IP entry remain, collapsed under the **For Nerds** section ("Advanced
+  options for curious turtles.") for debugging/fallback only; normal users never
+  see networking details.
 
 **Deployment (required for real internet play):** a relay instance must be reachable
 at the URL in `relay_config.dart`. It is a single stateless-ish Dart process
@@ -342,11 +362,64 @@ sees `GameState`, cards, deck, or save data. Wire-level tests decode every frame
 client receives and prove the only card-bearing channel is the per-recipient private
 update.
 
-**Remaining gap:** real-device acceptance across mixed networks (Wi-Fi ↔ mobile data)
-and the relay deployment itself are **outstanding** — no physical devices or a public
-relay are available in this environment; all verification so far is in-process
-loopback (real TCP-less WebSocket transport, real relay server, real host/session
-code).
+**Remaining gap (M18.6):** real-device acceptance across mixed networks
+(Wi-Fi ↔ mobile data) and a *public* relay instance are still outstanding — no
+physical devices or a public endpoint are available in this environment; all
+verification so far is in-process loopback over real WebSockets plus a compiled,
+standalone relay exercised by `tool/relay_smoke_test.dart`. See
+`m18-relay-deployment.md` for the exact deployment commands and
+`m18-mixed-network-qa.md` for the two-phone acceptance matrix.
+
+### 7.5 M18.6 — public relay deployment (recorded 2026-08-12)
+
+M18.6 makes the relay deployable as a standalone public WebSocket service with
+the minimum necessary changes — no new packages, no backend framework, no auth:
+
+- **`lib/multiplayer/relay_server_app.dart`** — the testable process wrapper:
+  configuration from `RELAY_BIND_ADDRESS`, `RELAY_PORT`, `RELAY_MAX_SESSIONS`,
+  `RELAY_SESSION_TTL_MINUTES` (defaults → env → CLI flags), graceful
+  SIGINT/SIGTERM shutdown (async signal errors contained — SIGTERM is
+  unsupported on Windows), and a timestamped lifecycle logger.
+- **`lib/multiplayer/relay_server.dart`** — optional `onLog` seam emitting
+  **routing metadata only** (connect/disconnect, session register/close, member
+  join/leave). The join code is never logged and payloads are never inspected,
+  so game/private state can never appear in logs; regression-tested in
+  `test/multiplayer/relay_logging_test.dart`.
+- **`tool/relay_server_main.dart`** — thin wrapper; `dart compile exe` produces a
+  self-contained binary. **`tool/relay_smoke_test.dart`** exercises a live relay
+  process independently (host register, code lookup, join, bidirectional opaque
+  routing, host-loss teardown).
+- **New tests**: duplicate-join rejection, multi-session isolation, relay
+  shutdown/restart, app config precedence + graceful-stop lifecycle, and
+  LOOKUP invalid-code rejection.
+- **UX fixes**: removed the last user-facing "same Wi-Fi network" wording
+  (menu, host-lobby form, relay join-failure message) — normal users only see
+  code/QR flows; LAN discovery and manual IP remain collapsed developer
+  options.
+- **Docs**: `m18-relay-deployment.md` (compile/run/deploy/app-config/APK
+  commands) and `m18-mixed-network-qa.md` (12-row two-phone acceptance matrix).
+
+Deployment target: any VPS/PaaS that supports WebSocket upgrades, with Caddy
+(or nginx) terminating TLS in front so the app reaches it over `wss://`. The
+6-digit code remains a locator, not a credential; no authentication is added.
+
+### 7.6 M18 milestone progression (release record)
+
+| Milestone | Delivered | Recorded in |
+| --- | --- | --- |
+| **M18.1** — architecture & transport discovery | Transport comparison (BLE/Wi-Fi Direct/LAN), topology, privacy model, dependency research, non-goals | §1–§6, §11, §17, §18 |
+| **M18.2** — protocol + `GameDriver` foundation | Message codec (`protocol.dart`/`protocol_codec.dart`), `GameDriver`/`LocalDriver` seam, session layer, manifest permissions, loopback tests | §9–§10, §1.1 |
+| **M18.3** — LAN transport & discovery | TCP transport (write-queue hardened), UDP multicast beacon discovery (no `multicast_dns`), multicast lock, manual-IP fallback | §5.3, §7.2, §8 |
+| **M18.4** — remote gameplay, reconnection, host loss | `RemoteDriver` + `RemoteGameView` over the wire, `PublicStateView`/`PrivateStateView`, `ACTION_REQUEST`/resync, reconnection overlay, host-loss teardown | §11–§14, `remote_driver.dart` |
+| **M18.5** — QR/code join UX | 6-digit join codes, v1/v2 QR payloads, `qr_flutter` + `mobile_scanner`, relay-first lobby, collapsed developer options, join-failure UX | §7.3, `join_code.dart`, `join_payload.dart` |
+| **M18.6** — relay & mixed-network support, production-readiness | Dumb WebSocket relay (`relay_server.dart`), deployable process (`relay_server_app.dart`, `tool/relay_server_main.dart`), v2 QR payload, relay logging seam, deployment + two-phone QA docs, smoke test | §7.4–§7.5, `m18-relay-deployment.md`, `m18-mixed-network-qa.md` |
+
+**Release status (v1.2.0):** LAN/local transport and the relay transport are
+both implemented and covered by in-process loopback tests (real TCP and real
+WebSockets). A **deployed public relay is required** for actual
+internet/mixed-network play, and physical two-device verification against
+such a relay has **not yet been performed** in this environment — see
+`m18-mixed-network-qa.md` for the acceptance matrix.
 
 ## 8. Android permissions / requirements
 
@@ -478,25 +551,31 @@ No fake "networking tests" with no value. Instead:
 - **Rebuild safety**: the multiplayer game screen must not fire feedback on rebuild (existing M17 regression pattern extended).
 - **Pass-and-play**: entire existing suite must stay green (LocalDriver path is the current code).
 
-## 16. M18.2–M18.4 implementation roadmap
+## 16. Original M18.2–M18.4 implementation roadmap
+
+The table below is the *original* M18.2–M18.4 plan. The actual delivery
+progression (including the M18.5 UX and M18.6 relay milestones) is recorded
+in §7.6. The plan's scoping differs slightly from what shipped (the
+`multicast_dns` package was replaced by the in-repo beacon protocol — §7.2 —
+and the QR/code join UX and relay became their own milestones).
 
 | Milestone | Scope |
 | --- | --- |
-| **M18.2 — Session & transport foundation** | Add `multicast_dns`; manifest permissions; `lib/multiplayer/` with protocol codec + message types; TCP `SessionTransport`; mDNS host advertisement + client discovery (manual IP fallback); lobby UI (create session / join session, roster display, join accept/reject); loopback + codec + privacy tests. No gameplay changes. |
+| **M18.2 — Session & transport foundation** | Add `multicast_dns` (as originally planned); manifest permissions; `lib/multiplayer/` with protocol codec + message types; TCP `SessionTransport`; host advertisement + client discovery (manual IP fallback); lobby UI (create session / join session, roster display, join accept/reject); loopback + codec + privacy tests. No gameplay changes. |
 | **M18.3 — Gameplay over the wire** | `GameDriver` abstraction (LocalDriver = today's code; RemoteDriver = request/apply); `PublicStateView` serializer; host broadcast + client `RemoteGameView`; `PRIVATE_UPDATE` unicast (own visible card); full-game loopback integration test; feedback fires locally on accepted actions (no transmission of audio). |
-| **M18.4 — Resilience & release** | Heartbeat, reconnection overlay, `RESYNC_REQUEST/RESPONSE`; host-loss UX; seat-release policy; real-device LAN verification (physical phones), release builds, APK size/perms diff, docs, final review. |
+| **M18.4 — Resilience & release** | Heartbeat, reconnection overlay, `RESYNC_REQUEST/RESPONSE`; host-loss UX; seat-release policy; real-device verification (physical phones), release builds, APK size/perms diff, docs, final review. |
 
 ## 17. Risks and mitigations
 
 | Risk | Mitigation |
 | --- | --- |
-| mDNS unreliable on some Android Wi-Fi (APs block multicast) | Manual "enter host IP" fallback; session list refreshes on demand |
+| mDNS unreliable on some Android Wi-Fi (APs block multicast) | LAN discovery is a collapsed developer fallback only; the normal join path is QR/code over the internet relay |
 | Host is a single point of failure | Explicit host-loss UX; migration is a documented non-goal |
-| Plaintext private card on the LAN | Accepted for local trusted play; documented; TLS is a possible later hardening (non-goal now) |
-| Wi-Fi network needed (vs Bluetooth anywhere) | Bluetooth was rejected for connection limits + licensing + pairing UX; LAN is the right trade for 2–10 phones |
-| Turn blocked when a client drops | Reserved seat + resync; host continues holding actions until the player returns (M18.2 detail) |
+| Plaintext private card in transit | Accepted for trusted play; the relay is a dumb forwarder that never stores payloads; TLS termination (wss) is the documented deployment setup |
+| Relay unavailable or misconfigured | Lobby shows a clear configuration/connection error; LAN developer fallback still exists |
+| Turn blocked when a client drops | Reserved seat + resync; host continues holding actions until the player returns |
 | Latency perception | Actions are validated locally-echoed via ACTION_ACCEPTED; feedback plays on acceptance (not on broadcast), matching M17 timing goals |
-| Dependency drift | Only one new runtime package, Flutter-team-published; version pinned |
+| Dependency drift | Runtime packages are pinned and few (`shared_preferences`, `audioplayers`, `qr_flutter`, `mobile_scanner`); networking is SDK-only |
 
 ## 18. Explicit decisions that must remain unchanged
 
@@ -507,8 +586,8 @@ These are contractual for the whole of Phase 18:
 3. **Pass-and-play (LocalDriver) remains complete and unchanged**, always available offline with zero setup.
 4. **Card privacy is absolute**: only a player's own visible card (private unicast, rule-authorized) and the authorized group reveal may cross the network.
 5. **`GameSaveCodec` and the save document never cross the network.**
-6. **No internet, no servers, no accounts** — offline LAN only.
+6. ~~**No internet, no servers, no accounts** — offline LAN only.~~ **Revised by M18.6:** a minimal dumb WebSocket relay is the production transport (no accounts, no matchmaking, no stored game data, no auth — the 6-digit code stays a locator, not a credential).
 7. **`GameFeedback` stays local**; no audio events are transmitted.
 8. **No new gameplay rules, settings, or history/replay changes** may be introduced by the multiplayer work.
-9. **Host migration is out of scope** for M18.2–M18.4.
+9. **Host migration is out of scope** for M18 (through M18.6).
 10. **No second feedback/settings/state system** — the M17 `GameFeedback` seam and `SettingsStore` remain the only ones.

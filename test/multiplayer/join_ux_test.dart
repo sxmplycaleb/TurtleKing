@@ -101,7 +101,36 @@ void main() {
         await tester.pumpAndSettle();
       }
       expect(find.text('Start Session'), findsOneWidget);
+
+      // The session stop chain ends with a real WebSocket close, and Dart's
+      // WebSocket.close() schedules a 5s close-handshake timeout timer.
+      // Under full-suite load the peer's close ack can arrive after the
+      // test body ends, leaving that timer pending ("A Timer is still
+      // pending"). Advancing fake time past the timeout fires it
+      // deterministically instead of racing the ack.
+      await tester.pump(const Duration(seconds: 6));
     });
+
+    testWidgets(
+      'an empty relay configuration shows a clear, placeholder-free error',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(home: HostLobbyScreen(relayUrl: '')),
+        );
+
+        await tester.tap(find.text('Start Session'));
+        await tester.pump();
+
+        expect(
+          find.textContaining('Multiplayer relay is not configured'),
+          findsOneWidget,
+        );
+        // A placeholder endpoint must never appear in a user-facing message.
+        expect(find.textContaining('wss://'), findsNothing);
+        expect(find.textContaining('your-relay'), findsNothing);
+        expect(find.textContaining('example.com'), findsNothing);
+      },
+    );
   });
 
   group('join lobby join UX', () {
@@ -112,14 +141,27 @@ void main() {
 
       expect(find.text('Scan QR Code'), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Join code'), findsOneWidget);
-      // LAN discovery + manual host IP live behind Developer options and are
-      // collapsed (and off) by default — normal play is QR/code over the
-      // internet relay.
-      expect(find.text('Developer options'), findsOneWidget);
+      // LAN discovery + manual host IP live behind the collapsed "For Nerds"
+      // section and are off by default — normal play is QR/code over the
+      // internet relay. The old "Developer options" label is gone.
+      expect(find.text('For Nerds'), findsOneWidget);
+      expect(find.text('Developer options'), findsNothing);
+      expect(find.text('Developer'), findsNothing);
+      // The friendly subtitle is part of the collapsed tile itself.
+      expect(
+        find.text('Advanced options for curious turtles.'),
+        findsOneWidget,
+      );
+      // The advanced content is collapsed by default.
       expect(find.text('Manual setup (host IP)'), findsNothing);
       expect(find.widgetWithText(TextField, 'Host IPv4'), findsNothing);
-      await tester.tap(find.text('Developer options'));
+      // Expanding "For Nerds" keeps the subtitle and reveals the options.
+      await tester.tap(find.text('For Nerds'));
       await tester.pumpAndSettle();
+      expect(
+        find.text('Advanced options for curious turtles.'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Manual setup (host IP)'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextField, 'Host IPv4'), findsOneWidget);
@@ -367,7 +409,9 @@ void main() {
         );
         // The join is a real WebSocket handshake: run the tap and the
         // handshake inside a single real-async window so the sockets can
-        // progress.
+        // progress. Instead of sleeping a fixed amount, poll until the join
+        // completes (or a deadline passes) — a fixed delay is too short when
+        // the machine is under load and would otherwise flake.
         await tester.runAsync(() async {
           await tester.enterText(
             find.widgetWithText(TextField, 'Your name'),
@@ -375,14 +419,29 @@ void main() {
           );
           await tester.tap(find.text('Scan QR Code'));
           await tester.pump();
-          await Future<void>.delayed(const Duration(milliseconds: 900));
+          final deadline = DateTime.now().add(const Duration(seconds: 15));
+          while (find.textContaining('Joined as').evaluate().isEmpty &&
+              DateTime.now().isBefore(deadline)) {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+            await tester.pump();
+          }
         });
         await tester.pumpAndSettle();
 
         expect(find.textContaining('Joined as'), findsOneWidget);
         expect(find.text('H'), findsOneWidget);
 
-        await tester.runAsync(() => host.stop());
+        // Stopping the host closes the client's socket through the relay.
+        // Give the client a real-async window to observe the close and close
+        // its own WebSocket, then drain the 5s close-handshake timeout that
+        // Dart's WebSocket.close() schedules (fake zone, so the test would
+        // otherwise end with a pending timer under load — see the host-lobby
+        // test above).
+        await tester.runAsync(() async {
+          await host.stop();
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+        });
+        await tester.pump(const Duration(seconds: 6));
       },
     );
   });
