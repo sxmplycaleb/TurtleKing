@@ -966,7 +966,7 @@ class ClientSession {
       socketErrorMessage:
           'Could not reach the host. Check that it is on the same Wi-Fi '
           'network and the address is correct.',
-    );
+    ).then((attempt) => attempt.result);
   }
 
   /// Connects to the host through the internet relay.
@@ -975,37 +975,84 @@ class ClientSession {
   /// on any mix of Wi-Fi/mobile-data networks. Same host-authoritative
   /// join: after the relay binds the client to the session, the normal
   /// JOIN_REQUEST/JOIN_ACCEPT handshake runs unchanged. Never throws.
+  ///
+  /// A relay join is given a generous timeout (default 30s) and up to **one
+  /// controlled retry** because a public relay can be mid-wake: Render's
+  /// free tier sleeps after ~15 minutes without traffic and takes 30–60s to
+  /// boot, so the first attempt can fail or time out while the relay wakes.
+  /// Permanent failures (no such session, session full, host not connected,
+  /// protocol rejection) are never retried — only transient transport
+  /// failures/timeouts are, and at most once.
   Future<JoinResult> joinRelay({
     required String relayUrl,
-    Duration connectTimeout = const Duration(seconds: 8),
+    Duration connectTimeout = const Duration(seconds: 30),
   }) {
     if (_joinCompleter != null) {
       throw StateError('join already in progress');
     }
-    _transport = RelayMultiplayerTransport(
+    // Reuse an injected relay transport (tests inject a controllable one);
+    // the real flow replaces the default TCP transport with the relay
+    // transport exactly once.
+    if (_transport is! RelayMultiplayerTransport) {
+      _transport = RelayMultiplayerTransport(
+        relayUrl: relayUrl,
+        connectTimeout: connectTimeout,
+      );
+    }
+    return _runRelayJoinWithRetry(
       relayUrl: relayUrl,
       connectTimeout: connectTimeout,
     );
-    return _runJoin(
-      connect: () => _transport.connect(
-        hostAddress: relayUrl,
-        sessionId: sessionId,
-        port: 0,
-        connectTimeout: connectTimeout,
-      ),
-      connectTimeout: connectTimeout,
-      socketErrorMessage:
-          'Could not reach the game relay. Check your internet connection.',
-      onRelayError: (error) => JoinResult.failure(
-        _relayJoinOutcome(error.reason),
-        _friendlyRelayReason(error.reason),
-      ),
-    );
   }
 
-  /// Shared join machinery: connect, send JOIN_REQUEST, wait for the host's
+  /// Runs the relay join up to twice. The first attempt may fail because the
+  /// relay is cold-starting (connect timeout, socket error, connection lost,
+  /// or the host not answering) — exactly one retry gives it time to wake.
+  /// Permanent relay rejections are classified as non-retryable by
+  /// [_runJoin] and surface immediately.
+  Future<JoinResult> _runRelayJoinWithRetry({
+    required String relayUrl,
+    required Duration connectTimeout,
+  }) async {
+    Future<TransportConnection> connect() => _transport.connect(
+      hostAddress: relayUrl,
+      sessionId: sessionId,
+      port: 0,
+      connectTimeout: connectTimeout,
+    );
+    JoinResult relayError(RelayJoinException error) => JoinResult.failure(
+      _relayJoinOutcome(error.reason),
+      _friendlyRelayReason(error.reason),
+    );
+    const socketErrorMessage =
+        'Could not reach the game relay. Check your internet connection.';
+
+    var attempt = await _runJoin(
+      connect: connect,
+      connectTimeout: connectTimeout,
+      socketErrorMessage: socketErrorMessage,
+      onRelayError: relayError,
+    );
+    if (!attempt.result.isAccepted && attempt.retryable) {
+      attempt = await _runJoin(
+        connect: connect,
+        connectTimeout: connectTimeout,
+        socketErrorMessage: socketErrorMessage,
+        onRelayError: relayError,
+      );
+    }
+    return attempt.result;
+  }
+
+  /// One join attempt: connect, send JOIN_REQUEST, wait for the host's
   /// JOIN_ACCEPT/JOIN_REJECT (or a typed failure). Never throws.
-  Future<JoinResult> _runJoin({
+  ///
+  /// Returns the result plus whether the failure was a **transient transport
+  /// failure** (connect/exchange timeout, socket error, connection lost, or
+  /// the host not answering) that a caller may retry once. Relay rejections
+  /// (no such session, session full, host not connected, protocol errors)
+  /// are permanent and come back with `retryable == false`.
+  Future<({JoinResult result, bool retryable})> _runJoin({
     required Future<TransportConnection> Function() connect,
     required Duration connectTimeout,
     required String socketErrorMessage,
@@ -1013,14 +1060,23 @@ class ClientSession {
   }) async {
     final completer = Completer<JoinResult>();
     _joinCompleter = completer;
+    var retryable = false;
     try {
       final connection = await connect();
       _connection = connection;
       _lastSeen = DateTime.now();
       _incomingSub = connection.incoming.listen(
         _onMessage,
-        onDone: _onConnectionClosed,
-        onError: (_) => _onConnectionClosed(),
+        onDone: () {
+          // A connection dropping mid-join is transient — the relay (or
+          // host) may be waking — so one retry is allowed.
+          if (!completer.isCompleted) retryable = true;
+          _onConnectionClosed();
+        },
+        onError: (_) {
+          if (!completer.isCompleted) retryable = true;
+          _onConnectionClosed();
+        },
       );
       await connection.send(
         _codec.encode(
@@ -1033,16 +1089,23 @@ class ClientSession {
       );
       _joinTimeout = Timer(connectTimeout, () {
         if (!completer.isCompleted) {
+          // The host did not answer in time — transient; allow one retry
+          // instead of ending the session (the join UI disposes on failure).
+          retryable = true;
           completer.complete(
             const JoinResult.failure(
               JoinOutcome.timedOut,
               'The host did not respond.',
             ),
           );
-          _close();
+          _cleanupJoinFailure();
         }
       });
     } on RelayJoinException catch (error) {
+      // A relay rejection (no such session, session full, host not
+      // connected, …) is permanent — retrying cannot change it. The single
+      // exception is a connection lost mid-handshake, which is transient.
+      retryable = error.reason == 'relay connection lost';
       _completeJoin(
         onRelayError?.call(error) ??
             const JoinResult.failure(
@@ -1051,10 +1114,13 @@ class ClientSession {
             ),
       );
     } on SocketException catch (_) {
+      retryable = true;
       _completeJoin(
         JoinResult.failure(JoinOutcome.connectionFailed, socketErrorMessage),
       );
     } on Exception catch (_) {
+      // Covers the connect/exchange timeouts thrown while the relay wakes.
+      retryable = true;
       _completeJoin(
         const JoinResult.failure(
           JoinOutcome.connectionFailed,
@@ -1062,7 +1128,7 @@ class ClientSession {
         ),
       );
     }
-    return completer.future;
+    return (result: await completer.future, retryable: retryable);
   }
 
   JoinOutcome _relayJoinOutcome(String reason) {
@@ -1220,20 +1286,43 @@ class ClientSession {
   }
 
   void _onConnectionClosed() {
-    _joinTimeout?.cancel();
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
     if (_joined) {
+      _joinTimeout?.cancel();
+      _heartbeatTimer?.cancel();
+      _heartbeatTimer = null;
       _emit(ClientSessionEventType.connectionLost);
+      _close();
     } else {
+      // A join that fails mid-handshake must not end the session: the relay
+      // retry re-connects on the same [ClientSession].
       _completeJoin(
         const JoinResult.failure(
           JoinOutcome.connectionFailed,
           'The connection to the host was lost.',
         ),
       );
+      _cleanupJoinFailure();
     }
-    _close();
+  }
+
+  /// Cleans up after a failed join attempt without ending the session:
+  /// closes the transport connection and cancels timers so a retry can
+  /// connect again on the same [ClientSession]. Only used while joining —
+  /// the joined path still calls [_close].
+  void _cleanupJoinFailure() {
+    _joinTimeout?.cancel();
+    _joinTimeout = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _incomingSub?.cancel();
+    _incomingSub = null;
+    final connection = _connection;
+    _connection = null;
+    if (connection != null) {
+      try {
+        unawaited(connection.close());
+      } catch (_) {}
+    }
   }
 
   void _completeJoin(JoinResult result) {

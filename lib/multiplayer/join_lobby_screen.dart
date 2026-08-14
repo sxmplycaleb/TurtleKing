@@ -75,6 +75,13 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
   List<PublicPlayer> _roster = const [];
   String? _error;
   bool _joining = false;
+
+  /// True once a relay join has been in flight for a few seconds: the
+  /// public relay may be waking from its idle sleep, and the UI should say
+  /// so instead of looking stuck.
+  bool _showWakingRelay = false;
+  Timer? _wakingTimer;
+
   bool _inLobby = false;
   bool _navigatingToGame = false;
 
@@ -92,6 +99,7 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
 
   @override
   void dispose() {
+    _wakingTimer?.cancel();
     _discoverySub?.cancel();
     _discovery?.stop();
     _clientSub?.cancel();
@@ -127,6 +135,29 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
       onError: (_) {},
       onDone: () {},
     );
+  }
+
+  /// After a relay join has been in flight for a few seconds, tell the
+  /// user the relay may be waking up (a public relay that went idle sleeps
+  /// and takes a while to boot). Only relay joins start this; the LAN
+  /// developer path stays on plain "Connecting…".
+  void _startWakingRelayIndicator() {
+    _wakingTimer?.cancel();
+    _wakingTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted && _joining) setState(() => _showWakingRelay = true);
+    });
+  }
+
+  /// Ends a join attempt: cancels the waking indicator and clears the
+  /// joining state (optionally surfacing [error]).
+  void _finishJoining({String? error}) {
+    _wakingTimer?.cancel();
+    _wakingTimer = null;
+    setState(() {
+      _joining = false;
+      _showWakingRelay = false;
+      if (error != null) _error = error;
+    });
   }
 
   /// Scans the host's QR code, validates the payload strictly, and joins
@@ -225,16 +256,15 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
       resolution = await resolver(code);
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _joining = false;
-        _error =
+      _finishJoining(
+        error:
             'Connection failed — could not look up that code. Make sure '
-            'both phones have an internet connection.';
-      });
+            'both phones have an internet connection.',
+      );
       return;
     }
     if (!mounted) return;
-    setState(() => _joining = false);
+    _finishJoining();
     switch (resolution.status) {
       case JoinCodeResolveStatus.found:
         final session = resolution.session!;
@@ -326,7 +356,9 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
     setState(() {
       _joining = true;
       _error = null;
+      _showWakingRelay = false;
     });
+    if (relayUrl != null) _startWakingRelayIndicator();
 
     final ClientSession client;
     final JoinResult result;
@@ -344,15 +376,14 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
       // Defensive: any unexpected error (e.g. a stale session state) must
       // surface as a message, never as a silent hang or an unhandled crash.
       if (!mounted) return;
-      setState(() {
-        _joining = false;
-        _error = 'Connection failed — check your internet connection.';
-      });
+      _finishJoining(
+        error: 'Connection failed — check your internet connection.',
+      );
       return;
     }
     if (!mounted) return;
 
-    setState(() => _joining = false);
+    _finishJoining();
     if (result.isAccepted) {
       _roster = result.roster ?? const [];
       _clientSub = client.events.listen(_onClientEvent);
@@ -555,6 +586,10 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
           if (_joining) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(),
+            if (_showWakingRelay) ...[
+              const SizedBox(height: 8),
+              const Text('Waking the multiplayer relay…'),
+            ],
           ],
           const SizedBox(height: 24),
           // LAN discovery and manual host-IP entry are development/testing
