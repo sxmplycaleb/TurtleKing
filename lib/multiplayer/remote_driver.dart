@@ -169,9 +169,13 @@ class RemoteDriver implements RemoteGameController {
 
   /// Connects to the host through the internet relay and joins with
   /// [playerName]. Completes with the join outcome; never throws.
+  ///
+  /// The default timeout matches [ClientSession.joinRelay]: a public relay
+  /// can be mid-wake (Render's free tier sleeps when idle), and the session
+  /// layer runs the single controlled retry for transient failures.
   Future<JoinResult> joinRelay({
     required String relayUrl,
-    Duration connectTimeout = const Duration(seconds: 8),
+    Duration connectTimeout = const Duration(seconds: 30),
   }) async {
     if (_disposed) {
       return const JoinResult.failure(

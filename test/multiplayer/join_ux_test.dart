@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -376,6 +377,72 @@ void main() {
       expect(find.textContaining('SocketException'), findsNothing);
       expect(find.textContaining('Connection refused'), findsNothing);
       expect(find.textContaining('TimeoutException'), findsNothing);
+      // A fast failure is not a slow relay wake — the waking hint must stay
+      // hidden.
+      expect(find.text('Waking the multiplayer relay…'), findsNothing);
+    });
+
+    testWidgets('a relay join still in flight after a few seconds shows the '
+        'waking-relay message', (tester) async {
+      // A TCP listener that accepts the WebSocket upgrade attempt but
+      // never answers keeps the client's connect pending — exactly what a
+      // relay that is still waking looks like to the app.
+      final stall = await tester.runAsync(
+        () => ServerSocket.bind(InternetAddress.loopbackIPv4, 0),
+      );
+      final server = stall!;
+      final accepted = <Socket>[];
+      final sub = server.listen((socket) => accepted.add(socket));
+      addTearDown(() async {
+        for (final socket in accepted) {
+          try {
+            socket.destroy();
+          } catch (_) {}
+        }
+        await sub.cancel();
+        await server.close();
+      });
+
+      final payload = JoinPayload(
+        sessionId: 'waking-ui',
+        joinCode: '483729',
+        relayUrl: 'ws://127.0.0.1:${server.port}',
+      ).encode();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: JoinLobbyScreen(scanPayloadProvider: () async => payload),
+        ),
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Your name'),
+        'Mia',
+      );
+      await tester.tap(find.text('Scan QR Code'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // The join is still in flight: plain "Connecting…" with no waking
+      // hint yet.
+      expect(find.text('Connecting…'), findsWidgets);
+      expect(find.text('Waking the multiplayer relay…'), findsNothing);
+
+      // After a meaningful delay the UI says the relay may be waking, and
+      // the loading state stays active (the button is still disabled).
+      await tester.pump(const Duration(seconds: 7));
+      expect(find.text('Waking the multiplayer relay…'), findsOneWidget);
+      expect(find.text('Connecting…'), findsWidgets);
+
+      // Both attempts (initial + one retry) time out; the state clears to
+      // a friendly error and the waking hint disappears.
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pumpAndSettle();
+      expect(find.text('Waking the multiplayer relay…'), findsNothing);
+      expect(find.textContaining('Connection failed'), findsOneWidget);
+
+      // Drain the WebSocket close-handshake timeout Dart schedules, so no
+      // fake timers are pending when the test body ends.
+      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets(
@@ -430,6 +497,9 @@ void main() {
 
         expect(find.textContaining('Joined as'), findsOneWidget);
         expect(find.text('H'), findsOneWidget);
+        // A warm join completes well before the waking hint's delay, so the
+        // hint must never have appeared.
+        expect(find.text('Waking the multiplayer relay…'), findsNothing);
 
         // Stopping the host closes the client's socket through the relay.
         // Give the client a real-async window to observe the close and close
