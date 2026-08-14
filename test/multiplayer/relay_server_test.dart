@@ -1,59 +1,9 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/multiplayer/relay_protocol.dart';
 import 'package:turtle_king/multiplayer/relay_server.dart';
 
-/// A raw WebSocket peer for driving the relay protocol directly (no session
-/// layer involved — these tests target the relay itself).
-class RelayTestPeer {
-  RelayTestPeer(this.ws);
-
-  final WebSocket ws;
-  final List<RelayFrame> received = [];
-  final List<Completer<RelayFrame>> _pending = [];
-  StreamSubscription<dynamic>? _sub;
-  bool closed = false;
-
-  static Future<RelayTestPeer> connect(String url) async {
-    final peer = RelayTestPeer(await WebSocket.connect(url));
-    peer._sub = peer.ws.listen(
-      (data) {
-        if (data is! String) return;
-        final frame = decodeRelayFrame(data);
-        if (peer._pending.isNotEmpty) {
-          peer._pending.removeAt(0).complete(frame);
-        } else {
-          peer.received.add(frame);
-        }
-      },
-      onError: (_) => peer.closed = true,
-      onDone: () => peer.closed = true,
-    );
-    return peer;
-  }
-
-  /// Sends [frame] and returns the next relay frame from the relay
-  /// (strict request/response for handshakes).
-  Future<RelayFrame> exchange(
-    RelayFrame frame, {
-    Duration timeout = const Duration(seconds: 4),
-  }) {
-    final completer = Completer<RelayFrame>();
-    _pending.add(completer);
-    ws.add(frame.encode());
-    return completer.future.timeout(timeout);
-  }
-
-  Future<void> close() async {
-    try {
-      await ws.close();
-    } catch (_) {}
-    await _sub?.cancel();
-  }
-}
+import 'helpers.dart';
 
 void main() {
   late RelayServer relay;

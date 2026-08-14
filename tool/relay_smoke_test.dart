@@ -43,7 +43,19 @@ Future<void> main(List<String> args) async {
   final hostFrames = <RelayFrame>[];
   host.listen(
     (data) {
-      if (data is String) hostFrames.add(decodeRelayFrame(data));
+      if (data is! String) return;
+      final frame = decodeRelayFrame(data);
+      if (frame is RelayPingFrame) {
+        // Liveness probe: pong so the heartbeat never mistakes a live
+        // connection for a dead one. After close() the outgoing side is
+        // closed and the pong is a no-op — the relay's heartbeat then
+        // detects the host loss (that is the point of check 5).
+        try {
+          host.add(const RelayPongFrame().encode());
+        } catch (_) {}
+        return;
+      }
+      hostFrames.add(frame);
     },
     onError: (_) {},
     cancelOnError: true,
@@ -83,7 +95,15 @@ Future<void> main(List<String> args) async {
   final looker = await WebSocket.connect(relayUrl);
   final lookerFrames = <RelayFrame>[];
   looker.listen((data) {
-    if (data is String) lookerFrames.add(decodeRelayFrame(data));
+    if (data is! String) return;
+    final frame = decodeRelayFrame(data);
+    if (frame is RelayPingFrame) {
+      try {
+        looker.add(const RelayPongFrame().encode());
+      } catch (_) {}
+      return;
+    }
+    lookerFrames.add(frame);
   }, cancelOnError: true);
   looker.add(RelayLookupFrame(joinCode: code).encode());
   final ack =
@@ -98,7 +118,15 @@ Future<void> main(List<String> args) async {
   final client = await WebSocket.connect(relayUrl);
   final clientFrames = <RelayFrame>[];
   client.listen((data) {
-    if (data is String) clientFrames.add(decodeRelayFrame(data));
+    if (data is! String) return;
+    final frame = decodeRelayFrame(data);
+    if (frame is RelayPingFrame) {
+      try {
+        client.add(const RelayPongFrame().encode());
+      } catch (_) {}
+      return;
+    }
+    clientFrames.add(frame);
   }, cancelOnError: true);
   client.add(RelayJoinFrame(sessionId: sessionId).encode());
   final joinAck =
@@ -127,8 +155,14 @@ Future<void> main(List<String> args) async {
   await check('host frame reaches the client', toClient.payload.isNotEmpty);
 
   // 5. Host loss tears the session down: the client socket is closed.
+  //
+  // On a direct (loopback/LAN) path the host's WebSocket close frame
+  // reaches the relay immediately. Through an internet proxy the close
+  // frame can be swallowed, so host loss is detected by the relay's
+  // heartbeat instead (default: drop after 10s of silence + up to 2s
+  // between pings) — the deadline below allows for that path.
   await host.close();
-  final deadline = DateTime.now().add(const Duration(seconds: 3));
+  final deadline = DateTime.now().add(const Duration(seconds: 20));
   var hostLossOk = false;
   while (DateTime.now().isBefore(deadline) && !hostLossOk) {
     hostLossOk = client.readyState == WebSocket.closed;

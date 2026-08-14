@@ -10,6 +10,12 @@ detail lives in the README; this file is the release-level summary.
 - **`GET /health` liveness endpoint** on the relay — returns a static
   `{"status":"ok"}` and never exposes join codes, sessions, players, or
   game data (regression-tested).
+- **Heartbeat host-loss detection** on the relay — every connection is
+  pinged and silent ones are dropped, so a dead host is detected and its
+  session torn down even when its WebSocket close frame never reaches the
+  relay (app killed, network drop, or a proxy that swallows close frames).
+  Fixes host-loss handling behind internet proxies/CDNs; ping/pong frames
+  carry no data.
 - **Render `PORT` support** in the relay process — honors the platform-
   standard `PORT` environment variable when `RELAY_PORT` is absent
   (precedence: `--port` > `RELAY_PORT` > `PORT` > 8787).

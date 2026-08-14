@@ -50,6 +50,10 @@ class _RelayConnection {
   /// The member id within that session ('host' for the host).
   String? member;
 
+  /// When this connection was last heard from (any inbound frame). Used by
+  /// the heartbeat to detect devices that vanished without a close frame.
+  DateTime lastSeen = DateTime.now();
+
   bool get isBound => sessionId != null;
 }
 
@@ -81,6 +85,8 @@ class RelayServer {
     this.sessionTtl = const Duration(minutes: 30),
     this.maxSessions = 64,
     this.sweepInterval = const Duration(seconds: 30),
+    this.heartbeatInterval = const Duration(seconds: 2),
+    this.heartbeatTimeout = const Duration(seconds: 10),
     this.onLog,
   });
 
@@ -91,6 +97,16 @@ class RelayServer {
   final int maxSessions;
 
   final Duration sweepInterval;
+
+  /// How often every connection is sent a [RelayPingFrame].
+  final Duration heartbeatInterval;
+
+  /// A connection that sends nothing (no game frame, no pong) for this long
+  /// is considered dead and dropped — its session is torn down and members
+  /// are closed. This is what detects host loss when the host's WebSocket
+  /// close frame never reaches the relay (app killed, network drop, or a
+  /// proxy that swallows close frames).
+  final Duration heartbeatTimeout;
 
   /// Optional lifecycle logger (wired to stdout by the standalone runner).
   ///
@@ -105,6 +121,7 @@ class RelayServer {
   final Map<String, _RelaySession> _sessions = {};
   final Map<WebSocket, _RelayConnection> _connections = {};
   Timer? _sweepTimer;
+  Timer? _heartbeatTimer;
   bool _stopped = false;
 
   void _log(String message) {
@@ -122,6 +139,7 @@ class RelayServer {
     _server = await HttpServer.bind(address ?? InternetAddress.anyIPv4, port);
     _server!.listen(_onHttpRequest);
     _sweepTimer = Timer.periodic(sweepInterval, (_) => _sweep());
+    _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) => _heartbeat());
     return _server!.port;
   }
 
@@ -130,6 +148,8 @@ class RelayServer {
     _stopped = true;
     _sweepTimer?.cancel();
     _sweepTimer = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     for (final session in List.of(_sessions.values)) {
       _closeSession(session, reason: 'relay stopped');
     }
@@ -182,6 +202,8 @@ class RelayServer {
   }
 
   void _onFrame(_RelayConnection connection, Object? data) {
+    // Anything at all from a device counts as liveness.
+    connection.lastSeen = DateTime.now();
     if (data is! String) return; // binary frames are ignored
     final RelayFrame frame;
     try {
@@ -192,6 +214,10 @@ class RelayServer {
     }
     try {
       switch (frame) {
+        case RelayPingFrame():
+          break; // devices don't ping the relay; ignore
+        case RelayPongFrame():
+          break; // liveness only — lastSeen already refreshed above
         case RelayHostFrame(
           :final sessionId,
           :final joinCode,
@@ -438,7 +464,11 @@ class RelayServer {
     connection.sessionId = null;
     connection.member = null;
     _connections.remove(connection.ws);
-    if (sessionId == null) return;
+    if (sessionId == null) {
+      // Unbound (e.g. heartbeat-reaped zombie): just close the socket.
+      _safeClose(connection.ws);
+      return;
+    }
     final session = _sessions[sessionId];
     if (session == null) return;
     if (wasHost) {
@@ -477,6 +507,22 @@ class RelayServer {
     for (final session in List.of(_sessions.values)) {
       if (now.difference(session.lastActivity) > sessionTtl) {
         _closeSession(session, reason: 'session expired');
+      }
+    }
+  }
+
+  /// Pings every connection and drops the ones that have been silent longer
+  /// than [heartbeatTimeout]. A live connection answers [RelayPingFrame]
+  /// with a pong (or is mid-game and sending frames), so its `lastSeen`
+  /// stays fresh; a dead one is dropped and, if it was a session host, its
+  /// session is torn down for everyone.
+  void _heartbeat() {
+    final now = DateTime.now();
+    for (final connection in List.of(_connections.values)) {
+      if (now.difference(connection.lastSeen) > heartbeatTimeout) {
+        _drop(connection, reason: 'heartbeat timeout');
+      } else {
+        _send(connection.ws, const RelayPingFrame());
       }
     }
   }

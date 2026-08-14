@@ -1156,13 +1156,17 @@ relay/mixed-network support and production-readiness (see
   `--dart-define=RELAY_URL=...` constant). Build `tool/relay_server_main.dart`
   with `dart compile exe` and run it on any WebSocket-capable VPS/PaaS (~$4–5/mo
   small VPS; no database, in-memory TTL-swept sessions). A production
-  `Dockerfile` (with a `GET /health` liveness endpoint and Render `PORT`
-  support) is included for container platforms such as Render. Exact
-  deployment commands: `docs/multiplayer/m18-relay-deployment.md`.
+  `Dockerfile` (with a `GET /health` liveness endpoint, Render `PORT`
+  support, and heartbeat liveness so a dead host is detected even when a
+  proxy swallows its close frame) is included for container platforms such
+  as Render. Exact deployment commands:
+  `docs/multiplayer/m18-relay-deployment.md`.
 - **Testing status:** the implementation is covered by in-process loopback
   tests (real TCP for LAN, real WebSockets for the relay) plus a standalone
-  relay smoke test (`tool/relay_smoke_test.dart`). **Two physical phones
-  against a deployed public relay have not yet been tested in this
+  relay smoke test (`tool/relay_smoke_test.dart`). The public relay is
+  deployed at `wss://turtleking.onrender.com` (health check passes; the
+  heartbeat host-loss fix on this branch needs a redeploy to be live
+  there). **Two physical phones have not yet been tested in this
   environment** — that is the one outstanding item before
   `docs/multiplayer/m18-mixed-network-qa.md` can be marked all-Pass.
 - **Non-goals:** accounts, host migration, and any change to the pass-and-play

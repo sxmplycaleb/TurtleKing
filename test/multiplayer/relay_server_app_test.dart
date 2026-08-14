@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:turtle_king/multiplayer/relay_protocol.dart';
 import 'package:turtle_king/multiplayer/relay_server_app.dart';
 
-import 'relay_server_test.dart' show RelayTestPeer;
+import 'helpers.dart' show RelayTestPeer;
 
 Future<void> pumpUntil(
   bool Function() condition, {

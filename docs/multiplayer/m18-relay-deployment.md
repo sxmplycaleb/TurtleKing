@@ -15,16 +15,17 @@ the app to a public relay.
 - Runner: `tool/relay_server_main.dart`
 - App endpoint: `lib/multiplayer/relay_config.dart` (`RELAY_URL`)
 
-> **Deployment status: IMPLEMENTED + DEPLOYMENT-READY, endpoint NOT yet
-> VERIFIED.** The relay is implemented and validated locally (compiled
-> binary + `tool/relay_smoke_test.dart` + the automated relay test suite).
-> The repo ships a production `Dockerfile` (§3.3) and a `/health` liveness
-> endpoint, and a Render Web Service has been created for this repository;
-> whether a public endpoint is actually live depends on that service
-> building this branch and passing its health check. **No two-phone
-> mixed-network test has been performed.** Do not claim internet
-> multiplayer is working until the deployed endpoint has been exercised
-> from two physical devices on different networks (see
+> **Deployment status: LIVE at `https://turtleking.onrender.com`** — the
+> Render Web Service is deployed, `GET /health` returns `200
+> {"status":"ok"}`, and the relay passes the smoke test against the
+> deployed WSS endpoint **except** host-loss, which is fixed by the
+> heartbeat liveness change (this branch) and needs a redeploy of this
+> branch to take effect on the public endpoint. All relay behavior is
+> validated locally (compiled binary + `tool/relay_smoke_test.dart` + the
+> automated relay test suite, including the heartbeat host-loss
+> regression). **No two-phone mixed-network test has been performed.** Do
+> not claim internet multiplayer is working until the deployed endpoint
+> has been exercised from two physical devices on different networks (see
 > `m18-mixed-network-qa.md`).
 
 ---
@@ -69,6 +70,14 @@ dart run tool/relay_smoke_test.dart wss://<real-relay-domain>
 The smoke test expects `SMOKE TEST PASSED`; it exercises host
 registration, code lookup (found + wrong-code), client join, opaque frame
 routing in both directions, and host-loss teardown.
+
+The relay detects a lost host by **heartbeat**, not by close frames: it
+pings every connection every 2s and drops any that stays silent for 10s
+(an app killed, a network drop, or a proxy that swallows WebSocket close
+frames). Dropping the host tears its session down and closes every
+member's socket — the smoke test's host-loss check allows for this
+window, so it passes over both a direct path and a proxied internet
+path.
 
 ## 3. Run it on a public server
 

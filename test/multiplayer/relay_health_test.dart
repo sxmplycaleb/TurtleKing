@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:turtle_king/multiplayer/relay_protocol.dart';
 import 'package:turtle_king/multiplayer/relay_server.dart';
 
-import 'relay_server_test.dart' show RelayTestPeer;
+import 'helpers.dart' show RelayTestPeer;
 
 Future<String> _getHealth(int port) async {
   final client = HttpClient();
