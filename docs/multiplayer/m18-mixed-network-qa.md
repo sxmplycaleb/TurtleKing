@@ -7,12 +7,14 @@ networking hidden behind developer options.
 
 > **Status: not yet executed.** This matrix is the acceptance plan for
 > physical two-phone verification against a deployed public relay. A
-> public relay is now live at `wss://turtleking.onrender.com` (health
-> check passes; see `m18-relay-deployment.md`), but no physical devices
-> are available in this environment, so every row below is still
+> public relay is live at `wss://turtleking.onrender.com` (health check
+> `{"status":"ok"}`; smoke test 7/7 against the deployed endpoint
+> including host-loss; see `m18-relay-deployment.md`), but no physical
+> devices are available in this environment, so every row below is still
 > **unfilled** — do not treat any row as passed. All verification to date
-> is in-process loopback (real TCP/WebSockets) plus
-> `tool/relay_smoke_test.dart` against a local relay.
+> is in-process loopback (real TCP/WebSockets), the automated relay test
+> suite, and `tool/relay_smoke_test.dart` against the local and deployed
+> relays.
 
 Prerequisites:
 

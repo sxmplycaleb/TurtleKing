@@ -1101,12 +1101,13 @@ the unchanged pass-and-play game. The full design record lives in
 [`docs/multiplayer/m18-architecture.md`](docs/multiplayer/m18-architecture.md);
 this section is only the summary.
 
-**Implemented through M18.6 (this is the v1.2.0 multiplayer release):**
-architecture decision, the protocol layer + `GameDriver`/`LocalDriver` seam,
-the LAN transport, remote gameplay over the wire, the QR-code / 6-digit-code
-join UX, and an internet relay transport that removes the same-Wi-Fi
-requirement. Milestone progression: M18.1 architecture/transport discovery,
-M18.2 protocol + `GameDriver` foundation, M18.3 LAN transport/discovery,
+**Implemented through M18.6 (the v1.2.0 multiplayer release), with the
+v1.2.1 patch on top (relay heartbeat/liveness host-loss detection and
+cold-start join resilience):** architecture decision, the protocol layer +
+`GameDriver`/`LocalDriver` seam, the LAN transport, remote gameplay over the
+wire, the QR-code / 6-digit-code join UX, and an internet relay transport
+that removes the same-Wi-Fi requirement. Milestone progression: M18.1
+architecture/transport discovery, M18.2 protocol + `GameDriver` foundation, M18.3 LAN transport/discovery,
 M18.4 remote gameplay/reconnection/host-loss, M18.5 QR/code join UX, M18.6
 relay/mixed-network support and production-readiness (see
 `m18-architecture.md` §7.6).

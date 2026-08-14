@@ -3,19 +3,34 @@
 All notable changes to Turtle King are recorded here. Milestone-by-milestone
 detail lives in the README; this file is the release-level summary.
 
-## [Unreleased] — Relay deployment tooling
+## [1.2.1] — Multiplayer relay reliability
+
+Post-v1.2.0 production fixes for the deployed internet relay.
+
+### Fixed
+
+- **Heartbeat host-loss detection** on the relay — every connection is
+  pinged (2s interval) and silent ones are dropped (10s timeout), so a dead
+  host is detected and its session torn down even when its WebSocket close
+  frame never reaches the relay (app killed, network drop, or a proxy/CDN
+  that swallows close frames). Fixes host-loss handling behind internet
+  proxies; clients answer automatically, and the ping/pong frames carry no
+  data. Verified 7/7 against the live public relay
+  (`wss://turtleking.onrender.com`), including host-loss.
+- **Slow/cold relay joins** — the relay join timeout is raised from 8s to
+  30s per attempt with **one controlled retry** for transient failures, so
+  a Render free-tier relay that is mid-wake (30–60s cold start after idle)
+  is given time to boot instead of failing after 8s. Permanent failures
+  (invalid code, unavailable/expired session, protocol rejection, host
+  rejection) are never retried. While waiting, the join lobby shows
+  `Connecting…` and then `Waking the multiplayer relay…` after a delay —
+  no networking/developer terminology.
 
 ### Added
 
 - **`GET /health` liveness endpoint** on the relay — returns a static
   `{"status":"ok"}` and never exposes join codes, sessions, players, or
   game data (regression-tested).
-- **Heartbeat host-loss detection** on the relay — every connection is
-  pinged and silent ones are dropped, so a dead host is detected and its
-  session torn down even when its WebSocket close frame never reaches the
-  relay (app killed, network drop, or a proxy that swallows close frames).
-  Fixes host-loss handling behind internet proxies/CDNs; ping/pong frames
-  carry no data.
 - **Render `PORT` support** in the relay process — honors the platform-
   standard `PORT` environment variable when `RELAY_PORT` is absent
   (precedence: `--port` > `RELAY_PORT` > `PORT` > 8787).
@@ -25,6 +40,13 @@ detail lives in the README; this file is the release-level summary.
 - **Render deployment guide** in
   `docs/multiplayer/m18-relay-deployment.md` §3.3 (service config, health
   check, `wss://<service-name>.onrender.com` endpoint, smoke test).
+
+### Notes
+
+- The live public relay is at `wss://turtleking.onrender.com` (health
+  `{"status":"ok"}`, smoke test 7/7 including host-loss). Physical
+  two-phone mixed-network testing has **not** been performed; see
+  `docs/multiplayer/m18-mixed-network-qa.md`.
 
 ## [1.2.0] — Multiplayer release (M18)
 

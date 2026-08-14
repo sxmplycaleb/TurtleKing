@@ -34,7 +34,7 @@ void main() {
       PackageInfo.setMockInitialValues(
         appName: 'Turtle King',
         packageName: 'com.turtleking.turtle_king',
-        version: '1.2.0',
+        version: '1.2.1',
         buildNumber: '1',
         buildSignature: '',
       );
@@ -44,7 +44,7 @@ void main() {
       await tester.pump();
 
       // The build number is deliberately not displayed.
-      expect(find.text('Version v1.2.0'), findsOneWidget);
+      expect(find.text('Version v1.2.1'), findsOneWidget);
       expect(find.textContaining('+1'), findsNothing);
     });
 
@@ -80,7 +80,7 @@ void main() {
       PackageInfo.setMockInitialValues(
         appName: 'Turtle King',
         packageName: 'com.turtleking.turtle_king',
-        version: '1.2.0',
+        version: '1.2.1',
         buildNumber: '1',
         buildSignature: '',
       );
@@ -97,7 +97,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('About'), findsOneWidget);
-      expect(find.text('Version v1.2.0'), findsOneWidget);
+      expect(find.text('Version v1.2.1'), findsOneWidget);
     });
   });
 
@@ -108,7 +108,7 @@ void main() {
       PackageInfo.setMockInitialValues(
         appName: 'Turtle King',
         packageName: 'com.turtleking.turtle_king',
-        version: '1.2.0',
+        version: '1.2.1',
         buildNumber: '1',
         buildSignature: '',
       );
@@ -117,9 +117,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Version v1.2.0'), findsOneWidget);
+      expect(find.text('Version v1.2.1'), findsOneWidget);
       // Still reads from package metadata — no hardcoded constant.
-      expect(find.textContaining('1.2.0'), findsWidgets);
+      expect(find.textContaining('1.2.1'), findsWidgets);
     });
   });
 }
