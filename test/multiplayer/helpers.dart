@@ -1,8 +1,11 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/game_state.dart';
+import 'package:turtle_king/multiplayer/relay_protocol.dart';
 import 'package:turtle_king/player.dart';
 import 'package:turtle_king/player_colors.dart';
 
@@ -50,5 +53,71 @@ void expectNoForbiddenKeys(Object? node, List<String> forbidden) {
     for (final item in node) {
       expectNoForbiddenKeys(item, forbidden);
     }
+  }
+}
+
+/// A raw WebSocket peer for driving the relay protocol directly (no session
+/// layer involved — relay-level tests target the relay itself).
+///
+/// Automatically answers the relay's heartbeat ([RelayPingFrame]) with a
+/// pong so a live peer is never mistaken for a dead one; pass
+/// `respondToPings: false` to simulate a peer that goes silent (which the
+/// relay's heartbeat then reaps). Ping/pong frames never surface through
+/// [exchange] or [received].
+class RelayTestPeer {
+  RelayTestPeer(this.ws);
+
+  final WebSocket ws;
+  final List<RelayFrame> received = [];
+  final List<Completer<RelayFrame>> _pending = [];
+  StreamSubscription<dynamic>? _sub;
+  bool closed = false;
+
+  static Future<RelayTestPeer> connect(
+    String url, {
+    bool respondToPings = true,
+  }) async {
+    final peer = RelayTestPeer(await WebSocket.connect(url));
+    peer._sub = peer.ws.listen(
+      (data) {
+        if (data is! String) return;
+        final frame = decodeRelayFrame(data);
+        if (frame is RelayPingFrame) {
+          if (respondToPings) {
+            try {
+              peer.ws.add(const RelayPongFrame().encode());
+            } catch (_) {}
+          }
+          return;
+        }
+        if (peer._pending.isNotEmpty) {
+          peer._pending.removeAt(0).complete(frame);
+        } else {
+          peer.received.add(frame);
+        }
+      },
+      onError: (_) => peer.closed = true,
+      onDone: () => peer.closed = true,
+    );
+    return peer;
+  }
+
+  /// Sends [frame] and returns the next relay frame from the relay
+  /// (strict request/response for handshakes).
+  Future<RelayFrame> exchange(
+    RelayFrame frame, {
+    Duration timeout = const Duration(seconds: 4),
+  }) {
+    final completer = Completer<RelayFrame>();
+    _pending.add(completer);
+    ws.add(frame.encode());
+    return completer.future.timeout(timeout);
+  }
+
+  Future<void> close() async {
+    try {
+      await ws.close();
+    } catch (_) {}
+    await _sub?.cancel();
   }
 }

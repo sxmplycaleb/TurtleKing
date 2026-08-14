@@ -162,6 +162,40 @@ class RelayLeaveFrame extends RelayFrame {
 }
 
 // ---------------------------------------------------------------------------
+// Liveness (either direction)
+// ---------------------------------------------------------------------------
+
+/// Relay-side liveness probe. The relay sends this to every connection on a
+/// heartbeat interval; a live client answers with [RelayPongFrame].
+///
+/// This exists because a WebSocket close frame does not always reach the
+/// relay through internet proxies/CDNs (the frame can be swallowed, or the
+/// client's TCP connection can die without one), which would otherwise leave
+/// dead hosts' sessions — and their members' sockets — hanging forever.
+/// Carries no data (no session, member, join code, or game payload), so it
+/// leaks nothing.
+class RelayPingFrame extends RelayFrame {
+  const RelayPingFrame();
+
+  @override
+  String get type => 'PING';
+
+  @override
+  Map<String, dynamic> body() => const {};
+}
+
+/// The reply to [RelayPingFrame]. Empty body; purely a liveness signal.
+class RelayPongFrame extends RelayFrame {
+  const RelayPongFrame();
+
+  @override
+  String get type => 'PONG';
+
+  @override
+  Map<String, dynamic> body() => const {};
+}
+
+// ---------------------------------------------------------------------------
 // Relay → device
 // ---------------------------------------------------------------------------
 
@@ -374,6 +408,8 @@ RelayFrame decodeRelayFrame(String raw) {
       member: requireString(f['member'], 'relay member'),
     ),
     'LEAVE' => const RelayLeaveFrame(),
+    'PING' => const RelayPingFrame(),
+    'PONG' => const RelayPongFrame(),
     'REGISTERED' => RelayRegisteredFrame(
       sessionId: requireSessionId(),
       member: requireString(f['member'], 'relay member'),

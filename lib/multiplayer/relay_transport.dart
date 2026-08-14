@@ -78,6 +78,16 @@ class RelaySocket {
         } on MultiplayerProtocolException {
           return; // malformed relay frame: ignore
         }
+        if (frame is RelayPingFrame) {
+          // Relay liveness probe: answer immediately and keep the ping out
+          // of the app-facing flow (handshakes must not see it).
+          try {
+            ws.add(const RelayPongFrame().encode());
+          } catch (_) {
+            // The socket is closing; the relay's heartbeat will drop us.
+          }
+          return;
+        }
         if (_exchanges.isNotEmpty) {
           final completer = _exchanges.removeAt(0);
           completer.complete(frame);

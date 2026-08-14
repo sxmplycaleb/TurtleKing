@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:turtle_king/multiplayer/relay_protocol.dart';
 import 'package:turtle_king/multiplayer/relay_server.dart';
 
-import 'relay_server_test.dart' show RelayTestPeer;
+import 'helpers.dart' show RelayTestPeer;
 
 /// Regression suite for the relay's logging contract: the standalone relay
 /// emits **routing metadata only**. It must never log game-protocol payloads
