@@ -1166,9 +1166,9 @@ relay/mixed-network support and production-readiness (see
   tests (real TCP for LAN, real WebSockets for the relay) plus a standalone
   relay smoke test (`tool/relay_smoke_test.dart`). The public relay is
   deployed at `wss://turtleking.onrender.com` (health check passes; the
-  heartbeat host-loss fix on this branch needs a redeploy to be live
-  there). **Two physical phones have not yet been tested in this
-  environment** — that is the one outstanding item before
+  heartbeat host-loss fix is live there, verified 7/7 against the deployed
+  endpoint including host-loss). **Two physical phones have not yet been
+  tested in this environment** — that is the one outstanding item before
   `docs/multiplayer/m18-mixed-network-qa.md` can be marked all-Pass.
 - **Non-goals:** accounts, host migration, and any change to the pass-and-play
   flow.
