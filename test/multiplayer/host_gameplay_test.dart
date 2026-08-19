@@ -2,12 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/game_state.dart';
+import 'package:turtle_king/player.dart';
 import 'package:turtle_king/multiplayer/protocol.dart';
 import 'package:turtle_king/multiplayer/protocol_codec.dart';
 import 'package:turtle_king/multiplayer/public_state.dart';
+import 'package:turtle_king/multiplayer/remote_driver.dart';
+import 'package:turtle_king/multiplayer/remote_game_controller.dart';
 import 'package:turtle_king/multiplayer/session.dart';
 
 import 'helpers.dart';
@@ -191,6 +195,43 @@ void main() {
       },
     );
 
+    test('host lobby and game controller can co-listen on session events '
+        '(regression: single-subscription crash on game start)', () async {
+      // The real host flow co-listens: the host lobby keeps its roster
+      // subscription while HostRemoteController.start() subscribes when
+      // the host starts its own game. HostSession.events was
+      // single-subscription, so the second listen threw "Bad state: Stream
+      // has already been listened to" and the host's game never started
+      // (found on physical devices).
+      final host = HostSession(sessionId: 'g-7');
+      final server = await host.start(displayName: 'G', hostName: 'H', port: 0);
+      final leo = RawGameClient('g-7', 'Leo');
+      await leo.connect(server.port);
+      await leo.awaitMessage<JoinAcceptMessage>();
+
+      final lobbyTypes = <HostSessionEventType>[];
+      final lobbySub = host.events.listen((e) => lobbyTypes.add(e.type));
+      final controllerTypes = <HostSessionEventType>[];
+      final controllerSub = host.events.listen(
+        (e) => controllerTypes.add(e.type),
+      );
+
+      await host.startGame(rosterGame(host.roster));
+
+      // Both consumers received the same session events — no
+      // "already been listened to" error.
+      expect(lobbyTypes.contains(HostSessionEventType.gameStarted), isTrue);
+      expect(
+        controllerTypes.contains(HostSessionEventType.gameStarted),
+        isTrue,
+      );
+
+      await lobbySub.cancel();
+      await controllerSub.cancel();
+      await host.stop();
+      await leo.close();
+    });
+
     test('a valid reveal action is accepted, broadcasts state, and the '
         'viewer receives their card', () async {
       final host = HostSession(sessionId: 'g-2');
@@ -304,6 +345,56 @@ void main() {
         );
         expect(stale.reason, contains('stale'));
 
+        await host.stop();
+        await mia.close();
+      },
+    );
+
+    test(
+      'HostRemoteController emits a rebuild event and refreshes its view '
+      'after an accepted action (regression: frozen host screen on device)',
+      () async {
+        // Physical defect: the host's own first action (Reveal) appeared to
+        // do nothing — the authoritative game advanced and the broadcast
+        // went out, but HostRemoteController._act emitted no RemoteGameEvent,
+        // and RemoteGameScreen only rebuilds on those events. The host's own
+        // gameplay screen therefore never re-rendered.
+        final host = HostSession(sessionId: 'g-8');
+        final server = await host.start(
+          displayName: 'G',
+          hostName: 'H',
+          port: 0,
+        );
+        final mia = RawGameClient('g-8', 'Mia');
+        await mia.connect(server.port);
+        await mia.awaitMessage<JoinAcceptMessage>();
+
+        final game = rosterGame(host.roster);
+        final hostPlayer = Player(
+          id: host.roster.first.id,
+          name: host.roster.first.name,
+          color: Color(host.roster.first.color),
+        );
+        final controller = HostRemoteController(
+          hostSession: host,
+          game: game,
+          hostPlayer: hostPlayer,
+        );
+        final emitted = <RemoteGameEvent>[];
+        final sub = controller.events.listen(emitted.add);
+        await controller.start();
+        await mia.awaitMessage<GameStartMessage>();
+
+        // The host (Player 0, the first viewer) acts. The controller must
+        // notify the UI (emitted grows) and its view must reflect the action.
+        final before = emitted.length;
+        controller.revealCurrentPlayer();
+        await pumpUntil(() => emitted.length > before, timeout: kSlow);
+        expect(emitted.last.status, RemoteGameStatus.playing);
+        expect(controller.view.currentPlayerRevealed, isTrue);
+        expect(controller.view.myCard, isNotNull);
+
+        await sub.cancel();
         await host.stop();
         await mia.close();
       },

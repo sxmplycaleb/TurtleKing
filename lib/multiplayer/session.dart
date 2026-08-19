@@ -203,8 +203,13 @@ class HostSession {
   /// manual host-IP path never needs it).
   final SessionDiscovery? discovery;
   final MessageCodec _codec = const MessageCodec();
+  // Broadcast: two consumers co-listen — the host lobby (roster/status
+  // updates) and the HostRemoteController while the host plays its own
+  // game. A single-subscription controller throws "Stream has already been
+  // listened to" on the second listen (real-device host-game-start crash);
+  // the client session was already broadcast for the same reason.
   final StreamController<HostSessionEvent> _events =
-      StreamController<HostSessionEvent>();
+      StreamController<HostSessionEvent>.broadcast();
   final Map<String, _HostClient> _clients = {};
 
   TransportServer? _server;
@@ -944,13 +949,22 @@ class ClientSession {
   bool get isConnected =>
       !_closed && _connection != null && _connection!.isOpen;
 
-  /// Connects to the host and requests a seat over a direct LAN connection.
+  /// Connects to the host and requests a seat over a direct connection.
   /// Completes with the outcome (accepted, rejected, or a typed failure).
   /// Never throws.
+  ///
+  /// [hostAddress] is transport-addressed: a LAN IP for the default TCP
+  /// transport, a BLE peer identifier for the Bluetooth transport (port 0),
+  /// etc. [socketErrorMessage] customizes the connection-failure message for
+  /// the transport in use (e.g. Bluetooth wording instead of the default
+  /// same-Wi-Fi wording).
   Future<JoinResult> join({
     required String hostAddress,
     int port = kDefaultGamePort,
     Duration connectTimeout = const Duration(seconds: 5),
+    String socketErrorMessage =
+        'Could not reach the host. Check that it is on the same Wi-Fi '
+        'network and the address is correct.',
   }) {
     if (_joinCompleter != null) {
       throw StateError('join already in progress');
@@ -963,9 +977,7 @@ class ClientSession {
         connectTimeout: connectTimeout,
       ),
       connectTimeout: connectTimeout,
-      socketErrorMessage:
-          'Could not reach the host. Check that it is on the same Wi-Fi '
-          'network and the address is correct.',
+      socketErrorMessage: socketErrorMessage,
     ).then((attempt) => attempt.result);
   }
 
@@ -1119,13 +1131,12 @@ class ClientSession {
         JoinResult.failure(JoinOutcome.connectionFailed, socketErrorMessage),
       );
     } on Exception catch (_) {
-      // Covers the connect/exchange timeouts thrown while the relay wakes.
+      // Covers the connect/exchange timeouts thrown while the relay wakes
+      // or a transport (e.g. Bluetooth) fails its bounded connect. Use the
+      // caller's transport-specific wording so the message stays friendly.
       retryable = true;
       _completeJoin(
-        const JoinResult.failure(
-          JoinOutcome.connectionFailed,
-          'Could not connect to the host.',
-        ),
+        JoinResult.failure(JoinOutcome.connectionFailed, socketErrorMessage),
       );
     }
     return (result: await completer.future, retryable: retryable);

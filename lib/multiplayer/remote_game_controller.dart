@@ -108,12 +108,22 @@ class HostRemoteController implements RemoteGameController {
   }
 
   void _onHostEvent(HostSessionEvent event) {
-    // Surface only what the host UI needs; state broadcasts arrive via the
-    // authoritative game object we already own.
     switch (event.type) {
       case HostSessionEventType.sessionEnded:
         _emit(RemoteGameStatus.sessionEnded, message: event.reason);
       case HostSessionEventType.actionAccepted:
+        // An action was applied to the authoritative game — the host's own
+        // action (broadcastHostAction) OR a client's (routed through the
+        // session). The game object we already own is the source of truth;
+        // refresh the host's view and notify the UI so it re-renders. The
+        // screen rebuilds only on RemoteGameEvent — without this, the
+        // host's first action would appear to do nothing.
+        _view = RemoteGameView(
+          publicState: PublicStateView.fromGame(game),
+          selfPlayerId: hostPlayer.id,
+          myCard: PrivateCard.fromCard(game.visibleCardOf(hostPlayer)),
+        );
+        _emit(RemoteGameStatus.playing);
       case HostSessionEventType.actionRejected:
       case HostSessionEventType.gameStarted:
       case HostSessionEventType.started:
@@ -149,11 +159,11 @@ class HostRemoteController implements RemoteGameController {
       _emit(RemoteGameStatus.playing, rejection: error.message);
       return;
     }
-    _view = RemoteGameView(
-      publicState: PublicStateView.fromGame(game),
-      selfPlayerId: hostPlayer.id,
-      myCard: PrivateCard.fromCard(game.visibleCardOf(hostPlayer)),
-    );
+    // Do NOT rebuild _view here — broadcastHostAction() fires
+    // actionAccepted on the session, which triggers _onHostEvent and
+    // rebuilds _view + emits RemoteGameStatus.playing in one pass.
+    // Rebuilding here would create a redundant duplicate rebuild on
+    // every host action.
     hostSession.broadcastHostAction();
   }
 

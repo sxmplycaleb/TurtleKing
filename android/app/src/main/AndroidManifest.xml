@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Phase 18 LAN multiplayer: TCP sockets + UDP discovery beacons.
          INTERNET is required for any socket use; ACCESS_WIFI_STATE and
          CHANGE_WIFI_MULTICAST_STATE support reliable multicast beacon
@@ -10,6 +11,21 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <!-- M18.5: camera access for the "Scan QR" join path (mobile_scanner). -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- M19: Bluetooth Low Energy local multiplayer. The plugin requests
+         these at runtime (authorize()); BLUETOOTH_SCAN + BLUETOOTH_CONNECT
+         for the joiner (central), BLUETOOTH_ADVERTISE + BLUETOOTH_CONNECT
+         for the host (peripheral), and legacy BLUETOOTH/BLUETOOTH_ADMIN +
+         location below Android 12. The uses-feature keeps the app
+         installable on devices without BLE (relay/LAN still work). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
     <application
         android:label="Turtle King"
         android:name="${applicationName}"

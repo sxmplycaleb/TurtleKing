@@ -378,7 +378,8 @@ class PublicStateView {
     'eliminatedPlayerIds': eliminatedPlayerIds,
     'eliminations': [for (final e in eliminations) e.toJson()],
     'roundResults': [for (final r in roundResults) r.toJson()],
-    'events': [for (final e in events) e.toJson()],
+    // events are intentionally omitted from the wire payload: they grow
+    // with every action and the remote client never renders them.
     'finalResult': finalResult?.toJson(),
   };
 
@@ -476,10 +477,12 @@ class PublicStateView {
         ))
           PublicRoundResult.fromJson(r),
       ],
-      events: [
-        for (final e in requireList(map['events'], 'public state.events'))
-          PublicGameEvent.fromJson(e),
-      ],
+      events: map['events'] != null
+          ? [
+              for (final e in requireList(map['events'], 'public state.events'))
+                PublicGameEvent.fromJson(e),
+            ]
+          : const [],
       finalResult: finalResult == null
           ? null
           : PublicGameResult.fromJson(finalResult),

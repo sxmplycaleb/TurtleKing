@@ -31,6 +31,12 @@ dependencies:
   # Flutter build populates from pubspec.yaml's `version:` field, so the
   # displayed version stays in sync automatically.
   package_info_plus: ^10.2.1
+  # M19: Bluetooth Low Energy transport for local/offline multiplayer
+  # (host-as-peripheral / clients-as-centrals). MIT license (no commercial
+  # trap — unlike flutter_blue_plus), supports both central and peripheral
+  # roles on Android + iOS, minSdk 24 matches the project. The session layer
+  # stays transport-agnostic; this package only backs the BLE adapter seam.
+  bluetooth_low_energy: ^6.2.1
 
 dev_dependencies:
   flutter_test:

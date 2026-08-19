@@ -171,7 +171,10 @@ void main() {
       expect(restored.lifetimeDrinks, original.lifetimeDrinks);
       expect(restored.roundDrinks, original.roundDrinks);
       expect(restored.calledYamada, original.calledYamada);
-      expect(restored.events.length, original.events.length);
+      // Events are intentionally omitted from the wire payload (they grow
+      // unboundedly and the remote client never renders them).
+      expect(restored.events, isEmpty);
+      expect(original.events, isNotEmpty);
       expect(restored.roundResults.length, original.roundResults.length);
       // Deterministic serialization: byte-identical after a round trip.
       expect(jsonEncode(restored.toJson()), jsonEncode(original.toJson()));

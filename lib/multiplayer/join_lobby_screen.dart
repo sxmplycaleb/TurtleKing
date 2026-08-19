@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'ble/ble_adapter.dart';
+import 'ble/ble_discovery.dart';
+import 'ble/ble_transport.dart';
+import 'ble/plugin_ble_adapter.dart';
 import 'discovery.dart';
 import 'join_code.dart';
 import 'join_payload.dart';
@@ -31,11 +35,18 @@ class JoinLobbyScreen extends StatefulWidget {
     this.relayUrl = kDefaultRelayUrl,
     this.codeResolver,
     this.scanPayloadProvider,
+    this.bleAdapter,
   });
 
   /// The internet relay endpoint used for QR/code joins. Defaults to the
   /// build-time [kDefaultRelayUrl]; tests inject a local in-process relay.
   final String relayUrl;
+
+  /// Test seam: the Bluetooth adapter used for the "Nearby (Bluetooth)"
+  /// join path. Null in production (a plugin adapter is created when the
+  /// user first searches); tests inject an in-memory fake shared with a
+  /// fake host.
+  final BleAdapter? bleAdapter;
 
   /// Resolves a typed 6-digit code to a typed result ([JoinCodeResolution]:
   /// found / notFound / unavailable). Defaults to the beacon-based
@@ -67,6 +78,15 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
   StreamSubscription<DiscoveredSession>? _discoverySub;
   List<DiscoveredSession> _discovered = [];
   bool _devDiscoveryStarted = false;
+
+  /// Bluetooth discovery: a first-class local join path (no internet, no
+  /// same-Wi-Fi). Started when the user taps "Search for nearby games".
+  BleAdapter? _bleAdapter;
+  BleSessionDiscovery? _bleDiscovery;
+  StreamSubscription<DiscoveredSession>? _bleSub;
+  List<DiscoveredSession> _bleDiscovered = [];
+  bool _bleSearching = false;
+  String? _bleError;
 
   ClientSession? _client;
   StreamSubscription<ClientSessionEvent>? _clientSub;
@@ -102,6 +122,9 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
     _wakingTimer?.cancel();
     _discoverySub?.cancel();
     _discovery?.stop();
+    _bleSub?.cancel();
+    _bleDiscovery?.stop();
+    _bleAdapter?.dispose();
     _clientSub?.cancel();
     _gameplaySub?.cancel();
     _client?.dispose();
@@ -134,6 +157,80 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
       },
       onError: (_) {},
       onDone: () {},
+    );
+  }
+
+  /// Starts (or re-runs) Bluetooth discovery: requests permission, scans
+  /// for nearby Turtle King hosts, and lists them for the user to pick.
+  /// Failures (permission denied, adapter off, unsupported) surface as a
+  /// friendly banner — never a crash or a silent nothing.
+  Future<void> _searchBluetooth() async {
+    if (_joining) return;
+    setState(() {
+      _bleSearching = true;
+      _bleError = null;
+    });
+    try {
+      final adapter = _bleAdapter ??= widget.bleAdapter ?? PluginBleAdapter();
+      if (!await adapter.ensureAuthorized()) {
+        if (!mounted) return;
+        setState(() {
+          _bleSearching = false;
+          _bleError =
+              'Bluetooth permission is needed to find nearby games. Allow '
+              'it in Settings and try again.';
+        });
+        return;
+      }
+      if (adapter.status == BleAdapterStatus.poweredOff) {
+        if (!mounted) return;
+        setState(() {
+          _bleSearching = false;
+          _bleError = 'Bluetooth is off — turn it on to find nearby games.';
+        });
+        return;
+      }
+      if (adapter.status == BleAdapterStatus.unsupported) {
+        if (!mounted) return;
+        setState(() {
+          _bleSearching = false;
+          _bleError = 'Bluetooth is not supported on this device.';
+        });
+        return;
+      }
+      final discovery = _bleDiscovery ??= BleSessionDiscovery(adapter: adapter);
+      _bleSub ??= discovery.discovered.listen((session) {
+        if (!mounted) return;
+        setState(() {
+          final known = _bleDiscovered.any(
+            (d) => d.sessionId == session.sessionId,
+          );
+          if (!known) _bleDiscovered = [..._bleDiscovered, session];
+        });
+      });
+      await adapter.startScan();
+      if (!mounted) return;
+      setState(() => _bleSearching = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _bleSearching = false;
+        _bleError =
+            'Could not search for nearby games. Check that '
+            'Bluetooth is on and try again.';
+      });
+    }
+  }
+
+  /// Joins a discovered Bluetooth session: connects over the BLE transport
+  /// (the shared adapter keeps the discovered peer resolvable) and runs the
+  /// normal join handshake.
+  Future<void> _joinBluetooth(DiscoveredSession session) {
+    return _joinTo(
+      hostAddress: session.hostAddress,
+      port: session.port,
+      sessionId: session.sessionId,
+      bluetooth: true,
     );
   }
 
@@ -340,8 +437,8 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
   }
 
   /// Core join: connects through [ClientSession] and enters the lobby,
-  /// either through the internet relay ([relayUrl]) or a direct LAN address
-  /// (developer options).
+  /// through the internet relay ([relayUrl]), a direct LAN address
+  /// (developer options), or local Bluetooth ([bluetooth]).
   ///
   /// Every failure — transport, timeout, protocol, or an unexpected error —
   /// is contained and surfaced as a concise user-facing message. Raw socket
@@ -351,6 +448,7 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
     String? hostAddress,
     int? port,
     required String sessionId,
+    bool bluetooth = false,
   }) async {
     final name = _nameController.text.trim();
     setState(() {
@@ -364,21 +462,41 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
     final JoinResult result;
     try {
       await _client?.dispose();
-      client = ClientSession(sessionId: sessionId, playerName: name);
+      if (bluetooth) {
+        final adapter = _bleAdapter;
+        if (adapter == null) {
+          _finishJoining(
+            error: 'Connection failed — search for nearby games first.',
+          );
+          return;
+        }
+        client = ClientSession(
+          sessionId: sessionId,
+          playerName: name,
+          transport: BleMultiplayerTransport(adapter: adapter),
+        );
+        result = await client.join(
+          hostAddress: hostAddress ?? '',
+          port: 0,
+          socketErrorMessage:
+              'Could not reach the host. Make sure Bluetooth is on and '
+              'the phones are nearby.',
+        );
+      } else {
+        client = ClientSession(sessionId: sessionId, playerName: name);
+        result = relayUrl != null
+            ? await client.joinRelay(relayUrl: relayUrl)
+            : await client.join(
+                hostAddress: hostAddress ?? '',
+                port: port ?? kDefaultGamePort,
+              );
+      }
       _client = client;
-      result = relayUrl != null
-          ? await client.joinRelay(relayUrl: relayUrl)
-          : await client.join(
-              hostAddress: hostAddress ?? '',
-              port: port ?? kDefaultGamePort,
-            );
     } catch (_) {
       // Defensive: any unexpected error (e.g. a stale session state) must
       // surface as a message, never as a silent hang or an unhandled crash.
       if (!mounted) return;
-      _finishJoining(
-        error: 'Connection failed — check your internet connection.',
-      );
+      _finishJoining(error: 'Connection failed — check your connection.');
       return;
     }
     if (!mounted) return;
@@ -393,6 +511,10 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
         sessionId: client.sessionId,
         playerName: name,
         relayUrl: relayUrl,
+        rejoinTransport: bluetooth
+            ? BleMultiplayerTransport(adapter: _bleAdapter!)
+            : null,
+        rejoinHostAddress: bluetooth ? hostAddress : null,
       );
       _remoteDriver = driver;
       driver.attach(client);
@@ -406,7 +528,11 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
       setState(() => _inLobby = true);
     } else {
       setState(
-        () => _error = _joinFailureMessage(result, relay: relayUrl != null),
+        () => _error = _joinFailureMessage(
+          result,
+          relay: relayUrl != null,
+          bluetooth: bluetooth,
+        ),
       );
       await client.dispose();
       if (mounted) _client = null;
@@ -421,17 +547,29 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
   /// [relay] distinguishes internet joins (the normal flow — failures point
   /// at the internet connection) from the LAN developer fallback (where
   /// same-network wording is accurate).
-  String _joinFailureMessage(JoinResult result, {bool relay = false}) {
+  String _joinFailureMessage(
+    JoinResult result, {
+    bool relay = false,
+    bool bluetooth = false,
+  }) {
     switch (result.outcome) {
       case JoinOutcome.rejected:
         return result.reason ?? 'The host rejected the join.';
       case JoinOutcome.connectionFailed:
+        if (bluetooth) {
+          return 'Connection failed — make sure Bluetooth is on and the '
+              'phones are close together.';
+        }
         return relay
             ? 'Connection failed — check your internet connection and try '
                   'again.'
             : 'Connection failed — make sure both phones are on the same '
                   'Wi-Fi network.';
       case JoinOutcome.timedOut:
+        if (bluetooth) {
+          return 'Connection timed out — the host may have moved out of '
+              'range. Try again.';
+        }
         return relay
             ? 'Connection timed out — the relay may be busy or your '
                   'connection is slow. Try again.'
@@ -592,9 +730,87 @@ class _JoinLobbyScreenState extends State<JoinLobbyScreen> {
             ],
           ],
           const SizedBox(height: 24),
+          // M19: local Bluetooth join — a first-class local path (no
+          // internet, no same-Wi-Fi). The phones just need to be nearby.
+          Text('Nearby (Bluetooth)', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (_bleError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _bleError!,
+                      style: TextStyle(
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_bleSearching)
+            const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Expanded(child: Text('Looking for nearby games…')),
+              ],
+            )
+          else if (_bleDiscovered.isEmpty)
+            Text(
+              'No nearby games found yet.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            for (final session in _bleDiscovered) ...[
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const Icon(Icons.bluetooth_searching),
+                  title: Text(session.displayName),
+                  subtitle: const Text('Nearby game'),
+                  trailing: FilledButton(
+                    onPressed: _joining ? null : () => _joinBluetooth(session),
+                    child: const Text('Join'),
+                  ),
+                ),
+              ),
+            ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _joining ? null : _searchBluetooth,
+            icon: const Icon(Icons.bluetooth_searching),
+            label: Text(
+              _bleSearching ? 'Searching…' : 'Search for nearby games',
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 24),
           // LAN discovery and manual host-IP entry are development/testing
-          // fallbacks only — normal players join by QR or 6-digit code over
-          // the internet relay, with no same-Wi-Fi requirement.
+          // fallbacks only — normal players join by QR, 6-digit code, or
+          // nearby Bluetooth, with no same-Wi-Fi requirement.
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
             title: const Text('For Nerds'),

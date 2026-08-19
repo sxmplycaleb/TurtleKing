@@ -163,6 +163,9 @@ void main() {
         find.text('Advanced options for curious turtles.'),
         findsOneWidget,
       );
+      // The Bluetooth section above "For Nerds" made the lobby taller;
+      // scroll the debug tile into view before tapping it.
+      await tester.ensureVisible(find.text('Manual setup (host IP)'));
       await tester.tap(find.text('Manual setup (host IP)'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextField, 'Host IPv4'), findsOneWidget);

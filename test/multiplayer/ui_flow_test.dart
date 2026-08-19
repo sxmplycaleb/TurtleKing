@@ -59,6 +59,10 @@ void main() {
     Future<void> openManualIp(WidgetTester tester) async {
       await tester.tap(find.text('For Nerds'));
       await tester.pumpAndSettle();
+
+      // The join lobby is a long scrollable screen (QR, code, Bluetooth
+      // sections); scroll the debug tile into view before tapping it.
+      await tester.ensureVisible(find.text('Manual setup (host IP)'));
       await tester.tap(find.text('Manual setup (host IP)'));
       await tester.pumpAndSettle();
       final joinByIp = find.widgetWithText(FilledButton, 'Join by IP');

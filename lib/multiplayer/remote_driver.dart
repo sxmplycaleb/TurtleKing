@@ -61,6 +61,8 @@ class RemoteDriver implements RemoteGameController {
     this.relayUrl,
     this.reconnectAttempts = 5,
     this.reconnectBaseDelay = const Duration(milliseconds: 400),
+    this.rejoinTransport,
+    this.rejoinHostAddress,
   });
 
   final String sessionId;
@@ -71,6 +73,16 @@ class RemoteDriver implements RemoteGameController {
   /// address, so a client whose internet blips can rejoin without any LAN
   /// dependency.
   final String? relayUrl;
+
+  /// The transport a rejoin must use, for transports whose connection is not
+  /// a plain `hostAddress:port` LAN join (e.g. Bluetooth, where the address
+  /// is a BLE peer identifier and the port is 0). Null means the default TCP
+  /// LAN transport, whose rejoin target is `hostAddress` + a non-zero port.
+  final MultiplayerTransport? rejoinTransport;
+
+  /// The address to reconnect to when [rejoinTransport] is set (for BLE,
+  /// the peer identifier). Falls back to the last `join()` address.
+  final String? rejoinHostAddress;
 
   /// Maximum reconnect attempts before giving up.
   final int reconnectAttempts;
@@ -250,6 +262,11 @@ class RemoteDriver implements RemoteGameController {
             myCard: _view?.myCard,
           );
         }
+        // The view changed — notify the UI so it re-renders (the screen
+        // rebuilds only on RemoteGameEvent; without this, the first action
+        // would appear to do nothing even though the host applied it and
+        // the new state arrived).
+        _setStatus(RemoteGameStatus.playing);
       case ClientGameplayEventType.privateUpdated:
         // Only ever applied for this player (session layer filters it).
         if (event.privateState != null) {
@@ -264,6 +281,8 @@ class RemoteDriver implements RemoteGameController {
             myCard: event.privateState!.card,
           );
         }
+        // The client's own card changed — re-render (see stateUpdated).
+        _setStatus(RemoteGameStatus.playing);
       case ClientGameplayEventType.resynced:
         if (event.publicState != null) {
           _view = RemoteGameView(
@@ -328,6 +347,7 @@ class RemoteDriver implements RemoteGameController {
       final session = ClientSession(
         sessionId: sessionId,
         playerName: playerName,
+        transport: rejoinTransport,
       );
       _session = session;
       _attachSession(session);
@@ -359,16 +379,22 @@ class RemoteDriver implements RemoteGameController {
     _setStatus(RemoteGameStatus.connectionFailed);
   }
 
-  /// Whether a rejoin target exists (relay URL for internet sessions, or a
-  /// remembered host address for LAN sessions).
+  /// The address to reconnect to for non-relay sessions (BLE peer id when a
+  /// rejoin transport is set, otherwise the last LAN join address).
+  String? get _rejoinAddress => rejoinHostAddress ?? _hostAddress;
+
+  /// Whether a rejoin target exists: a relay URL for internet sessions, a
+  /// remembered host address + port for LAN sessions, or a rejoin transport
+  /// + address (Bluetooth, where the port is 0 and never used).
   bool get _hasRejoinTarget {
     if (relayUrl != null) return true;
+    if (rejoinTransport != null) return _rejoinAddress != null;
     return _hostAddress != null && _port != 0;
   }
 
   /// Rejoins the session through the transport it was originally joined
-  /// with: the internet relay when [relayUrl] is set, otherwise the LAN host
-  /// address. Never throws.
+  /// with: the internet relay when [relayUrl] is set, the rejoin transport
+  /// (Bluetooth) when provided, otherwise the LAN host address. Never throws.
   Future<JoinResult> _tryRejoin(ClientSession session) {
     final relay = relayUrl;
     if (relay != null) {
@@ -377,9 +403,8 @@ class RemoteDriver implements RemoteGameController {
         connectTimeout: reconnectBaseDelay * 2,
       );
     }
-    final address = _hostAddress;
-    final port = _port;
-    if (address == null || port == 0) {
+    final address = _rejoinAddress;
+    if (address == null) {
       return Future.value(
         const JoinResult.failure(
           JoinOutcome.connectionFailed,
@@ -389,7 +414,7 @@ class RemoteDriver implements RemoteGameController {
     }
     return session.join(
       hostAddress: address,
-      port: port,
+      port: _port,
       connectTimeout: reconnectBaseDelay * 2,
     );
   }
@@ -402,7 +427,11 @@ class RemoteDriver implements RemoteGameController {
     _sessionEndedPermanently = false;
     if (!_hasRejoinTarget) return false;
     _setStatus(RemoteGameStatus.reconnecting);
-    final session = ClientSession(sessionId: sessionId, playerName: playerName);
+    final session = ClientSession(
+      sessionId: sessionId,
+      playerName: playerName,
+      transport: rejoinTransport,
+    );
     _session = session;
     _attachSession(session);
     final result = await _tryRejoin(session);

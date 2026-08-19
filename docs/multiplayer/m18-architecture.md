@@ -98,6 +98,13 @@ GameState  (authoritative rules engine — UNCHANGED, host-only in multiplayer)
 
 ## 5. Transport comparison
 
+> **M19 update:** this section records the **M18** decision. M19 later
+> adopted Bluetooth Low Energy as a *third* local transport using
+> `bluetooth_low_energy` (which supports both central and peripheral roles,
+> unlike the central-only `flutter_blue_plus` evaluated here) — see
+> `docs/multiplayer/m19-bluetooth-architecture.md`. The M18 conclusion —
+> BLE is not the *primary internet* transport — is unchanged.
+
 ### 5.1 Bluetooth (BLE) — rejected as primary
 
 | Criterion | Finding |

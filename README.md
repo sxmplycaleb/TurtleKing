@@ -1103,30 +1103,40 @@ this section is only the summary.
 
 **Implemented through M18.6 (the v1.2.0 multiplayer release), with the
 v1.2.1 patch on top (relay heartbeat/liveness host-loss detection and
-cold-start join resilience):** architecture decision, the protocol layer +
-`GameDriver`/`LocalDriver` seam, the LAN transport, remote gameplay over the
-wire, the QR-code / 6-digit-code join UX, and an internet relay transport
-that removes the same-Wi-Fi requirement. Milestone progression: M18.1
-architecture/transport discovery, M18.2 protocol + `GameDriver` foundation, M18.3 LAN transport/discovery,
-M18.4 remote gameplay/reconnection/host-loss, M18.5 QR/code join UX, M18.6
+cold-start join resilience) and the M19 Bluetooth transport:** architecture
+decision, the protocol layer + `GameDriver`/`LocalDriver` seam, the LAN
+transport, remote gameplay over the wire, the QR-code / 6-digit-code join
+UX, an internet relay transport that removes the same-Wi-Fi requirement,
+and a local Bluetooth Low Energy transport that needs no internet and no
+Wi-Fi. Milestone progression: M18.1 architecture/transport discovery, M18.2
+protocol + `GameDriver` foundation, M18.3 LAN transport/discovery, M18.4
+remote gameplay/reconnection/host-loss, M18.5 QR/code join UX, M18.6
 relay/mixed-network support and production-readiness (see
-`m18-architecture.md` §7.6).
+`m18-architecture.md` §7.6), M19 Bluetooth transport (see
+`docs/multiplayer/m19-bluetooth-architecture.md`).
 
-- **Transport:** two interchangeable transports behind one interface. LAN
-  (`dart:io` TCP + UDP multicast beacons on `239.255.77.77:5354`) and the
+- **Transport:** three interchangeable transports behind one interface. LAN
+  (`dart:io` TCP + UDP multicast beacons on `239.255.77.77:5354`), the
   **internet relay** (`lib/multiplayer/relay_server.dart` + `relay_transport.dart`):
   every device opens one outbound WebSocket to a reachable relay endpoint, so
   Wi-Fi ↔ Wi-Fi, Wi-Fi ↔ mobile data, and mobile ↔ mobile all work — no port
-  forwarding, no router configuration, no LAN IP in the QR. Protocol messages
-  are newline-delimited canonical JSON (the M18.2 `MessageCodec`); no runtime
-  networking dependency was added (`dart:io` WebSockets are SDK-only).
+  forwarding, no router configuration, no LAN IP in the QR; and **Bluetooth
+  Low Energy** (`lib/multiplayer/ble/`, backed by `bluetooth_low_energy`):
+  the host is a GATT peripheral, clients are centrals, and nearby phones
+  play with no internet and no Wi-Fi. Protocol messages are
+  newline-delimited canonical JSON (the M18.2 `MessageCodec`); over BLE the
+  same messages ride in a chunked MTU framing layer (`ble_framing.dart`).
 - **Discovery:** LAN sessions use built-in UDP multicast beacons
   (`lib/multiplayer/discovery.dart`); internet sessions resolve the 6-digit
-  code against the relay. The originally-planned `multicast_dns` package was
-  found to be **query-only** and was not added — see `m18-architecture.md`
-  §7.2. Bluetooth (`flutter_blue_plus`) stays rejected: BLE-central-only, no
-  Bluetooth Classic, and a source-available license requiring a commercial
-  license for for-profit use.
+  code against the relay; Bluetooth hosts advertise the service UUID + a
+  game name and clients scan for it (no structured payload — no session id,
+  join code, or game data is ever advertised). The originally-planned
+  `multicast_dns` package was found to be **query-only** and was not added —
+  see `m18-architecture.md` §7.2. M18 rejected `flutter_blue_plus`
+  (BLE-central-only and a source-available license requiring a commercial
+  license for for-profit use); M19 instead uses `bluetooth_low_energy`
+  (MIT), which supports **both** the peripheral (host) and central (client)
+  roles — see `docs/multiplayer/m19-bluetooth-architecture.md`.
 - **Topology:** host-authoritative star. The host owns the existing
   `GameState` (the single rules engine, unchanged); clients send action
   requests and render only the sanitized public state the host broadcasts.
@@ -1135,11 +1145,13 @@ relay/mixed-network support and production-readiness (see
   network. Cards, hidden hands, the remaining deck, and the save document
   never leave the host. `PublicStateView`/`PrivateStateView` are the only
   state that may be serialized — over LAN and over the relay alike.
-- **UI:** `Multiplayer` on the home screen → Host Game shows the 6-digit
-  join code + QR code (with a copy action) and the roster lobby; Join Game
-  makes **Scan QR** and **Enter code** the primary paths (relay-first), with
-  discovered sessions and a collapsed manual host-IP **For Nerds** section
-  ("Advanced options for curious turtles.") as debug fallbacks.
+- **UI:** `Multiplayer` on the home screen → Host Game offers **Internet**
+  (6-digit join code + QR code, with a copy action) or **Bluetooth** (nearby
+  hosting, no internet) and shows the roster lobby; Join Game makes **Scan
+  QR** and **Enter code** the primary paths (relay-first), plus a **Nearby
+  (Bluetooth)** search that lists discoverable hosts, with a collapsed
+  manual host-IP **For Nerds** section ("Advanced options for curious
+  turtles.") as a debug fallback.
 - **Remote gameplay (M18.4):** the host routes client actions through the
   authoritative `GameState` and broadcasts sanitized public state; clients
   render only `PublicStateView` plus their own private card and never
@@ -1172,6 +1184,46 @@ relay/mixed-network support and production-readiness (see
   `docs/multiplayer/m18-mixed-network-qa.md` can be marked all-Pass.
 - **Non-goals:** accounts, host migration, and any change to the pass-and-play
   flow.
+
+## Phase 19 — Bluetooth Multiplayer
+
+Phase 19 adds **Bluetooth Low Energy** as a third multiplayer transport:
+local/offline play between nearby phones with no internet and no Wi-Fi. The
+full design record lives in
+[`docs/multiplayer/m19-bluetooth-architecture.md`](docs/multiplayer/m19-bluetooth-architecture.md);
+this section is the summary.
+
+- **Transport:** the host publishes a Turtle King GATT service (write
+  characteristic for clients → host, notify characteristic for host →
+  clients) and advertises the service UUID only (no name — Android's
+  plugin renames the device to advertise a name, which hangs repeat hosts;
+  joiners match on the UUID and show the fallback name); clients
+  scan for it, connect as GATT centrals, and play through the **unchanged**
+  session/protocol layer (`HostSession`/`ClientSession`, the M18.2
+  `MessageCodec`, host-authoritative `GameState`, `PublicStateView` /
+  `PrivateStateView` privacy, reconnection, host-loss). The only BLE-specific
+  logic is a chunked framing layer that fits the existing JSON messages into
+  MTU-sized notifications/writes — see `lib/multiplayer/ble/`.
+- **Host flow:** Host Game → **Bluetooth** → permission/Bluetooth-on checks
+  → session starts advertising → nearby clients appear in the roster.
+- **Join flow:** Join Game → **Nearby (Bluetooth)** → search → pick a host
+  from the list → normal join handshake → lobby → play.
+- **Permissions:** Android requests `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT`
+  (host also `BLUETOOTH_ADVERTISE`) at runtime, with legacy
+  `BLUETOOTH`/`BLUETOOTH_ADMIN` + location below Android 12; the
+  `uses-feature` entry keeps the app installable on BLE-less devices
+  (relay/LAN still work). iOS adds `NSBluetoothAlwaysUsageDescription` and
+  prompts on first use.
+- **Privacy:** the advertisement carries only the service UUID; frames
+  are opaque bytes to the platform; session ids and join codes are adopted
+  during the normal JOIN handshake, never advertised. All existing
+  host-authority and private-card guarantees are inherited unchanged.
+- **Testing status:** covered by in-process tests with an in-memory
+  simulated BLE network (framing, join, gameplay, privacy, host loss,
+  reconnect, malformed-frame rejection) plus the existing 648-test suite.
+  **Physical two-device Bluetooth testing has not yet been performed** —
+  that is the one outstanding item before
+  `docs/multiplayer/m19-bluetooth-qa.md` can be marked all-Pass.
 
 ## Prerequisites
 

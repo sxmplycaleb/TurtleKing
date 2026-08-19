@@ -7,6 +7,10 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../game_state.dart';
 import '../player.dart';
+import 'ble/ble_adapter.dart';
+import 'ble/ble_discovery.dart';
+import 'ble/ble_transport.dart';
+import 'ble/plugin_ble_adapter.dart';
 import 'join_code.dart';
 import 'join_payload.dart';
 import 'public_state.dart';
@@ -15,6 +19,16 @@ import 'relay_transport.dart';
 import 'remote_game_controller.dart';
 import 'remote_game_screen.dart';
 import 'session.dart';
+
+/// How the host session is transported: over the internet relay, or over
+/// local Bluetooth LE (no internet, phones nearby).
+enum HostTransportMode {
+  /// Internet relay (QR + 6-digit code join) — the default.
+  internet,
+
+  /// Local Bluetooth LE (nearby-device join).
+  bluetooth,
+}
 
 /// The host lobby: enter a name, create a session on the internet relay,
 /// and watch the roster fill as clients join by QR or 6-digit code.
@@ -28,6 +42,7 @@ class HostLobbyScreen extends StatefulWidget {
     super.key,
     this.joinCodeGenerator = generateJoinCode,
     this.relayUrl = kDefaultRelayUrl,
+    this.bleAdapter,
   });
 
   /// Test seam: how the 6-digit join code is drawn (deterministic in tests).
@@ -36,6 +51,11 @@ class HostLobbyScreen extends StatefulWidget {
   /// The internet relay endpoint this session is hosted on. Defaults to the
   /// build-time [kDefaultRelayUrl]; tests inject a local in-process relay.
   final String relayUrl;
+
+  /// Test seam: the Bluetooth adapter backing a Bluetooth-hosted session.
+  /// Null in production (a plugin adapter is created when the user chooses
+  /// Bluetooth); tests inject an in-memory fake.
+  final BleAdapter? bleAdapter;
 
   @override
   State<HostLobbyScreen> createState() => _HostLobbyScreenState();
@@ -58,6 +78,11 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
   String? _error;
   bool _starting = false;
   bool _copied = false;
+  HostTransportMode _mode = HostTransportMode.internet;
+
+  /// The shared BLE adapter for a Bluetooth-hosted session (transport +
+  /// discovery must share one adapter).
+  BleAdapter? _bleAdapter;
 
   @override
   void dispose() {
@@ -79,22 +104,60 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
       _error = null;
     });
 
-    final relayUrl = widget.relayUrl;
-    if (relayUrl.isEmpty) {
-      setState(() {
-        _starting = false;
-        _error =
-            'Multiplayer relay is not configured for this build. Ask the '
-            'app owner for a build with a relay endpoint, or install a '
-            'version that has multiplayer enabled.';
-      });
-      return;
+    final HostSession session;
+    if (_mode == HostTransportMode.bluetooth) {
+      // Local Bluetooth: no relay required, no internet needed.
+      final adapter = _bleAdapter ??= widget.bleAdapter ?? PluginBleAdapter();
+      if (!await adapter.ensureAuthorized()) {
+        if (!mounted) return;
+        setState(() {
+          _starting = false;
+          _error =
+              'Bluetooth permission is needed to host nearby games. Allow '
+              'it in Settings and try again.';
+        });
+        return;
+      }
+      if (adapter.status == BleAdapterStatus.poweredOff) {
+        if (!mounted) return;
+        setState(() {
+          _starting = false;
+          _error = 'Bluetooth is off — turn it on to host a nearby game.';
+        });
+        return;
+      }
+      if (adapter.status == BleAdapterStatus.unsupported) {
+        if (!mounted) return;
+        setState(() {
+          _starting = false;
+          _error = 'Bluetooth is not supported on this device.';
+        });
+        return;
+      }
+      session = HostSession(
+        sessionId: generateSessionId(),
+        transport: BleMultiplayerTransport(adapter: adapter),
+        discovery: BleSessionDiscovery(adapter: adapter),
+        joinCode: null,
+      );
+    } else {
+      final relayUrl = widget.relayUrl;
+      if (relayUrl.isEmpty) {
+        setState(() {
+          _starting = false;
+          _error =
+              'Multiplayer relay is not configured for this build. Ask the '
+              'app owner for a build with a relay endpoint, or install a '
+              'version that has multiplayer enabled.';
+        });
+        return;
+      }
+      session = HostSession(
+        sessionId: generateSessionId(),
+        transport: RelayMultiplayerTransport(relayUrl: relayUrl),
+        joinCode: widget.joinCodeGenerator(),
+      );
     }
-    final session = HostSession(
-      sessionId: generateSessionId(),
-      transport: RelayMultiplayerTransport(relayUrl: relayUrl),
-      joinCode: widget.joinCodeGenerator(),
-    );
     try {
       await session.start(
         displayName: _gameNameController.text.trim(),
@@ -106,9 +169,11 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
       if (!mounted) return;
       setState(() {
         _starting = false;
-        _error =
-            'Could not start the session. Check your internet connection '
-            'and that the game relay is reachable.';
+        _error = _mode == HostTransportMode.bluetooth
+            ? 'Could not start Bluetooth hosting. Make sure Bluetooth is '
+                  'on and the phones are nearby.'
+            : 'Could not start the session. Check your internet connection '
+                  'and that the game relay is reachable.';
       });
       return;
     }
@@ -132,7 +197,7 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
           : JoinPayload(
               sessionId: session.sessionId,
               joinCode: code,
-              relayUrl: relayUrl,
+              relayUrl: widget.relayUrl,
             ).encode();
     });
   }
@@ -224,12 +289,35 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
         children: [
           const SizedBox(height: 8),
           Text(
-            'Start a session, then share the code or QR code — friends '
-            'can join from anywhere with an internet connection.',
+            _mode == HostTransportMode.bluetooth
+                ? 'Host a game over Bluetooth — friends nearby can find it '
+                      'without any internet connection.'
+                : 'Start a session, then share the code or QR code — friends '
+                      'can join from anywhere with an internet connection.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
+          ),
+          const SizedBox(height: 16),
+          // Transport choice: internet relay (default) or local Bluetooth.
+          SegmentedButton<HostTransportMode>(
+            segments: const [
+              ButtonSegment(
+                value: HostTransportMode.internet,
+                icon: Icon(Icons.public),
+                label: Text('Internet'),
+              ),
+              ButtonSegment(
+                value: HostTransportMode.bluetooth,
+                icon: Icon(Icons.bluetooth),
+                label: Text('Bluetooth'),
+              ),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (selection) {
+              setState(() => _mode = selection.first);
+            },
           ),
           const SizedBox(height: 24),
           TextField(
@@ -294,64 +382,54 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            'Join Game',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // The large 6-digit code: the primary way a friend joins.
-          SelectableText(
-            formatJoinCode(_joinCode),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.displayMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 6,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Share this code with a friend',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'On another phone: Join Game → Enter code',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Works over Wi-Fi or mobile data — no need to be on the same '
-            'network.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: OutlinedButton.icon(
-              onPressed: _joinCode.isEmpty ? null : _copyCode,
-              icon: Icon(_copied ? Icons.check : Icons.copy),
-              label: Text(_copied ? 'Code copied' : 'Copy code'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // The QR code: the zero-typing join path. Its payload identifies
-          // the session on the internet relay — no LAN address (see
-          // [JoinPayload]).
-          if (qrPayload != null) ...[
+          if (_mode == HostTransportMode.bluetooth) ...[
             Text(
-              'Scan this QR code to join',
+              'Nearby players can join from the Join Game screen — they '
+              'just need Bluetooth on and to be close by.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ] else ...[
+            Text(
+              'Join Game',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // The large 6-digit code: the primary way a friend joins.
+            SelectableText(
+              formatJoinCode(_joinCode),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.displayMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 6,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Share this code with a friend',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'On another phone: Join Game → Enter code',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Works over Wi-Fi or mobile data — no need to be on the same '
+              'network.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -359,28 +437,49 @@ class _HostLobbyScreenState extends State<HostLobbyScreen> {
             ),
             const SizedBox(height: 8),
             Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: QrImageView(
-                  data: qrPayload,
-                  version: QrVersions.auto,
-                  size: 220,
-                  semanticsLabel: 'Join QR code for $_gameName',
-                ),
+              child: OutlinedButton.icon(
+                onPressed: _joinCode.isEmpty ? null : _copyCode,
+                icon: Icon(_copied ? Icons.check : Icons.copy),
+                label: Text(_copied ? 'Code copied' : 'Copy code'),
               ),
             ),
-          ] else
-            Text(
-              'Waiting for the relay…',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(height: 12),
+            // The QR code: the zero-typing join path. Its payload identifies
+            // the session on the internet relay — no LAN address (see
+            // [JoinPayload]).
+            if (qrPayload != null) ...[
+              Text(
+                'Scan this QR code to join',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: QrImageView(
+                    data: qrPayload,
+                    version: QrVersions.auto,
+                    size: 220,
+                    semanticsLabel: 'Join QR code for $_gameName',
+                  ),
+                ),
+              ),
+            ] else
+              Text(
+                'Waiting for the relay…',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
           const SizedBox(height: 24),
           Text(
             'Players (${_roster.length})',
