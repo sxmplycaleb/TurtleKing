@@ -3,7 +3,7 @@
 All notable changes to Turtle King are recorded here. Milestone-by-milestone
 detail lives in the README; this file is the release-level summary.
 
-## [Unreleased] — M19 Bluetooth multiplayer
+## [1.3.0] — 2026-08-19 — M19 Bluetooth multiplayer
 
 ### Fixed
 
