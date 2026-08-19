@@ -18,9 +18,8 @@ the app to a public relay.
 > **Deployment status: LIVE at `https://turtleking.onrender.com`** — the
 > Render Web Service is deployed, `GET /health` returns `200
 > {"status":"ok"}`, and the relay passes the smoke test against the
-> deployed WSS endpoint **except** host-loss, which is fixed by the
-> heartbeat liveness change (this branch) and needs a redeploy of this
-> branch to take effect on the public endpoint. All relay behavior is
+> deployed WSS endpoint **7/7** (twice), including **host-loss** (the
+> heartbeat liveness fix is live). All relay behavior is additionally
 > validated locally (compiled binary + `tool/relay_smoke_test.dart` + the
 > automated relay test suite, including the heartbeat host-loss
 > regression). **No two-phone mixed-network test has been performed.** Do
