@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/card_widgets.dart';
 import 'package:turtle_king/feedback.dart';
+import 'package:turtle_king/legal/onboarding_store.dart';
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/settings.dart';
 import 'package:turtle_king/settings_screen.dart';
@@ -323,7 +324,10 @@ void main() {
         'settings.legalConsentVersion': '1.0',
       });
       final settingsWithConsent = await SettingsStore.load();
-      await tester.pumpWidget(TurtleKingApp(store: settingsWithConsent));
+      final onboarding = OnboardingStore.inMemory()..completeOnboarding();
+      await tester.pumpWidget(
+        TurtleKingApp(store: settingsWithConsent, onboarding: onboarding),
+      );
       await tester.pump(const Duration(milliseconds: 1300));
       await tester.pumpAndSettle();
     }
@@ -339,7 +343,12 @@ void main() {
 
     testWidgets('the MaterialApp themeMode follows the store', (tester) async {
       final store = await storeWithPrefs();
-      await tester.pumpWidget(TurtleKingApp(store: store));
+      await tester.pumpWidget(
+        TurtleKingApp(
+          store: store,
+          onboarding: OnboardingStore.inMemory()..completeOnboarding(),
+        ),
+      );
 
       MaterialApp app() => tester.widget<MaterialApp>(find.byType(MaterialApp));
       expect(app().themeMode, ThemeMode.system);
@@ -360,7 +369,12 @@ void main() {
       tester,
     ) async {
       final store = await storeWithPrefs();
-      await tester.pumpWidget(TurtleKingApp(store: store));
+      await tester.pumpWidget(
+        TurtleKingApp(
+          store: store,
+          onboarding: OnboardingStore.inMemory()..completeOnboarding(),
+        ),
+      );
 
       store.setColorTheme(AppColorTheme.oceanBlue);
       store.setCardDesign(CardDesign.noir);

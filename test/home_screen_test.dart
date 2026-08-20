@@ -4,9 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/home_screen.dart';
 import 'package:turtle_king/how_to_play_screen.dart';
+import 'package:turtle_king/legal/onboarding_store.dart';
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/player_setup_screen.dart';
 import 'package:turtle_king/settings.dart';
+
+/// Creates an [OnboardingStore] that is already fully completed.
+OnboardingStore _completedOnboarding() {
+  final store = OnboardingStore.inMemory();
+  store.completeOnboarding();
+  return store;
+}
 
 /// Pumps the full app and advances past the splash screen so the home
 /// screen is on stage.
@@ -17,7 +25,9 @@ Future<void> pumpHome(WidgetTester tester) async {
     'settings.legalConsentVersion': '1.0',
   });
   final settings = await SettingsStore.load();
-  await tester.pumpWidget(TurtleKingApp(store: settings));
+  await tester.pumpWidget(
+    TurtleKingApp(store: settings, onboarding: _completedOnboarding()),
+  );
   // Advance past the splash timer and its fade transition.
   await tester.pump(const Duration(milliseconds: 1300));
   await tester.pumpAndSettle();
