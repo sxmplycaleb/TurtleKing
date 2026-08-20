@@ -13,11 +13,7 @@ class LegalUrls {
   LegalUrls._();
 
   /// Base URL for the legal website.
-  ///
-  /// Update this to your actual deployed URL before publishing.
-  /// For GitHub Pages: `https://username.github.io/turtle_king/legal/`
-  /// For custom domain: `https://your-domain/legal/`
-  static const String baseUrl = 'YOUR_GITHUB_PAGES_URL_HERE';
+  static const String baseUrl = 'https://sxmplycaleb.github.io/TurtleKing';
 
   /// Privacy Policy URL.
   static const String privacyPolicy = '$baseUrl/privacy.html';
