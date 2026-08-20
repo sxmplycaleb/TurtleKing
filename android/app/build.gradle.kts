@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Load release signing credentials from android/key.properties.
+// The file is gitignored and must be created manually before a release build.
+val keyProperties = Properties()
+val keyPropertiesFile = rootProject.file("key.properties")
+if (keyPropertiesFile.exists()) {
+    keyPropertiesFile.inputStream().use { keyProperties.load(it) }
 }
 
 android {
@@ -14,11 +24,23 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    signingConfigs {
+        create("release") {
+            if (keyPropertiesFile.exists()) {
+                keyAlias = keyProperties["keyAlias"] as String?
+                    ?: error("Release signing requires android/key.properties with keyAlias.")
+                keyPassword = keyProperties["keyPassword"] as String?
+                    ?: error("Release signing requires android/key.properties with keyPassword.")
+                storeFile = file(keyProperties["storeFile"] as? String
+                    ?: error("Release signing requires android/key.properties with storeFile."))
+                storePassword = keyProperties["storePassword"] as String?
+                    ?: error("Release signing requires android/key.properties with storePassword.")
+            }
+        }
+    }
+
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.turtleking.turtle_king"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -27,11 +49,26 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = if (keyPropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                // Fail the build if key.properties is missing during a release build.
+                // The check happens at build time, not configuration time,
+                // so debug builds remain unaffected.
+                signingConfigs.getByName("debug")
+            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
 }
 
 kotlin {
@@ -42,4 +79,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Validate release signing at configuration time if a release task is requested.
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.contains("release", ignoreCase = true) } && !keyPropertiesFile.exists()) {
+        error("Release signing is not configured. Create android/key.properties with the required signing properties before building a release.")
+    }
 }

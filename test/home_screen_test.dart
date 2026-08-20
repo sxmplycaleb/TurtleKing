@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/home_screen.dart';
 import 'package:turtle_king/how_to_play_screen.dart';
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/player_setup_screen.dart';
+import 'package:turtle_king/settings.dart';
 
 /// Pumps the full app and advances past the splash screen so the home
 /// screen is on stage.
 Future<void> pumpHome(WidgetTester tester) async {
-  await tester.pumpWidget(const TurtleKingApp());
+  // Create a settings store with consent already accepted.
+  SharedPreferences.setMockInitialValues({
+    'settings.legalConsentAccepted': true,
+    'settings.legalConsentVersion': '1.0',
+  });
+  final settings = await SettingsStore.load();
+  await tester.pumpWidget(TurtleKingApp(store: settings));
   // Advance past the splash timer and its fade transition.
   await tester.pump(const Duration(milliseconds: 1300));
   await tester.pumpAndSettle();

@@ -317,7 +317,13 @@ void main() {
 
   group('app-wide application', () {
     Future<void> pumpAppToHome(WidgetTester tester, SettingsStore store) async {
-      await tester.pumpWidget(TurtleKingApp(store: store));
+      // Set consent as accepted in the mock preferences.
+      SharedPreferences.setMockInitialValues({
+        'settings.legalConsentAccepted': true,
+        'settings.legalConsentVersion': '1.0',
+      });
+      final settingsWithConsent = await SettingsStore.load();
+      await tester.pumpWidget(TurtleKingApp(store: settingsWithConsent));
       await tester.pump(const Duration(milliseconds: 1300));
       await tester.pumpAndSettle();
     }

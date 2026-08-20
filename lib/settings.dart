@@ -31,6 +31,8 @@ class SettingsStore extends ChangeNotifier {
     required this.cardDesign,
     required this.soundEnabled,
     required this.hapticsEnabled,
+    required this.legalConsentAccepted,
+    required this.legalConsentVersion,
   });
 
   static const _themeModeKey = 'settings.themeMode';
@@ -38,6 +40,8 @@ class SettingsStore extends ChangeNotifier {
   static const _cardDesignKey = 'settings.cardDesign';
   static const _soundEnabledKey = 'settings.soundEnabled';
   static const _hapticsEnabledKey = 'settings.hapticsEnabled';
+  static const _legalConsentAcceptedKey = 'settings.legalConsentAccepted';
+  static const _legalConsentVersionKey = 'settings.legalConsentVersion';
 
   final SharedPreferences? _prefs;
 
@@ -56,9 +60,28 @@ class SettingsStore extends ChangeNotifier {
   /// Whether gameplay haptic feedback plays (default: on).
   bool hapticsEnabled;
 
+  /// Whether the legal consent (age + terms/privacy) has been accepted.
+  bool legalConsentAccepted;
+
+  /// The version of the legal consent that was accepted.
+  /// When this changes, consent must be re-accepted.
+  String legalConsentVersion;
+
+  /// The current legal consent version.
+  /// Increment this when the legal documents change materially.
+  static const currentConsentVersion = '1.0';
+
   /// Loads the persisted preferences (defaults when unset).
   static Future<SettingsStore> load() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Check if the stored consent version matches the current version.
+    // If not, consent must be re-accepted.
+    final storedVersion = prefs.getString(_legalConsentVersionKey) ?? '';
+    final consentAccepted =
+        (prefs.getBool(_legalConsentAcceptedKey) ?? false) &&
+        storedVersion == currentConsentVersion;
+
     return SettingsStore._(
       prefs: prefs,
       themeMode: _readEnum(
@@ -78,6 +101,8 @@ class SettingsStore extends ChangeNotifier {
       ),
       soundEnabled: prefs.getBool(_soundEnabledKey) ?? true,
       hapticsEnabled: prefs.getBool(_hapticsEnabledKey) ?? true,
+      legalConsentAccepted: consentAccepted,
+      legalConsentVersion: storedVersion,
     );
   }
 
@@ -89,6 +114,8 @@ class SettingsStore extends ChangeNotifier {
     cardDesign: CardDesign.classicPoker,
     soundEnabled: true,
     hapticsEnabled: true,
+    legalConsentAccepted: false,
+    legalConsentVersion: '',
   );
 
   static T _readEnum<T extends Enum>(
@@ -144,6 +171,24 @@ class SettingsStore extends ChangeNotifier {
     if (value == hapticsEnabled) return;
     hapticsEnabled = value;
     _prefs?.setBool(_hapticsEnabledKey, value);
+    notifyListeners();
+  }
+
+  /// Records that the user has accepted the legal consent.
+  void acceptLegalConsent() {
+    legalConsentAccepted = true;
+    legalConsentVersion = currentConsentVersion;
+    _prefs?.setBool(_legalConsentAcceptedKey, true);
+    _prefs?.setString(_legalConsentVersionKey, currentConsentVersion);
+    notifyListeners();
+  }
+
+  /// Resets the legal consent state (for testing or privacy compliance).
+  void resetLegalConsent() {
+    legalConsentAccepted = false;
+    legalConsentVersion = '';
+    _prefs?.setBool(_legalConsentAcceptedKey, false);
+    _prefs?.setString(_legalConsentVersionKey, '');
     notifyListeners();
   }
 }

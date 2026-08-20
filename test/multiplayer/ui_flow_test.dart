@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/multiplayer/host_lobby_screen.dart';
 import 'package:turtle_king/multiplayer/join_lobby_screen.dart';
 import 'package:turtle_king/multiplayer/menu_screen.dart';
+import 'package:turtle_king/settings.dart';
 
 /// Pumps the full app and advances past the splash screen so the home
 /// screen is on stage.
 Future<void> pumpHome(WidgetTester tester) async {
-  await tester.pumpWidget(const TurtleKingApp());
+  // Create a settings store with consent already accepted.
+  SharedPreferences.setMockInitialValues({
+    'settings.legalConsentAccepted': true,
+    'settings.legalConsentVersion': '1.0',
+  });
+  final settings = await SettingsStore.load();
+  await tester.pumpWidget(TurtleKingApp(store: settings));
   await tester.pump(const Duration(milliseconds: 1300));
   await tester.pumpAndSettle();
 }

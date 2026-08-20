@@ -37,6 +37,9 @@ dependencies:
   # roles on Android + iOS, minSdk 24 matches the project. The session layer
   # stays transport-agnostic; this package only backs the BLE adapter seam.
   bluetooth_low_energy: ^6.2.1
+  # Legal website links: opens Privacy Policy, Terms of Service, and Contact
+  # pages in the device browser. BSD-3-Clause, maintained by the Flutter team.
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
