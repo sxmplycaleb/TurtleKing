@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/home_screen.dart';
+import 'package:turtle_king/legal/onboarding_store.dart';
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/settings.dart';
 import 'package:turtle_king/splash_screen.dart';
@@ -75,7 +76,10 @@ void main() {
         'settings.legalConsentVersion': '1.0',
       });
       final settings = await SettingsStore.load();
-      await tester.pumpWidget(TurtleKingApp(store: settings));
+      final onboarding = OnboardingStore.inMemory()..completeOnboarding();
+      await tester.pumpWidget(
+        TurtleKingApp(store: settings, onboarding: onboarding),
+      );
 
       expect(splashArtworkFinder(), findsOneWidget);
       expect(find.byType(HomeScreen), findsNothing);
@@ -90,7 +94,11 @@ void main() {
     testWidgets('starting the app creates no gameplay screen or state', (
       tester,
     ) async {
-      await tester.pumpWidget(const TurtleKingApp());
+      await tester.pumpWidget(
+        TurtleKingApp(
+          onboarding: OnboardingStore.inMemory()..completeOnboarding(),
+        ),
+      );
 
       // During the splash, no gameplay widgets exist.
       expect(find.byType(GameStartScreen), findsNothing);

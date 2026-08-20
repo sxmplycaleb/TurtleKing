@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:turtle_king/legal/onboarding_store.dart';
 import 'package:turtle_king/main.dart';
 import 'package:turtle_king/multiplayer/host_lobby_screen.dart';
 import 'package:turtle_king/multiplayer/join_lobby_screen.dart';
@@ -17,7 +18,10 @@ Future<void> pumpHome(WidgetTester tester) async {
     'settings.legalConsentVersion': '1.0',
   });
   final settings = await SettingsStore.load();
-  await tester.pumpWidget(TurtleKingApp(store: settings));
+  final onboarding = OnboardingStore.inMemory()..completeOnboarding();
+  await tester.pumpWidget(
+    TurtleKingApp(store: settings, onboarding: onboarding),
+  );
   await tester.pump(const Duration(milliseconds: 1300));
   await tester.pumpAndSettle();
 }
