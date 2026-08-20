@@ -251,10 +251,10 @@ void main() {
         expect(feedback.events, isEmpty);
 
         // Scrolling through every section is presentation-only too.
-        await tester.scrollUntilVisible(find.text('Sound Effects'), 200);
+        await tester.scrollUntilVisible(find.text('Classic Poker'), 200);
         await tester.pumpAndSettle();
         expect(feedback.events, isEmpty);
-        await tester.scrollUntilVisible(find.text('Classic Poker'), 200);
+        await tester.scrollUntilVisible(find.text('Sound Effects'), 200);
         await tester.pumpAndSettle();
         expect(feedback.events, isEmpty);
       },
