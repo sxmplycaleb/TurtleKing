@@ -267,5 +267,5 @@ local source of `DiscoveredSession`s.
 | **M19.7** — physical-device QA | **Outstanding** — see `docs/multiplayer/m19-bluetooth-qa.md` |
 
 **Release note:** Bluetooth is a new capability on top of v1.2.1; it is
-tracked as M19 (a future minor release), not as part of the v1.2.x patch
+tracked as M19 (released as **v1.3.0**), not as part of the v1.2.x patch
 line.

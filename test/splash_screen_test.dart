@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:turtle_king/game_start_screen.dart';
 import 'package:turtle_king/home_screen.dart';
 import 'package:turtle_king/main.dart';
+import 'package:turtle_king/settings.dart';
 import 'package:turtle_king/splash_screen.dart';
 
 /// Finds the splash's full Turtle King artwork image asset.
@@ -67,7 +69,13 @@ void main() {
     testWidgets('the app entry shows the splash before the home screen', (
       tester,
     ) async {
-      await tester.pumpWidget(const TurtleKingApp());
+      // Create a settings store with consent already accepted.
+      SharedPreferences.setMockInitialValues({
+        'settings.legalConsentAccepted': true,
+        'settings.legalConsentVersion': '1.0',
+      });
+      final settings = await SettingsStore.load();
+      await tester.pumpWidget(TurtleKingApp(store: settings));
 
       expect(splashArtworkFinder(), findsOneWidget);
       expect(find.byType(HomeScreen), findsNothing);

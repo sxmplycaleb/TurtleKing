@@ -3,6 +3,8 @@ import 'package:flutter/material.dart' hide Card;
 import 'app_version.dart';
 import 'card.dart';
 import 'card_widgets.dart';
+import 'legal/legal_urls.dart';
+import 'legal/url_launcher_helper.dart';
 import 'settings.dart';
 import 'theme.dart';
 
@@ -46,6 +48,43 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _SectionTitle(title: 'About'),
             const AppVersionText(),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy Policy'),
+              subtitle: const Text('How we handle your data'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                UrlLauncherHelper.openPrivacyPolicy(
+                  context,
+                  LegalUrls.privacyPolicy,
+                );
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.description_outlined),
+              title: const Text('Terms of Service'),
+              subtitle: const Text('Usage terms and conditions'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                UrlLauncherHelper.openTermsOfService(
+                  context,
+                  LegalUrls.termsOfService,
+                );
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.contact_mail_outlined),
+              title: const Text('Contact'),
+              subtitle: const Text('Get in touch with us'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                UrlLauncherHelper.openContact(context, LegalUrls.contact);
+              },
+            ),
           ],
         ),
       ),

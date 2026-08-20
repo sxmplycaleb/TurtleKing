@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — TurtleKing</title>
+  <link rel="stylesheet" href="css/style.css">
+  <meta name="description" content="TurtleKing Privacy Policy — Learn how we handle your data.">
+</head>
+<body>
+  <header class="header">
+    <h1>TurtleKing</h1>
+    <p class="subtitle">Privacy Policy</p>
+  </header>
+
+  <nav class="nav">
+    <ul>
+      <li><a href="privacy.html" class="active">Privacy Policy</a></li>
+      <li><a href="terms.html">Terms of Service</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <article class="content">
+      <h1>Privacy Policy</h1>
+      <p><strong>Version 1.0</strong> · <strong>Effective Date:</strong> <time datetime="2026-08-19">August 19, 2026</time></p>
+
+      <p>TurtleKing ("we", "us", or "our") is a digital card game application for Android devices. This Privacy Policy explains how we handle information when you use the TurtleKing app (the "App").</p>
+
+      <p>By using the App, you agree to the practices described in this Privacy Policy.</p>
+
+      <section>
+        <h2>1. What TurtleKing Is</h2>
+        <p>TurtleKing is a social card game designed for local play. It supports:</p>
+        <ul>
+          <li>Offline pass-and-play gameplay on a single device</li>
+          <li>Local multiplayer over Bluetooth</li>
+          <li>Local multiplayer over Wi-Fi/LAN</li>
+          <li>Remote multiplayer through our relay server</li>
+        </ul>
+        <p>The App does not require user accounts, login, or personal registration.</p>
+      </section>
+
+      <section>
+        <h2>2. Information We Do Not Collect</h2>
+        <p>TurtleKing is designed to minimize data collection:</p>
+        <ul>
+          <li>We do NOT collect personal information (name, email, phone number, address)</li>
+          <li>We do NOT collect device identifiers</li>
+          <li>We do NOT collect location data</li>
+          <li>We do NOT use advertising or analytics services</li>
+          <li>We do NOT use advertising identifiers</li>
+          <li>We do NOT collect camera images</li>
+          <li>We do NOT access contacts, SMS, files, or microphone</li>
+          <li>We do NOT collect health or financial information</li>
+          <li>We do NOT create user accounts</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>3. Information Processed Locally</h2>
+        <p>The App stores the following information locally on your device using Android SharedPreferences:</p>
+        <ul>
+          <li>Game preferences (theme, color theme, card design, sound, haptics)</li>
+          <li>Legal consent acknowledgement (age verification, terms acceptance)</li>
+          <li>Local game save data (if you choose to save a game in progress)</li>
+        </ul>
+        <p>This data never leaves your device unless you explicitly engage in multiplayer gameplay.</p>
+      </section>
+
+      <section>
+        <h2>4. Information Transmitted During Multiplayer</h2>
+        <p>When you participate in multiplayer games, the following information may be transmitted:</p>
+        <ul>
+          <li><strong>Player names:</strong> The name you choose during player setup is transmitted to other players in the same game session.</li>
+          <li><strong>Game actions:</strong> Card reveals, passes, holds, YAMADA calls, and other gameplay actions are transmitted to other players.</li>
+          <li><strong>Session information:</strong> Game session identifiers, player identifiers, and connection metadata are transmitted for routing purposes.</li>
+          <li><strong>Public game state:</strong> Information about visible game state (active players, current round, visible cards) is shared with all players in the session.</li>
+        </ul>
+        <p><strong>Important:</strong> Your private hand (cards only you should see) is NEVER transmitted to other players. Each player's private card information is sent only to that specific player.</p>
+      </section>
+
+      <section>
+        <h2>5. Bluetooth</h2>
+        <p>When you use Bluetooth multiplayer:</p>
+        <ul>
+          <li>The App uses Bluetooth Low Energy to discover and connect to nearby TurtleKing hosts</li>
+          <li>Player names and game data are transmitted over the Bluetooth connection</li>
+          <li>Bluetooth connections are peer-to-peer between devices in proximity</li>
+          <li>No Bluetooth data is transmitted to our servers or third parties</li>
+          <li>Bluetooth requires your device's Bluetooth to be enabled</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>6. Camera / QR Scanning</h2>
+        <p>When you use the QR code scanning feature:</p>
+        <ul>
+          <li>The camera is used only to scan QR codes for joining multiplayer sessions</li>
+          <li>Camera frames are processed locally on your device</li>
+          <li>No camera images are uploaded, stored, or transmitted</li>
+          <li>The camera permission is requested only when you choose to scan a QR code</li>
+          <li>QR codes contain only the information needed to join a multiplayer session (session identifier, connection details)</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>7. Relay Server</h2>
+        <p>For remote multiplayer over the internet, the App connects to our relay server:</p>
+        <ul>
+          <li><strong>Endpoint:</strong> <code>wss://turtleking.onrender.com</code></li>
+          <li><strong>Connection:</strong> WebSocket over TLS (encrypted)</li>
+          <li><strong>Purpose:</strong> Routes game messages between players who are not on the same local network</li>
+          <li><strong>Data retention:</strong> All session data is held in memory only and is deleted when the session ends or the server restarts</li>
+          <li><strong>No persistent database:</strong> We do not store game history, player names, or session data on our servers</li>
+          <li><strong>Logging:</strong> Only routing metadata is logged (connection events, disconnections). No game content, player names, or card data is logged.</li>
+        </ul>
+        <p>The relay server is operated by the TurtleKing development team.</p>
+      </section>
+
+      <section>
+        <h2>8. Third-Party Services</h2>
+        <p>TurtleKing does not integrate with third-party analytics, advertising, or tracking services.</p>
+        <p>The App uses the following platform services provided by Google:</p>
+        <ul>
+          <li>Google Play Services (for Bluetooth functionality on Android)</li>
+          <li>ML Kit (for on-device QR code scanning)</li>
+        </ul>
+        <p>These services operate locally on your device and do not transmit data to Google in the context of this App.</p>
+      </section>
+
+      <section>
+        <h2>9. Data Retention</h2>
+        <ul>
+          <li><strong>Local data:</strong> Stored on your device until you delete it (by clearing app data or uninstalling the App)</li>
+          <li><strong>Multiplayer session data:</strong> Held in memory on the relay server only for the duration of the session; deleted when the session ends</li>
+          <li><strong>No data is retained on our servers after you disconnect</strong></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>10. Children's Privacy</h2>
+        <p>TurtleKing is intended for users aged 18 and older. We do not knowingly collect information from children under 13. If you are under 13, do not use this App.</p>
+        <p>If we become aware that a child under 13 has provided us with personal information, we will take steps to delete such information.</p>
+      </section>
+
+      <section>
+        <h2>11. Your Choices and Rights</h2>
+        <ul>
+          <li>You can clear all local App data at any time through your device's Settings &gt; Apps &gt; TurtleKing &gt; Storage &gt; Clear Data</li>
+          <li>Uninstalling the App removes all local data</li>
+          <li>You can disable Bluetooth to prevent Bluetooth multiplayer functionality</li>
+          <li>You can deny camera permission to prevent QR scanning functionality</li>
+          <li>You can choose not to use multiplayer features</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>12. Security</h2>
+        <p>We take reasonable measures to protect the information processed by the App:</p>
+        <ul>
+          <li>Multiplayer communications are encrypted using TLS</li>
+          <li>No sensitive personal data is collected or stored</li>
+          <li>The relay server does not persist game data</li>
+        </ul>
+        <p>However, no method of electronic transmission or storage is 100% secure.</p>
+      </section>
+
+      <section>
+        <h2>13. Changes to This Privacy Policy</h2>
+        <p>We may update this Privacy Policy from time to time. Changes will be reflected on this page with an updated effective date. Continued use of the App after changes constitutes acceptance of the updated policy.</p>
+      </section>
+
+      <section>
+        <h2>14. Contact Us</h2>
+        <div class="contact-info">
+          <p>If you have questions about this Privacy Policy, please contact:</p>
+          <p><strong>Email:</strong> <a href="mailto:support.omanutro@gmail.com">support.omanutro@gmail.com</a></p>
+          <p><strong>WhatsApp:</strong> <a href="https://wa.me/254790321533">+254 790 321 533</a></p>
+        </div>
+      </section>
+
+      <section>
+        <h2>15. Governing Law</h2>
+        <p>This Privacy Policy is governed by the laws of the Republic of Kenya.</p>
+      </section>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 TurtleKing. All rights reserved.</p>
+    <p>
+      <a href="privacy.html">Privacy Policy</a> · 
+      <a href="terms.html">Terms of Service</a> · 
+      <a href="contact.html">Contact</a>
+    </p>
+  </footer>
+</body>
+</html>

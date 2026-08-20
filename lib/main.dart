@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'feedback.dart';
+import 'legal/legal_consent_screen.dart';
 import 'settings.dart';
 import 'splash_screen.dart';
 import 'theme.dart';
@@ -53,6 +54,11 @@ class _TurtleKingAppState extends State<TurtleKingApp> {
     setState(() {});
   }
 
+  void _onLegalConsent() {
+    _store.acceptLegalConsent();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     // The feedback service reads the sound/haptic toggles live from the
@@ -79,7 +85,9 @@ class _TurtleKingAppState extends State<TurtleKingApp> {
             ThemeModePref.light => ThemeMode.light,
             ThemeModePref.dark => ThemeMode.dark,
           },
-          home: const SplashScreen(),
+          home: _store.legalConsentAccepted
+              ? const SplashScreen()
+              : LegalConsentScreen(onConsent: _onLegalConsent),
         ),
       ),
     );
