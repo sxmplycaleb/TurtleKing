@@ -85,6 +85,15 @@ class SettingsScreen extends StatelessWidget {
                 UrlLauncherHelper.openContact(context, LegalUrls.contact);
               },
             ),
+            const SizedBox(height: 24),
+            Center(
+              child: Text(
+                '© 2026 TurtleKing. All rights reserved.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
           ],
         ),
       ),
