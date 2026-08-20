@@ -1,0 +1,66 @@
+name: Deploy Legal Website to GitHub Pages
+
+on:
+  push:
+    branches:
+      - feature/github-pages-legal-deployment
+    paths:
+      - 'docs/legal/**'
+  workflow_dispatch:
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+# Deploy to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Copy legal website files only
+        run: |
+          # Create a clean deployment directory
+          mkdir -p _site
+          
+          # Copy ONLY the legal website content
+          cp -r docs/legal/* _site/
+          
+          # Verify no sensitive files are included
+          echo "=== Files to be deployed ==="
+          find _site -type f
+          
+          # Check for sensitive patterns
+          echo "=== Checking for sensitive files ==="
+          find _site -type f \( -name "*.env" -o -name "*.key" -o -name "*.pem" -o -name "*.jks" -o -name "*.keystore" -o -name "key.properties" -o -name "*.firebase*" \)
+          
+          # Verify no multiplayer docs are included
+          echo "=== Checking for multiplayer docs ==="
+          find _site -name "*multiplayer*" -o -name "*m18*" -o -name "*m19*"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
