@@ -8,6 +8,8 @@ import 'game_state.dart';
 import 'how_to_play_screen.dart';
 import 'multiplayer/driver.dart';
 import 'multiplayer/menu_screen.dart';
+import 'other_games/other_games_section.dart';
+import 'other_games/play_count_store.dart';
 import 'player_setup_screen.dart';
 import 'settings_screen.dart';
 
@@ -35,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   GameSaveStore? _store;
   GameState? _saved;
   GameSaveException? _saveError;
+  Map<String, int> _playCounts = {};
 
   @override
   void initState() {
@@ -54,6 +57,18 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadSavedGame();
     } catch (_) {
       // No persistence available; show the normal flow without resume.
+    }
+    _loadPlayCounts();
+  }
+
+  Future<void> _loadPlayCounts() async {
+    try {
+      final store = await PlayCountStore.load();
+      setState(() {
+        _playCounts = store.allCounts();
+      });
+    } catch (_) {
+      // No persistence available; show games in catalog order.
     }
   }
 
@@ -216,6 +231,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         textStyle: theme.textTheme.titleMedium,
                       ),
                     ),
+                    const SizedBox(height: 32),
+                    OtherGamesSection(playCounts: _playCounts),
                   ],
                 ),
               ),
