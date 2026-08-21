@@ -42,6 +42,13 @@ body {
   text-align: center;
 }
 
+.header-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
 .header h1 {
   font-size: 1.8rem;
   font-weight: 700;
@@ -191,6 +198,11 @@ a:hover {
   text-align: center;
 }
 
+/* Platform-specific contact icon colors */
+.contact-link--whatsapp .contact-icon { color: #25D366; }
+.contact-link--phone .contact-icon { color: var(--navy); }
+.contact-link--email .contact-icon { color: #EA4335; }
+
 .contact-label {
   font-weight: 600;
   color: var(--navy);
@@ -205,7 +217,7 @@ a:hover {
 /* Social Links */
 .social-links {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
   margin: 20px 0;
 }
@@ -213,26 +225,61 @@ a:hover {
 .social-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--navy);
-  color: var(--white);
+  gap: 12px;
+  padding: 14px 16px;
   border-radius: 8px;
   text-decoration: none;
   transition: background-color 0.2s, transform 0.2s;
+  min-height: 52px;
 }
 
 .social-link:hover {
-  background: var(--navy-light);
   transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+/* Platform-specific social link branding */
+.social-link--instagram {
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  color: var(--white);
+}
+
+.social-link--linkedin {
+  background: #0077B5;
+  color: var(--white);
+}
+
+.social-link--x {
+  background: #000000;
+  color: var(--white);
+}
+
+.social-link--github {
+  background: #24292e;
+  color: var(--white);
 }
 
 .social-icon {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.social-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .social-label {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.social-handle {
+  font-size: 0.85rem;
+  opacity: 0.85;
 }
 
 /* Footer */
@@ -250,6 +297,14 @@ a:hover {
 }
 
 /* Responsive */
+@media (min-width: 640px) {
+  .social-links {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+}
+
 @media (max-width: 600px) {
   .container {
     padding: 20px 15px;

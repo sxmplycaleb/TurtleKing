@@ -3,6 +3,46 @@
 All notable changes to Turtle King are recorded here. Milestone-by-milestone
 detail lives in the README; this file is the release-level summary.
 
+## [1.4.1] — Other Games and play-count ranking
+
+### Added
+
+- **Other Games section** on the home screen with six upcoming games:
+  Choose a Topic, Shots & Ladders, Guess the Word or Take a Shot,
+  Spell or Take a Shot, Don't Say the Same Word, and Ludo.
+- **Play-count-based ranking** — games are automatically sorted by how
+  often the user plays them, with a "MOST PLAYED" badge on the leader.
+- **Collapsible OTHER GAMES accordion** — collapsed by default to keep
+  the home screen focused on TurtleKing.
+- **Game preview screens** for each upcoming game with descriptions and
+  "COMING SOON" badges.
+- **Contact page branding update** — logo, Instagram link updated to
+  @fans.of.caleb, brand colors.
+- **Legal link fixes** — Android `<queries>` for HTTPS URL launching,
+  improved error messages.
+- **Release signing** — production keystore and Gradle signing
+  configuration for Play Store release builds.
+- **GitHub Pages legal website** — Privacy Policy, Terms of Service,
+  and Contact pages deployed to GitHub Pages.
+- **Kenya governing law** — jurisdiction placeholders replaced with
+  Republic of Kenya governing-law language.
+
+## [1.4.0] — 18+ age verification and onboarding
+
+### Added
+
+- **4-step onboarding flow** gating all gameplay:
+  1. Date of Birth picker (DOB-based age calculation)
+  2. Adult Confirmation (explicit 18+ checkbox)
+  3. Drinking Game Disclosure (mandatory acknowledgement)
+  4. Terms & Privacy (links to legal documents with acceptance)
+- **DOB date picker** restricted to 18+ dates only (`today - 18 years`).
+- **Underage block screen** — dedicated screen for users under 18.
+- **OnboardingGuard** — centralized navigation guard protecting all
+  gameplay routes.
+- **Privacy preservation** — raw DOB never persisted; only boolean
+  completion flags stored.
+
 ## [1.3.0] — 2026-08-19 — M19 Bluetooth multiplayer
 
 ### Fixed

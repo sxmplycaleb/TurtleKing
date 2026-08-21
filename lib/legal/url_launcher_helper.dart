@@ -7,6 +7,11 @@ import 'package:url_launcher/url_launcher.dart' as launcher;
 /// - No browser is available
 /// - URL is invalid
 /// - Launch fails for any reason
+///
+/// Note: On Android 11+ (API 30+), `canLaunchUrl` may return false for
+/// HTTPS URLs even when launching can work, because of package visibility
+/// rules. We therefore try `launchUrl` directly and only show an error
+/// if that also fails.
 class UrlLauncherHelper {
   UrlLauncherHelper._();
 
@@ -21,22 +26,10 @@ class UrlLauncherHelper {
   }) async {
     final uri = Uri.parse(url);
 
-    if (!await launcher.canLaunchUrl(uri)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              errorMessage ??
-                  'Could not open the link. '
-                      'Please check your internet connection and try again.',
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-      return false;
-    }
-
+    // On Android 11+ (API 30+), canLaunchUrl may return false even for
+    // valid HTTPS URLs due to package visibility rules. The official
+    // url_launcher docs recommend trying launchUrl directly rather than
+    // gating on canLaunchUrl.
     try {
       final launched = await launcher.launchUrl(
         uri,
@@ -47,9 +40,7 @@ class UrlLauncherHelper {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              errorMessage ??
-                  'Could not open the link. '
-                      'Please try again later.',
+              errorMessage ?? 'Unable to open this link. Please try again.',
             ),
             duration: const Duration(seconds: 3),
           ),
@@ -62,7 +53,7 @@ class UrlLauncherHelper {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              errorMessage ?? 'An error occurred while opening the link.',
+              errorMessage ?? 'Unable to open this link. Please try again.',
             ),
             duration: const Duration(seconds: 3),
           ),
@@ -77,9 +68,7 @@ class UrlLauncherHelper {
     return openUrl(
       context,
       url,
-      errorMessage:
-          'Could not open the Privacy Policy. '
-          'Please check your internet connection and try again.',
+      errorMessage: 'Unable to open the Privacy Policy. Please try again.',
     );
   }
 
@@ -88,9 +77,7 @@ class UrlLauncherHelper {
     return openUrl(
       context,
       url,
-      errorMessage:
-          'Could not open the Terms of Service. '
-          'Please check your internet connection and try again.',
+      errorMessage: 'Unable to open the Terms of Service. Please try again.',
     );
   }
 
@@ -99,9 +86,7 @@ class UrlLauncherHelper {
     return openUrl(
       context,
       url,
-      errorMessage:
-          'Could not open the Contact page. '
-          'Please check your internet connection and try again.',
+      errorMessage: 'Unable to open the Contact page. Please try again.',
     );
   }
 }
