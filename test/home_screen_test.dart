@@ -34,13 +34,8 @@ Future<void> pumpHome(WidgetTester tester) async {
 }
 
 /// Finds the home screen's Turtle King emblem image asset.
-Finder emblemFinder() => find.byWidgetPredicate(
-  (widget) =>
-      widget is Image &&
-      widget.image is AssetImage &&
-      (widget.image as AssetImage).assetName ==
-          'assets/branding/turtle_king_emblem.png',
-);
+/// Uses the semantic label to distinguish the main logo from game card icons.
+Finder emblemFinder() => find.bySemanticsLabel('Turtle King logo');
 
 void main() {
   group('HomeScreen', () {
@@ -55,7 +50,12 @@ void main() {
     testWidgets('the emblem asset renders at a positive size', (tester) async {
       await pumpHome(tester);
 
-      final image = tester.widget<Image>(emblemFinder());
+      // The Image widget carries the semantic label directly.
+      final image = tester.widget<Image>(
+        find.byWidgetPredicate(
+          (w) => w is Image && w.semanticLabel == 'Turtle King logo',
+        ),
+      );
       expect(image.width, greaterThan(0));
       expect(image.height, greaterThan(0));
       expect(image.fit, BoxFit.contain);
