@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+=======
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart' as launcher;
+>>>>>>> origin/main
 
 import 'package:turtle_king/legal/legal_urls.dart';
 import 'package:turtle_king/legal/onboarding_store.dart';
@@ -13,6 +19,13 @@ import 'package:turtle_king/settings.dart';
 String? lastLaunchedUrl;
 bool launchResult = true;
 
+<<<<<<< HEAD
+/// The url_launcher method channel name.
+const _channel = MethodChannel('plugins.flutter.io/url_launcher');
+
+/// Pumps the full app and advances past the splash screen to Terms screen.
+Future<void> pumpTermsScreen(WidgetTester tester) async {
+=======
 /// A function-type variable so tests can override launch behavior.
 Future<bool> Function(Uri uri, {launcher.LaunchMode mode})? mockLauncher;
 
@@ -33,6 +46,7 @@ Future<void> pumpTermsScreen(
   WidgetTester tester, {
   launcher.LaunchMode mode = launcher.LaunchMode.platformDefault,
 }) async {
+>>>>>>> origin/main
   SharedPreferences.setMockInitialValues({
     'settings.legalConsentAccepted': true,
     'settings.legalConsentVersion': '1.0',
@@ -53,6 +67,35 @@ Future<void> pumpTermsScreen(
 }
 
 void main() {
+<<<<<<< HEAD
+  setUp(() {
+    lastLaunchedUrl = null;
+    launchResult = true;
+    // Mock the url_launcher platform channel.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (MethodCall call) async {
+          switch (call.method) {
+            case 'launch':
+              final url = call.arguments['url'] as String;
+              lastLaunchedUrl = url;
+              return launchResult;
+            case 'canLaunch':
+              return true;
+            case 'close':
+              return null;
+            default:
+              return null;
+          }
+        });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, null);
+  });
+
+=======
+>>>>>>> origin/main
   group('LegalUrls', () {
     test('privacy URL is a valid HTTPS URL', () {
       final uri = Uri.parse(LegalUrls.privacyPolicy);
@@ -84,6 +127,11 @@ void main() {
   });
 
   group('UrlLauncherHelper', () {
+<<<<<<< HEAD
+    testWidgets('tapping Terms of Service invokes URL launcher', (
+      tester,
+    ) async {
+=======
     setUp(() {
       lastLaunchedUrl = null;
       launchResult = true;
@@ -94,6 +142,7 @@ void main() {
       tester,
     ) async {
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       await tester.ensureVisible(find.text('Terms of Service'));
@@ -104,7 +153,10 @@ void main() {
     });
 
     testWidgets('tapping Privacy Policy invokes URL launcher', (tester) async {
+<<<<<<< HEAD
+=======
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       await tester.ensureVisible(find.text('Privacy Policy'));
@@ -115,7 +167,10 @@ void main() {
     });
 
     testWidgets('opening Terms does not complete onboarding', (tester) async {
+<<<<<<< HEAD
+=======
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       // Tap Terms.
@@ -134,7 +189,10 @@ void main() {
     });
 
     testWidgets('opening Privacy does not complete onboarding', (tester) async {
+<<<<<<< HEAD
+=======
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       await tester.ensureVisible(find.text('Privacy Policy'));
@@ -153,7 +211,10 @@ void main() {
       tester,
     ) async {
       launchResult = false;
+<<<<<<< HEAD
+=======
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       await tester.ensureVisible(find.text('Privacy Policy'));
@@ -172,7 +233,10 @@ void main() {
       tester,
     ) async {
       launchResult = false;
+<<<<<<< HEAD
+=======
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       await tester.ensureVisible(find.text('Terms of Service'));
@@ -187,7 +251,10 @@ void main() {
     });
 
     testWidgets('checkbox state preserved after opening link', (tester) async {
+<<<<<<< HEAD
+=======
       mockLauncher = _testLaunch;
+>>>>>>> origin/main
       await pumpTermsScreen(tester);
 
       // Check the checkbox first.
