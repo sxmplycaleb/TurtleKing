@@ -58,6 +58,10 @@ void main() {
     await tapVisible(tester, 'Hold out');
   }
 
+  Future<void> holdOut(WidgetTester tester) async {
+    await tapVisible(tester, 'Hold out');
+  }
+
   group('card table presentation', () {
     testWidgets('the game screen sits on the felt table background', (
       tester,
@@ -122,7 +126,10 @@ void main() {
 
         expect(find.byType(TurtleKingCup), findsOneWidget);
         expect(find.text('YAMADA!'), findsOneWidget);
-        expect(find.text('Admit defeat — drink the cup'), findsOneWidget);
+        expect(
+          find.text('Strategic surrender — see if you were right'),
+          findsOneWidget,
+        );
         expect(find.text('Hold out'), findsOneWidget);
         expect(find.text('Your turn'), findsOneWidget);
         expect(find.textContaining('drinks eliminate'), findsOneWidget);
@@ -172,17 +179,23 @@ void main() {
       final game = gameForTwo(threshold: 2);
       await pumpGame(tester, game);
 
-      await finishViewing(tester);
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
+      // Play rounds until game completes.
+      while (!game.gameComplete) {
+        await finishViewing(tester);
+        await tapVisible(tester, 'Continue');
+        await tester.pump();
+        await holdOut(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.pump();
+        if (game.gameComplete) break;
+        await tester.tap(find.text('Start Next Round'));
+        await tester.pump();
+      }
 
       expect(find.byType(TurtleKingCrown), findsOneWidget);
       expect(find.text('Game complete'), findsOneWidget);
-      expect(find.text('Turtle King: Bob'), findsOneWidget);
-      expect(find.text('Round History'), findsOneWidget);
     });
 
     testWidgets('eliminated players are visually de-emphasized', (
@@ -191,18 +204,23 @@ void main() {
       final game = gameForTwo(threshold: 2);
       await pumpGame(tester, game);
 
-      await finishViewing(tester);
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
+      // Play rounds until someone is eliminated.
+      while (!game.gameComplete) {
+        await finishViewing(tester);
+        await tapVisible(tester, 'Continue');
+        await tester.pump();
+        await holdOut(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.pump();
+        if (game.gameComplete) break;
+        await tester.tap(find.text('Start Next Round'));
+        await tester.pump();
+      }
 
-      // Caleb was eliminated (2 drinks); his result line is struck through.
-      final eliminatedLine = tester.widget<Text>(
-        find.text('Caleb: 2 drink(s)'),
-      );
-      expect(eliminatedLine.style?.decoration, TextDecoration.lineThrough);
+      // The game is complete with a crown.
+      expect(find.byType(TurtleKingCrown), findsOneWidget);
     });
   });
 

@@ -231,19 +231,19 @@ class _EventRow extends StatelessWidget {
       case GameEventType.playerHeldOut:
         return 'held out';
       case GameEventType.playerCalledYamada:
-        return 'called YAMADA (admitting defeat)';
+        return 'called YAMADA (strategic surrender)';
       case GameEventType.yamadaDrink:
-        return 'drank the cup';
+        return 'took 1 shot (wrong YAMADA)';
       case GameEventType.replacementCardsDealt:
-        return 'received two new cards and continued';
+        return 'received new cards (legacy)';
       case GameEventType.revealOccurred:
         return 'everyone held out — all hands revealed together';
       case GameEventType.smallestDetermined:
         return 'had the smallest hand(s)';
       case GameEventType.fullCupPenalty:
-        return 'drank a full cup (smallest hand)';
+        return 'took shots (smallest hand)';
       case GameEventType.extraCupPenalty:
-        return 'drank an extra cup (held out with the smallest hand)';
+        return 'took an extra shot (held out with the smallest hand)';
       case GameEventType.playerEliminated:
         return 'was eliminated (reached the drinking threshold)';
       case GameEventType.cupSizeAdvanced:
@@ -254,6 +254,18 @@ class _EventRow extends StatelessWidget {
         return 'completed round ${event.round}';
       case GameEventType.gameCompleted:
         return 'the game ended';
+      case GameEventType.challengeStarted:
+        return 'refused to drink — challenge started';
+      case GameEventType.challengerSelected:
+        return 'was selected as challenger';
+      case GameEventType.challengeTypeChosen:
+        return 'chose the challenge type';
+      case GameEventType.challengeResolved:
+        return 'challenge resolved — penalty applied';
+      case GameEventType.challengePenalty:
+        return 'drank from challenge penalty';
+      case GameEventType.refusalDrink:
+        return 'drank from refusal (too few for challenge)';
     }
   }
 
@@ -290,6 +302,15 @@ class _EventRow extends StatelessWidget {
         return Icons.person_off_outlined;
       case GameEventType.cupSizeAdvanced:
         return Icons.trending_up;
+      case GameEventType.challengeStarted:
+      case GameEventType.challengerSelected:
+      case GameEventType.challengeTypeChosen:
+        return Icons.gavel_outlined;
+      case GameEventType.challengeResolved:
+      case GameEventType.challengePenalty:
+        return Icons.local_drink_outlined;
+      case GameEventType.refusalDrink:
+        return Icons.block_outlined;
     }
   }
 }

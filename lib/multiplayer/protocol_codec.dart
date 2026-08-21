@@ -105,6 +105,8 @@ class MessageCodec {
         sessionId: sessionId,
         action: requireEnum(GameAction.values, body['action'], 'action'),
         playerId: requireString(body['playerId'], 'playerId'),
+        challengeType: body['challengeType'] as String?,
+        challengeResult: body['challengeResult'] as String?,
       ),
       'ACTION_ACCEPTED' => ActionAcceptedMessage(
         seq: seq,

@@ -1,3 +1,4 @@
+import '../challenge/challenge_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 
@@ -39,6 +40,21 @@ abstract class GameDriver {
   /// [player]'s pouring-turn action: shout YAMADA (admit defeat).
   void callYamada(Player player);
 
+  /// [player]'s pouring-turn action: refuse to drink.
+  ///
+  /// Returns `true` if a challenge was initiated, `false` if the player
+  /// drinks directly.
+  bool refuseDrink(Player player);
+
+  /// Selects a random challenger from eligible players.
+  ChallengeState selectChallenger();
+
+  /// The challenger chooses the challenge type.
+  ChallengeState chooseChallengeType(ChallengeType type, Player player);
+
+  /// Resolves the active challenge with the given result.
+  void resolveChallenge(ChallengeResult result);
+
   /// Starts the next round after the current one has completed.
   void startNextRound();
 }
@@ -66,6 +82,20 @@ class LocalDriver implements GameDriver {
 
   @override
   void callYamada(Player player) => state.callYamada(player);
+
+  @override
+  bool refuseDrink(Player player) => state.refuseDrink(player);
+
+  @override
+  ChallengeState selectChallenger() => state.selectChallenger();
+
+  @override
+  ChallengeState chooseChallengeType(ChallengeType type, Player player) =>
+      state.chooseChallengeType(type, player);
+
+  @override
+  void resolveChallenge(ChallengeResult result) =>
+      state.resolveChallenge(result);
 
   @override
   void startNextRound() => state.startNextRound();

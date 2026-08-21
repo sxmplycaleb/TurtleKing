@@ -113,6 +113,8 @@ class GameSaveCodec {
       'remainingDeck': [
         for (final card in game.remainingDeck) _cardToMap(card),
       ],
+      'yamadaCallerThisRound': game.yamadaCallerThisRound?.id,
+      'playersActedThisRound': List.of(game.playersActedThisRound),
     };
   }
 
@@ -209,6 +211,14 @@ class GameSaveCodec {
           for (final item in _requireList(map, 'remainingDeck'))
             _cardFromMap(_requireMap(item, 'remainingDeck[]')),
         ],
+        yamadaCallerThisRound: map['yamadaCallerThisRound'] != null
+            ? _playerRef(map['yamadaCallerThisRound'] as String, playersById)
+            : null,
+        playersActedThisRound: {
+          if (map['playersActedThisRound'] != null)
+            for (final id in (map['playersActedThisRound'] as List<dynamic>))
+              id as String,
+        },
       );
     } on GameSaveException {
       rethrow;

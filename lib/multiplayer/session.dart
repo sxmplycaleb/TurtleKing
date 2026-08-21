@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart' show Color;
 
+import '../challenge/challenge_state.dart';
 import '../game_state.dart';
 import '../player_colors.dart';
 import 'errors.dart';
@@ -716,6 +717,18 @@ class HostSession {
         owned = game.pourCurrentPlayer.id == client.playerId;
       case GameAction.startNextRound:
         owned = true;
+      case GameAction.refuseDrink:
+        owned = game.pourCurrentPlayer.id == client.playerId;
+      case GameAction.selectChallenger:
+        // Only the host selects the challenger (authoritative random).
+        owned = true;
+      case GameAction.chooseChallengeType:
+        owned = game.challengeState?.challenger?.id == client.playerId;
+      case GameAction.resolveChallenge:
+        // Only the challenger or challenged player can trigger resolution.
+        owned =
+            game.challengeState?.challenger?.id == client.playerId ||
+            game.challengeState?.challengedPlayer.id == client.playerId;
     }
     if (!owned) {
       _sendRejected(connection, message, 'not your turn');
@@ -741,6 +754,54 @@ class HostSession {
           game.callYamada(game.pourCurrentPlayer);
         case GameAction.startNextRound:
           game.startNextRound();
+        case GameAction.refuseDrink:
+          game.refuseDrink(game.pourCurrentPlayer);
+        case GameAction.selectChallenger:
+          if (!game.challengeActive) {
+            rejection = 'no active challenge';
+          } else {
+            game.selectChallenger();
+          }
+        case GameAction.chooseChallengeType:
+          if (!game.challengeActive ||
+              game.challengeState?.challenger == null) {
+            rejection = 'no active challenge awaiting type selection';
+          } else {
+            final typeStr = message.challengeType;
+            if (typeStr == null) {
+              rejection = 'challenge type is required';
+            } else {
+              final type = ChallengeType.values
+                  .where((t) => t.name == typeStr)
+                  .firstOrNull;
+              if (type == null) {
+                rejection = 'invalid challenge type: $typeStr';
+              } else {
+                game.chooseChallengeType(
+                  type,
+                  game.challengeState!.challenger!,
+                );
+              }
+            }
+          }
+        case GameAction.resolveChallenge:
+          if (!game.challengeActive) {
+            rejection = 'no active challenge';
+          } else {
+            final resultStr = message.challengeResult;
+            if (resultStr == null) {
+              rejection = 'challenge result is required';
+            } else {
+              final result = ChallengeResult.values
+                  .where((r) => r.name == resultStr)
+                  .firstOrNull;
+              if (result == null) {
+                rejection = 'invalid challenge result: $resultStr';
+              } else {
+                game.resolveChallenge(result);
+              }
+            }
+          }
       }
     } on YamadaRoundException catch (error) {
       rejection = error.message;
@@ -1369,7 +1430,11 @@ class ClientSession {
   /// Fire-and-forget from the caller's perspective: the outcome arrives via
   /// [gameplayEvents] (actionAccepted / actionRejected). Never throws for
   /// transport failures; a closed connection simply drops the request.
-  void requestAction(GameAction action) {
+  void requestAction(
+    GameAction action, {
+    String? challengeType,
+    String? challengeResult,
+  }) {
     final connection = _connection;
     final self = _self;
     if (connection == null || self == null || _closed) return;
@@ -1383,6 +1448,8 @@ class ClientSession {
                   sessionId: _hostSessionId ?? sessionId,
                   action: action,
                   playerId: self.id,
+                  challengeType: challengeType,
+                  challengeResult: challengeResult,
                 ),
               ),
             )

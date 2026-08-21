@@ -109,6 +109,12 @@ void main() {
     await completeViewingTurn(tester);
   }
 
+  Future<void> holdOut(WidgetTester tester) async {
+    await tester.ensureVisible(find.text('Hold out'));
+    await tester.tap(find.text('Hold out'));
+    await tester.pump();
+  }
+
   group('event to audio asset mapping', () {
     test('every event maps to its own distinct bundled asset', () {
       const expected = <FeedbackEvent, String>{
@@ -601,22 +607,24 @@ void main() {
       final game = gameForTwo(threshold: 2);
       await pumpGame(tester, game, recording);
 
-      await finishViewing(tester);
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
+      // Play rounds until game completes.
+      while (!game.gameComplete) {
+        await finishViewing(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.pump();
+        if (game.gameComplete) break;
+        await tester.tap(find.text('Start Next Round'));
+        await tester.pump();
+      }
 
-      // Second YAMADA eliminates the caller and ends the game.
       expect(
         recording.events,
-        containsAllInOrder([
-          FeedbackEvent.yamada,
-          FeedbackEvent.yamada,
-          FeedbackEvent.elimination,
-          FeedbackEvent.victory,
-        ]),
+        containsAllInOrder([FeedbackEvent.elimination, FeedbackEvent.victory]),
       );
     });
 

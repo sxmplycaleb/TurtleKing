@@ -14,6 +14,10 @@ enum GameAction {
   holdOut,
   callYamada,
   startNextRound,
+  refuseDrink,
+  selectChallenger,
+  chooseChallengeType,
+  resolveChallenge,
 }
 
 /// A strongly typed protocol message (see docs/multiplayer/m18-architecture.md
@@ -152,16 +156,29 @@ class ActionRequestMessage extends MultiplayerMessage {
     required super.sessionId,
     required this.action,
     required this.playerId,
+    this.challengeType,
+    this.challengeResult,
   });
 
   final GameAction action;
   final String playerId;
 
+  /// The challenge type for chooseChallengeType actions.
+  final String? challengeType;
+
+  /// The challenge result for resolveChallenge actions.
+  final String? challengeResult;
+
   @override
   String get type => 'ACTION_REQUEST';
 
   @override
-  Map<String, Object?> body() => {'action': action.name, 'playerId': playerId};
+  Map<String, Object?> body() => {
+    'action': action.name,
+    'playerId': playerId,
+    if (challengeType != null) 'challengeType': challengeType,
+    if (challengeResult != null) 'challengeResult': challengeResult,
+  };
 }
 
 /// Host confirms the action and reports the new public state version

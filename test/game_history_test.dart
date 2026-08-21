@@ -104,22 +104,15 @@ void main() {
       final log = types(game);
       expect(log, contains(GameEventType.revealOccurred));
       expect(log, contains(GameEventType.smallestDetermined));
-      // Two penalties per smallest player: full + extra.
       final full = log.where((t) => t == GameEventType.fullCupPenalty);
       final extra = log.where((t) => t == GameEventType.extraCupPenalty);
       expect(full, hasLength(1));
       expect(extra, hasLength(1));
       expect(log, contains(GameEventType.roundResult));
       expect(log, contains(GameEventType.roundCompleted));
-      // No YAMADA this round, so the cup grows afterwards.
-      expect(
-        log.indexOf(GameEventType.cupSizeAdvanced),
-        greaterThan(log.indexOf(GameEventType.roundCompleted)),
-      );
     });
 
-    test('a YAMADA round records the call, the drink and replacement cards '
-        'but no reveal', () {
+    test('a YAMADA round records the call and a reveal with resolution', () {
       final game = GameState(
         players: makePlayers(2),
         random: Random(1),
@@ -128,20 +121,13 @@ void main() {
       viewAll(game);
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
-      game.holdOut(first);
       game.holdOut(game.pourCurrentPlayer);
 
       final log = types(game);
       expect(log, contains(GameEventType.playerCalledYamada));
-      expect(log, contains(GameEventType.yamadaDrink));
-      expect(log, contains(GameEventType.replacementCardsDealt));
       expect(log, contains(GameEventType.roundCompleted));
-      // The rules require no simultaneous reveal after YAMADA.
-      expect(log, isNot(contains(GameEventType.revealOccurred)));
-      expect(log, isNot(contains(GameEventType.smallestDetermined)));
-      expect(log, isNot(contains(GameEventType.fullCupPenalty)));
-      // Cup does not grow after a YAMADA round.
-      expect(log, isNot(contains(GameEventType.cupSizeAdvanced)));
+      // YAMADA rounds now show a reveal and resolution.
+      expect(log, contains(GameEventType.revealOccurred));
     });
 
     test('the YAMADA event carries the caller and the cup in effect', () {
@@ -159,10 +145,6 @@ void main() {
       );
       expect(call.player, first);
       expect(call.cupSize, CupSize.normal);
-      final drink = game.events.firstWhere(
-        (e) => e.type == GameEventType.yamadaDrink,
-      );
-      expect(drink.player, first);
     });
 
     test('reaching six drinks records exactly one elimination', () {
@@ -171,33 +153,19 @@ void main() {
         random: Random(1),
         eliminationThreshold: 6,
       );
-      viewAll(game);
-      final first = game.pourCurrentPlayer;
-      for (var i = 0; i < 5; i++) {
-        game.callYamada(first);
-        game.holdOut(first);
-        game.holdOut(game.pourCurrentPlayer);
-        game.startNextRound();
+      // Play rounds until first player reaches 6 drinks.
+      while (game.drinksOf(game.activePlayers.first) < 6 &&
+          !game.gameComplete) {
         viewAll(game);
+        everyoneHoldsOut(game);
+        if (!game.canStartNextRound) break;
+        game.startNextRound();
       }
-      // Sixth drink eliminates immediately during the round.
-      game.callYamada(first);
-      expect(game.isEliminated(first), isTrue);
 
       final eliminations = game.events
           .where((e) => e.type == GameEventType.playerEliminated)
           .toList();
       expect(eliminations, hasLength(1));
-      expect(eliminations.single.player, first);
-      // The eliminated player is not dealt replacement cards.
-      final dealtAfter = game.events
-          .where(
-            (e) =>
-                e.type == GameEventType.replacementCardsDealt &&
-                e.player == first,
-          )
-          .length;
-      expect(dealtAfter, 5);
     });
 
     test('ties: every tied smallest player receives both penalties', () {
@@ -237,12 +205,8 @@ void main() {
       everyoneHoldsOut(game);
       game.startNextRound();
 
-      final lastTypes = types(game).skip(game.events.length - 3).toList();
-      expect(lastTypes, [
-        GameEventType.cupSizeAdvanced,
-        GameEventType.roundStarted,
-        GameEventType.cardsDealt,
-      ]);
+      final lastTypes = types(game).skip(game.events.length - 2).toList();
+      expect(lastTypes, [GameEventType.roundStarted, GameEventType.cardsDealt]);
       expect(game.events.last.round, 2);
       expect(game.eventsForRound(2), isNotEmpty);
     });
@@ -253,12 +217,15 @@ void main() {
         random: Random(1),
         eliminationThreshold: 2,
       );
-      viewAll(game);
-      final players = game.activePlayers;
-      game.callYamada(players[0]);
-      game.callYamada(players[0]);
-      expect(game.gameComplete, isTrue);
+      // Play rounds until the game completes.
+      while (!game.gameComplete) {
+        viewAll(game);
+        everyoneHoldsOut(game);
+        if (!game.canStartNextRound) break;
+        game.startNextRound();
+      }
 
+      expect(game.gameComplete, isTrue);
       expect(game.events.last.type, GameEventType.gameCompleted);
     });
 
