@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'challenge/challenge_engine.dart';
+import 'challenge/challenge_state.dart';
 import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
@@ -197,6 +199,24 @@ enum GameEventType {
 
   /// The deterministic result of a completed round was recorded.
   roundResult,
+
+  /// A player refused to drink and a challenge was started.
+  challengeStarted,
+
+  /// A random challenger was selected from eligible players.
+  challengerSelected,
+
+  /// The challenger chose the challenge type (Dare/RPS/Trivia).
+  challengeTypeChosen,
+
+  /// The challenge resolved and a penalty was applied.
+  challengeResolved,
+
+  /// A player drank as a result of a challenge penalty.
+  challengePenalty,
+
+  /// A player refused to drink (too few others for a challenge).
+  refusalDrink,
 }
 
 /// One immutable entry in the game replay log.
@@ -329,6 +349,8 @@ class GameState {
     required bool gameComplete,
     required GameResult? finalResult,
     required List<Card> remainingDeck,
+    Player? yamadaCallerThisRound,
+    Set<String> playersActedThisRound = const {},
   }) : _players = List.unmodifiable(players),
        _deck = Deck.fromCards(remainingDeck),
        _eliminationThreshold = eliminationThreshold,
@@ -353,7 +375,9 @@ class GameState {
        _smallestHands = List.of(smallestHands),
        _revealedPlayers = List.of(revealedPlayers),
        _gameComplete = gameComplete,
-       _finalResult = finalResult {
+       _finalResult = finalResult,
+       _yamadaCallerThisRound = yamadaCallerThisRound {
+    _playersActedThisRound.addAll(playersActedThisRound);
     if (_players.length < 2) {
       throw ArgumentError.value(players, 'players', 'need at least 2 players');
     }
@@ -401,12 +425,58 @@ class GameState {
   bool _roundFinalized = false;
   List<Player> _smallestHands = const [];
 
+  // YAMADA strategic surrender tracking.
+  Player? _yamadaCallerThisRound;
+  final Set<String> _playersActedThisRound = {};
+
+  /// The IDs of players who have acted (held out or called YAMADA) this round.
+  Set<String> get playersActedThisRound =>
+      Set.unmodifiable(_playersActedThisRound);
+
   /// The players who participated in the group reveal (active players at the
   /// moment everyone held out, before penalty drinks). Used so the reveal UI
   /// shows exactly the hands that were revealed together.
   List<Player> _revealedPlayers = const [];
   bool _gameComplete = false;
   GameResult? _finalResult;
+
+  // ---------------------------------------------------------------------
+  // Refusal / Challenge system
+  // ---------------------------------------------------------------------
+
+  /// The challenge engine managing refusal/challenge state.
+  final ChallengeEngine _challengeEngine = ChallengeEngine();
+
+  /// Whether a challenge is currently active.
+  bool get challengeActive => _challengeEngine.isActive;
+
+  /// The current challenge state, or null when no challenge is active.
+  ChallengeState? get challengeState => _challengeEngine.state;
+
+  /// The players eligible to be selected as challenger (everyone except
+  /// the challenged player). Empty when no challenge is active.
+  List<Player> get eligiblePlayersForChallenge =>
+      _challengeEngine.state?.eligiblePlayers ?? [];
+
+  // ---------------------------------------------------------------------
+  // YAMADA strategic surrender getters
+  // ---------------------------------------------------------------------
+
+  /// The player who called YAMADA this round, or null if nobody called it.
+  Player? get yamadaCallerThisRound => _yamadaCallerThisRound;
+
+  /// Whether YAMADA was called this round.
+  bool get yamadaCalledThisRound => _yamadaCallerThisRound != null;
+
+  /// Whether the YAMADA caller had the smallest hand (correct call).
+  /// Only meaningful after the round completes with a YAMADA call.
+  bool get yamadaWasCorrect {
+    if (_yamadaCallerThisRound == null) return false;
+    final caller = _yamadaCallerThisRound!;
+    if (!hasHand(caller)) return false;
+    final callerTotal = _handTotal(caller);
+    return activePlayers.every((p) => _handTotal(p) >= callerTotal);
+  }
 
   // ---------------------------------------------------------------------
   // Identity / roster
@@ -562,7 +632,6 @@ class GameState {
     if (allPlayersViewed) {
       _pouring = true;
       _pourIndex = 0;
-      _consecutiveHolds = 0;
       _record(
         GameEvent(type: GameEventType.pouringStarted, round: _roundNumber),
       );
@@ -596,8 +665,13 @@ class GameState {
   /// Whether the current round is the first round.
   bool get isFirstRound => _roundNumber == 1;
 
-  /// The current round's cup size.
-  CupSize get cupSize => _cupSize;
+  /// The current round's cup size, based on the round number.
+  /// Round 1 = normal, Round 2 = large, Round 3+ = extra-large.
+  CupSize get cupSize => switch (_roundNumber) {
+    1 => CupSize.normal,
+    2 => CupSize.large,
+    _ => CupSize.extraLarge,
+  };
 
   /// The current round's number (1-based).
   int get roundNumber => _roundNumber;
@@ -624,16 +698,16 @@ class GameState {
 
   /// [player]'s pouring-turn action: holds out (does not shout YAMADA).
   ///
-  /// When every active player has held out in a row, the round ends. If
-  /// nobody called YAMADA, all hands are revealed together and the smallest
-  /// hand(s) drink a full cup plus an extra cup for holding out; if YAMADA
-  /// was called, the round ends without a reveal.
+  /// When all players have acted (held out or called YAMADA), the round ends.
+  /// If nobody called YAMADA, all hands are revealed together and the
+  /// smallest hand(s) take shots. If YAMADA was called, the caller's hand
+  /// is revealed and the YAMADA result is determined.
   ///
   /// Throws [YamadaRoundException] for invalid usage; the state is unchanged
   /// after a rejected call.
   void holdOut(Player player) {
     _validatePourAction(player);
-    _consecutiveHolds++;
+    _playersActedThisRound.add(player.id);
     _record(
       GameEvent(
         type: GameEventType.playerHeldOut,
@@ -641,25 +715,33 @@ class GameState {
         player: player,
       ),
     );
-    if (_consecutiveHolds >= activePlayerCount) {
+    if (_playersActedThisRound.length >= activePlayerCount) {
       _completeRound();
       return;
     }
     _advancePour();
   }
 
-  /// [player]'s pouring-turn action: shouts YAMADA, admitting defeat.
+  /// [player]'s pouring-turn action: shouts YAMADA, a strategic surrender.
   ///
-  /// The player drinks the water in the cup (one drinking event), is dealt
-  /// two new cards (looking at one of them), and their pouring turn repeats
-  /// so they can decide again with the new hand. If the drink reaches the
-  /// elimination threshold the player is eliminated on the spot; when fewer
-  /// than two active players remain the game completes immediately.
+  /// YAMADA is a one-time call per round. The player commits to admitting
+  /// defeat. After all players have acted, the cards are revealed:
+  ///
+  /// - If the caller would have been the loser (smallest hand): 0 shots.
+  /// - If the caller would NOT have been the loser: 1 shot.
+  ///
+  /// No new cards are dealt. The caller's turn advances to the next player.
   ///
   /// Throws [YamadaRoundException] for invalid usage; the state is unchanged
   /// after a rejected call.
   void callYamada(Player player) {
     _validatePourAction(player);
+    if (_yamadaCallerThisRound != null) {
+      throw const YamadaRoundException(
+        'YAMADA has already been called this round',
+      );
+    }
+    _yamadaCallerThisRound = player;
     _calledYamada[player.id] = true;
     _record(
       GameEvent(
@@ -669,25 +751,129 @@ class GameState {
         cupSize: _cupSize,
       ),
     );
-    _drink(player, GameEventType.yamadaDrink);
-    _consecutiveHolds = 0;
-    _maybeCompleteGame();
-    if (_gameComplete) return;
-    if (!isEliminated(player)) {
-      _redealHand(player);
+    // YAMADA does NOT trigger a drink or redeal — the round continues.
+    // After all players have acted, the result is resolved.
+    _playersActedThisRound.add(player.id);
+    if (_playersActedThisRound.length >= activePlayerCount) {
+      _completeRound();
+      return;
+    }
+    _advancePour();
+  }
+
+  // ---------------------------------------------------------------------
+  // Refusal / Challenge flow
+  // ---------------------------------------------------------------------
+
+  /// [player]'s pouring-turn action: refuses to drink.
+  ///
+  /// If there are 3 or more OTHER active players, this enters the Challenge
+  /// Selection flow. Otherwise, it falls through to the normal penalty flow
+  /// (the player takes the shot directly).
+  ///
+  /// Returns `true` if a challenge was initiated, `false` if the player
+  /// should just drink directly (too few other players).
+  ///
+  /// Throws [YamadaRoundException] for invalid usage.
+  bool refuseDrink(Player player) {
+    _validatePourAction(player);
+
+    final others = activePlayers.where((p) => p.id != player.id).toList();
+
+    if (others.length >= challengeMinimumOtherPlayers) {
+      // Enter challenge selection flow.
+      _challengeEngine.begin(challengedPlayer: player, eligiblePlayers: others);
       _record(
         GameEvent(
-          type: GameEventType.replacementCardsDealt,
+          type: GameEventType.challengeStarted,
           round: _roundNumber,
           player: player,
+          players: others,
         ),
       );
-      return; // the same player's turn repeats with the new cards
+      return true;
     }
-    // The eliminated player is gone from [activePlayers], so the next active
-    // player slides into this index (clamped when the eliminated player was
-    // last). The phone then passes to them.
-    _pourIndex = _pourIndex % activePlayers.length;
+
+    // Fewer than 3 others — player drinks directly.
+    _drink(player, GameEventType.refusalDrink);
+    _maybeCompleteGame();
+    if (!_gameComplete) {
+      _pourIndex = _pourIndex % activePlayers.length;
+    }
+    return false;
+  }
+
+  /// Selects a random challenger from the eligible players.
+  ///
+  /// Must be called after [refuseDrink] returns `true`.
+  /// Returns the updated challenge state.
+  ChallengeState selectChallenger() {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge to select from');
+    }
+    final result = _challengeEngine.selectChallenger();
+    _record(
+      GameEvent(
+        type: GameEventType.challengerSelected,
+        round: _roundNumber,
+        player: result.challenger,
+        players: [result.challengedPlayer],
+      ),
+    );
+    return result;
+  }
+
+  /// The challenger chooses the challenge type.
+  ///
+  /// [player] must be the challenger. Returns the updated challenge state.
+  ChallengeState chooseChallengeType(ChallengeType type, Player player) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final result = _challengeEngine.chooseChallengeType(type, player);
+    _record(
+      GameEvent(
+        type: GameEventType.challengeTypeChosen,
+        round: _roundNumber,
+        player: player,
+      ),
+    );
+    return result;
+  }
+
+  /// Resolves the active challenge and applies the penalty.
+  ///
+  /// [result] determines who drinks: challenger or challenged player.
+  /// The penalty is applied exactly once, and the challenge is marked resolved.
+  ///
+  /// After resolution, the game returns to normal flow.
+  void resolveChallenge(ChallengeResult result) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge to resolve');
+    }
+    final resolved = _challengeEngine.resolve(result);
+    final penaltyRecipient = resolved.penaltyRecipient!;
+
+    // Apply the penalty exactly once.
+    _drink(penaltyRecipient, GameEventType.challengePenalty);
+
+    _record(
+      GameEvent(
+        type: GameEventType.challengeResolved,
+        round: _roundNumber,
+        player: penaltyRecipient,
+      ),
+    );
+
+    // Reset the challenge engine so a new challenge can begin later.
+    _challengeEngine.reset();
+
+    _maybeCompleteGame();
+    if (!_gameComplete) {
+      // The pouring turn continues with the next player after the
+      // penalty recipient's position.
+      _pourIndex = _pourIndex % activePlayers.length;
+    }
   }
 
   /// Validates a pouring action and rejects it without mutating anything.
@@ -712,15 +898,6 @@ class GameState {
   /// Moves the pouring turn to the next active player.
   void _advancePour() {
     _pourIndex = (_pourIndex + 1) % activePlayers.length;
-  }
-
-  /// Deals [player] a fresh two-card hand; they look at the first card.
-  void _redealHand(Player player) {
-    if (_deck.remainingCards < 2) {
-      _deck.reset();
-      _deck.shuffle();
-    }
-    _hands[player.id] = _deck.deal(2);
   }
 
   /// Records one drinking event for [player] and eliminates them on the spot
@@ -756,29 +933,10 @@ class GameState {
   /// drinks are recorded, and the cup does not grow.
   void _completeRound() {
     final yamadaCalled = _calledYamada.values.any((called) => called);
-    if (!yamadaCalled) {
-      _revealedPlayers = List.of(activePlayers);
-      final smallest = _smallestHandsAmong(activePlayers);
-      _smallestHands = smallest;
-      _record(
-        GameEvent(
-          type: GameEventType.revealOccurred,
-          round: _roundNumber,
-          players: List.of(_revealedPlayers),
-        ),
-      );
-      _record(
-        GameEvent(
-          type: GameEventType.smallestDetermined,
-          round: _roundNumber,
-          players: List.of(smallest),
-        ),
-      );
-      for (final player in smallest) {
-        // Full cup for the smallest hand, plus the extra holding-out cup.
-        _drink(player, GameEventType.fullCupPenalty);
-        _drink(player, GameEventType.extraCupPenalty);
-      }
+    if (yamadaCalled) {
+      _resolveYamadaRound();
+    } else {
+      _resolveNormalRound();
     }
     _finalizeRound();
     _record(
@@ -789,10 +947,71 @@ class GameState {
       ),
     );
     _record(GameEvent(type: GameEventType.roundCompleted, round: _roundNumber));
-    if (!yamadaCalled) {
-      _advanceCupSize();
-    }
     _maybeCompleteGame();
+  }
+
+  /// Resolves a round where nobody called YAMADA: all hands revealed,
+  /// smallest hand takes shots = roundNumber (the cup) + 1 (holding-out).
+  void _resolveNormalRound() {
+    _revealedPlayers = List.of(activePlayers);
+    final smallest = _smallestHandsAmong(activePlayers);
+    _smallestHands = smallest;
+    _record(
+      GameEvent(
+        type: GameEventType.revealOccurred,
+        round: _roundNumber,
+        players: List.of(_revealedPlayers),
+      ),
+    );
+    _record(
+      GameEvent(
+        type: GameEventType.smallestDetermined,
+        round: _roundNumber,
+        players: List.of(smallest),
+      ),
+    );
+    for (final player in smallest) {
+      // Round penalty: roundNumber shots (the cup).
+      _drink(player, GameEventType.fullCupPenalty);
+      // Extra shot for holding out (everyone held out in this case).
+      _drink(player, GameEventType.extraCupPenalty);
+    }
+  }
+
+  /// Resolves a round where someone called YAMADA: reveal only the caller's
+  /// hand, determine if the call was correct, apply penalty accordingly.
+  ///
+  /// Correct YAMADA (caller has smallest hand): 0 shots.
+  /// Wrong YAMADA (caller does NOT have smallest hand): 1 shot.
+  void _resolveYamadaRound() {
+    final caller = _yamadaCallerThisRound!;
+    _revealedPlayers = [caller];
+    _smallestHands = const [];
+    _record(
+      GameEvent(
+        type: GameEventType.revealOccurred,
+        round: _roundNumber,
+        players: [caller],
+      ),
+    );
+    final callerHandTotal = _handTotal(caller);
+    final callerIsSmallest = activePlayers.every(
+      (p) => _handTotal(p) >= callerHandTotal,
+    );
+    if (callerIsSmallest) {
+      // Correct YAMADA: 0 shots.
+      _record(
+        GameEvent(
+          type: GameEventType.smallestDetermined,
+          round: _roundNumber,
+          players: [caller],
+        ),
+      );
+      _smallestHands = [caller];
+    } else {
+      // Wrong YAMADA: caller takes 1 shot.
+      _drink(caller, GameEventType.yamadaDrink);
+    }
   }
 
   /// The players tied for the smallest total hand value (Ace = 1 ...
@@ -827,26 +1046,10 @@ class GameState {
             player: _calledYamada[player.id] ?? false,
         }),
         smallestHands: List.unmodifiable(_smallestHands),
-        cupSize: _cupSize,
+        cupSize: cupSize,
       ),
     );
     _roundFinalized = true;
-  }
-
-  /// Grows the cup one step after a round with no YAMADA (normal → large →
-  /// extra-large, capped).
-  void _advanceCupSize() {
-    _cupSize = switch (_cupSize) {
-      CupSize.normal => CupSize.large,
-      CupSize.large || CupSize.extraLarge => CupSize.extraLarge,
-    };
-    _record(
-      GameEvent(
-        type: GameEventType.cupSizeAdvanced,
-        round: _roundNumber,
-        cupSize: _cupSize,
-      ),
-    );
   }
 
   // ---------------------------------------------------------------------
@@ -881,8 +1084,9 @@ class GameState {
     _revealed = false;
     _pouring = false;
     _pourIndex = 0;
-    _consecutiveHolds = 0;
     _roundFinalized = false;
+    _yamadaCallerThisRound = null;
+    _playersActedThisRound.clear();
     _roundNumber++;
     _record(GameEvent(type: GameEventType.roundStarted, round: _roundNumber));
     _dealHands();

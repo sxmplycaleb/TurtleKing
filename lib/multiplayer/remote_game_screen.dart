@@ -378,8 +378,9 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Water is being poured into the ${cupSizeFromName(view.cupSize).label} cup. '
-          'If your other card feels too small, shout YAMADA — or hold out.',
+          'Water is being poured — round ${view.roundNumber}. '
+          'If your other card feels too small, '
+          'shout YAMADA — or hold out.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: style.textPrimary,
@@ -533,15 +534,24 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (yamadaCalled)
+        if (yamadaCalled) ...[
           Text(
-            'YAMADA was called — the round ended without a reveal.',
+            'YAMADA was called — cards revealed!',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: style.textPrimary,
             ),
-          )
-        else ...[
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The YAMADA caller takes 0 or 1 shot based on whether they '
+            'had the smallest hand.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: style.textSecondary,
+            ),
+          ),
+        ] else ...[
           Text(
             'Everyone held out — hands were revealed!',
             textAlign: TextAlign.center,
@@ -584,7 +594,7 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
                 backgroundColor: Color(player.color),
               ),
               title: Text(player.name),
-              trailing: Text('${view.roundDrinks[player.id]} cup(s)'),
+              trailing: Text('${view.roundDrinks[player.id]} shot(s)'),
             ),
         const SizedBox(height: 16),
         if (view.canStartNextRound)

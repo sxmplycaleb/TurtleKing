@@ -1,3 +1,4 @@
+import '../challenge/challenge_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 import 'json_util.dart';
@@ -296,6 +297,7 @@ class PublicStateView {
     required this.roundResults,
     required this.events,
     required this.finalResult,
+    this.challengeState,
   });
 
   /// Builds the projection from a [GameState] using **only public getters**.
@@ -331,6 +333,9 @@ class PublicStateView {
       finalResult: game.finalResult == null
           ? null
           : PublicGameResult.fromGame(game.finalResult!),
+      challengeState: game.challengeActive
+          ? PublicChallengeState.fromChallenge(game.challengeState!)
+          : null,
     );
   }
 
@@ -356,6 +361,9 @@ class PublicStateView {
   final List<PublicRoundResult> roundResults;
   final List<PublicGameEvent> events;
   final PublicGameResult? finalResult;
+
+  /// Challenge state (null when no challenge is active).
+  final PublicChallengeState? challengeState;
 
   Map<String, Object?> toJson() => {
     'players': [for (final p in players) p.toJson()],
@@ -486,6 +494,72 @@ class PublicStateView {
       finalResult: finalResult == null
           ? null
           : PublicGameResult.fromJson(finalResult),
+      challengeState: map['challengeState'] != null
+          ? PublicChallengeState.fromJson(map['challengeState'])
+          : null,
+    );
+  }
+}
+
+/// Public challenge state — broadcast to all clients when a challenge is active.
+///
+/// Contains only identity strings (player IDs) and the challenge type/phase.
+/// No private game state is exposed.
+class PublicChallengeState {
+  const PublicChallengeState({
+    required this.challengedPlayerId,
+    this.challengerId,
+    this.type,
+    required this.phase,
+    this.eligiblePlayerIds = const [],
+    this.result,
+  });
+
+  factory PublicChallengeState.fromChallenge(ChallengeState cs) {
+    return PublicChallengeState(
+      challengedPlayerId: cs.challengedPlayer.id,
+      challengerId: cs.challenger?.id,
+      type: cs.type?.name,
+      phase: cs.phase.name,
+      eligiblePlayerIds: [for (final p in cs.eligiblePlayers) p.id],
+      result: cs.result?.name,
+    );
+  }
+
+  final String challengedPlayerId;
+  final String? challengerId;
+  final String? type;
+  final String phase;
+  final List<String> eligiblePlayerIds;
+  final String? result;
+
+  Map<String, Object?> toJson() => {
+    'challengedPlayerId': challengedPlayerId,
+    'challengerId': challengerId,
+    'type': type,
+    'phase': phase,
+    'eligiblePlayerIds': eligiblePlayerIds,
+    'result': result,
+  };
+
+  factory PublicChallengeState.fromJson(Object? value) {
+    final map = requireMap(value, 'challenge state');
+    return PublicChallengeState(
+      challengedPlayerId: requireString(
+        map['challengedPlayerId'],
+        'challenge state.challengedPlayerId',
+      ),
+      challengerId: map['challengerId'] as String?,
+      type: map['type'] as String?,
+      phase: requireString(map['phase'], 'challenge state.phase'),
+      eligiblePlayerIds: [
+        for (final id in requireList(
+          map['eligiblePlayerIds'],
+          'challenge state.eligiblePlayerIds',
+        ))
+          requireString(id, 'challenge state.eligiblePlayerIds[]'),
+      ],
+      result: map['result'] as String?,
     );
   }
 }

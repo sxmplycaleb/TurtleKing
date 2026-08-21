@@ -182,14 +182,29 @@ void main() {
         }
       }
 
-      // Pouring: two YAMADA calls eliminate each player in turn until one
-      // remains (game over). An elimination is followed by a neutral
-      // handoff that also needs a Continue.
+      // Pouring: hold out to complete rounds until the game ends.
       while (!game.gameComplete) {
-        await tapVisible('YAMADA!');
-        await tapVisible('Continue');
+        await tapVisible('Hold out');
+        if (find.text('Continue').evaluate().isNotEmpty) {
+          await tapVisible('Continue');
+        }
         if (find.text('Pass the phone').evaluate().isNotEmpty) {
           await tapVisible('Continue');
+        }
+        if (find.text('Start Next Round').evaluate().isNotEmpty) {
+          await tapVisible('Start Next Round');
+          // Viewing phase for remaining players after round restart.
+          while (!game.pouringStarted && !game.gameComplete) {
+            if (find.text('Reveal My Card').evaluate().isNotEmpty) {
+              await tapVisible('Reveal My Card');
+            }
+            if (find.text('Pass to Next Player').evaluate().isNotEmpty) {
+              await tapVisible('Pass to Next Player');
+            }
+            if (find.text('Continue').evaluate().isNotEmpty) {
+              await tapVisible('Continue');
+            }
+          }
         }
       }
 

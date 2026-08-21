@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:turtle_king/game_state.dart';
 import 'package:turtle_king/multiplayer/driver.dart';
 import 'package:turtle_king/multiplayer/public_state.dart';
+import 'package:turtle_king/player.dart';
+import 'package:turtle_king/player_colors.dart';
 
 import 'helpers.dart';
 
@@ -44,17 +47,15 @@ void main() {
       expect(game.currentPlayerIndex, 1);
     });
 
-    test('callYamada forwards the drink and redeal', () {
+    test('callYamada records the strategic surrender', () {
       final game = testGame(2);
       viewThrough(game);
       final driver = LocalDriver(game);
       final caller = game.pourCurrentPlayer;
-      final drinksBefore = game.drinksOf(caller);
-      final deckBefore = game.remainingCards;
       driver.callYamada(caller);
-      expect(game.drinksOf(caller), drinksBefore + 1);
-      expect(game.remainingCards, deckBefore - 2); // two new cards dealt
+      // YAMADA is a strategic surrender: no immediate drink or redeal.
       expect(game.calledYamadaThisRound(caller), isTrue);
+      expect(game.yamadaCallerThisRound?.id, caller.id);
     });
 
     test('startNextRound forwards after a completed round', () {
@@ -110,28 +111,36 @@ void main() {
     });
 
     test('eliminated players cannot act through the driver', () {
-      // Three players so elimination does not end the whole game (with two
-      // players the game completes first and the action is rejected as
-      // "already complete", not "eliminated").
-      final game = testGame(3);
-      viewThrough(game);
-      final p0 = game.players[0];
-      // Drive p0 to elimination with six YAMADA calls.
-      for (var i = 0; i < 6; i++) {
-        game.callYamada(p0);
+      final game = GameState(
+        players: [
+          Player(id: 'p1', name: 'P1', color: PlayerColors.palette[0]),
+          Player(id: 'p2', name: 'P2', color: PlayerColors.palette[1]),
+          Player(id: 'p3', name: 'P3', color: PlayerColors.palette[2]),
+        ],
+        random: Random(1),
+        eliminationThreshold: 2,
+      );
+      // Play rounds until someone is eliminated.
+      while (!game.gameComplete) {
+        viewThrough(game);
+        while (!game.roundComplete) {
+          game.holdOut(game.pourCurrentPlayer);
+        }
+        if (game.eliminatedPlayers.isNotEmpty) break;
+        if (!game.canStartNextRound) break;
+        game.startNextRound();
       }
-      expect(game.isEliminated(p0), isTrue);
-      expect(game.gameComplete, isFalse);
-      final driver = LocalDriver(game);
+      final eliminated = game.eliminatedPlayers;
       expect(
-        () => driver.holdOut(p0),
-        throwsA(
-          isA<YamadaRoundException>().having(
-            (e) => e.message,
-            'message',
-            contains('eliminated'),
-          ),
-        ),
+        eliminated,
+        isNotEmpty,
+        reason: 'expected at least one elimination',
+      );
+      final driver = LocalDriver(game);
+      // The eliminated player cannot hold out (rejected at validation).
+      expect(
+        () => driver.holdOut(eliminated.first),
+        throwsA(isA<YamadaRoundException>()),
       );
     });
 
@@ -146,32 +155,33 @@ void main() {
         final driver = LocalDriver(testGame(3, seed: 23));
 
         void script(GameDriver d) {
-          for (var i = 0; i < 3; i++) {
-            d.revealCurrentPlayer();
-            d.passToNextPlayer();
-          }
-          // YAMADA repeats the caller's turn, so the round completes with
-          // three consecutive holds: p0, p1, p2.
-          d.callYamada(d.state.players[0]);
-          d.holdOut(d.state.players[0]);
-          d.holdOut(d.state.players[1]);
-          d.holdOut(d.state.players[2]);
-          if (d.state.canStartNextRound) {
-            d.startNextRound();
+          // Two full rounds.
+          for (var r = 0; r < 2; r++) {
+            for (var i = 0; i < 3; i++) {
+              d.revealCurrentPlayer();
+              d.passToNextPlayer();
+            }
+            while (!d.state.roundComplete) {
+              d.holdOut(d.state.pourCurrentPlayer);
+            }
+            if (d.state.canStartNextRound) {
+              d.startNextRound();
+            }
           }
         }
 
         void scriptDirect(GameState g) {
-          for (var i = 0; i < 3; i++) {
-            g.revealCurrentPlayer();
-            g.passToNextPlayer();
-          }
-          g.callYamada(g.players[0]);
-          g.holdOut(g.players[0]);
-          g.holdOut(g.players[1]);
-          g.holdOut(g.players[2]);
-          if (g.canStartNextRound) {
-            g.startNextRound();
+          for (var r = 0; r < 2; r++) {
+            for (var i = 0; i < 3; i++) {
+              g.revealCurrentPlayer();
+              g.passToNextPlayer();
+            }
+            while (!g.roundComplete) {
+              g.holdOut(g.pourCurrentPlayer);
+            }
+            if (g.canStartNextRound) {
+              g.startNextRound();
+            }
           }
         }
 

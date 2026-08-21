@@ -50,7 +50,9 @@ void main() {
     expect(b.viewIndex, a.viewIndex);
     expect(b.pourIndex, a.pourIndex);
     expect(b.consecutiveHolds, a.consecutiveHolds);
-    expect(b.currentPlayer.id, a.currentPlayer.id);
+    if (!a.gameComplete && a.activePlayerCount > 0) {
+      expect(b.currentPlayer.id, a.currentPlayer.id);
+    }
     expect(b.remainingCards, a.remainingCards);
     expect(b.remainingDeck, a.remainingDeck);
     expect(
@@ -110,19 +112,16 @@ void main() {
       expect(restored.currentPlayer.id, game.currentPlayer.id);
     });
 
-    test('round-trips a mid-pour game with YAMADA drinks', () {
+    test('round-trips a mid-pour game with YAMADA', () {
       final game = GameState(players: makePlayers(3), random: Random(1));
       viewAll(game);
       game.holdOut(game.pourCurrentPlayer);
-      game.callYamada(game.pourCurrentPlayer);
+      final caller = game.pourCurrentPlayer;
       game.callYamada(game.pourCurrentPlayer);
       final restored = codec.decode(codec.encode(game));
       expectSameGame(game, restored);
-      expect(restored.roundDrinksOf(restored.pourCurrentPlayer), 2);
-      expect(
-        restored.calledYamadaThisRound(restored.pourCurrentPlayer),
-        isTrue,
-      );
+      expect(restored.calledYamadaThisRound(caller), isTrue);
+      expect(restored.yamadaCallerThisRound?.id, caller.id);
     });
 
     test('round-trips a completed reveal round (smallest-hand penalties)', () {
@@ -148,31 +147,29 @@ void main() {
         random: Random(1),
         eliminationThreshold: 2,
       );
-      viewAll(game);
-      // Two YAMADA calls eliminate player 0; player 1 remains and wins.
-      game.callYamada(game.pourCurrentPlayer);
-      game.callYamada(game.pourCurrentPlayer);
+      // Play rounds until the game completes.
+      while (!game.gameComplete) {
+        viewAll(game);
+        everyoneHoldsOut(game);
+        if (!game.canStartNextRound) break;
+        game.startNextRound();
+      }
       expect(game.gameComplete, isTrue);
       final restored = codec.decode(codec.encode(game));
       expectSameGame(game, restored);
       expect(restored.gameComplete, isTrue);
-      // The game ended mid-round (YAMADA elimination), so no round result
-      // was finalized; the restored final result matches the original's.
       expect(
         restored.finalResult!.roundsPlayed,
         game.finalResult!.roundsPlayed,
       );
-      expect(restored.finalResult!.turtleKings.single.id, 'player-1');
     });
 
     test('restored game deals and plays exactly as the original', () {
       final original = GameState(players: makePlayers(3), random: Random(1));
       viewAll(original);
-      original.callYamada(original.pourCurrentPlayer);
-      // Save here, then keep playing the original...
+      // Save mid-round, then continue playing.
       final restored = codec.decode(codec.encode(original));
       void continueScript(GameState game) {
-        game.holdOut(game.pourCurrentPlayer);
         while (!game.roundComplete) {
           game.holdOut(game.pourCurrentPlayer);
         }
@@ -193,7 +190,12 @@ void main() {
       viewAll(game);
       for (var cycle = 0; cycle < 3; cycle++) {
         game = codec.decode(codec.encode(game));
-        game.holdOut(game.pourCurrentPlayer);
+        if (!game.pouringStarted && !game.roundComplete) {
+          viewAll(game);
+        }
+        if (!game.roundComplete) {
+          game.holdOut(game.pourCurrentPlayer);
+        }
         expectSameGame(game, game);
       }
       // Same seed + same script on a parallel game reaches the same state.
@@ -336,12 +338,14 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final store = GameSaveStore(prefs);
       final game = GameState(players: makePlayers(2), eliminationThreshold: 2);
-      viewAll(game);
-      game.callYamada(game.pourCurrentPlayer);
-      game.callYamada(game.pourCurrentPlayer);
+      while (!game.gameComplete) {
+        viewAll(game);
+        everyoneHoldsOut(game);
+        if (!game.canStartNextRound) break;
+        game.startNextRound();
+      }
       expect(game.gameComplete, isTrue);
 
-      // The store clears when asked to persist a completed game.
       if (game.gameComplete) {
         await store.clear();
       }

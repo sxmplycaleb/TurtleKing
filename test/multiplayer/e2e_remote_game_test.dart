@@ -240,12 +240,30 @@ void main() {
         host.broadcastHostAction();
         await pumpUntil(() => leoDriver.view.isMyTurn, timeout: kSlow);
 
-        // Leo calls YAMADA until the sixth drink eliminates him and — with
-        // only the host left — the game completes immediately.
-        for (var i = 1; i <= 6; i++) {
-          final before = host.stateSeq;
-          leoDriver.callYamada();
-          await pumpUntil(() => host.stateSeq > before, timeout: kSlow);
+        // Play rounds until the game completes via normal gameplay.
+        var roundsPlayed = 0;
+        while (!game.gameComplete && roundsPlayed < 20) {
+          // Complete the round: hold out until done.
+          if (game.pouringStarted && !game.roundComplete) {
+            final before = host.stateSeq;
+            while (!game.roundComplete) {
+              game.holdOut(game.pourCurrentPlayer);
+            }
+            host.broadcastHostAction();
+            await pumpUntil(() => host.stateSeq > before, timeout: kSlow);
+          }
+          if (!game.gameComplete && game.canStartNextRound) {
+            final beforeNext = host.stateSeq;
+            game.startNextRound();
+            host.broadcastHostAction();
+            await pumpUntil(() => host.stateSeq > beforeNext, timeout: kSlow);
+            // View cards for the new round.
+            while (!game.pouringStarted) {
+              game.revealCurrentPlayer();
+              game.passToNextPlayer();
+            }
+          }
+          roundsPlayed++;
         }
         await pumpUntil(() => game.gameComplete, timeout: kSlow);
         expect(game.eliminationHistory.length, 1);

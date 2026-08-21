@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide Card;
 
+import 'challenge/challenge_state.dart';
 import 'card_widgets.dart';
 import 'feedback.dart';
 import 'game_history_screen.dart';
@@ -50,20 +51,16 @@ enum _Stage {
   revealed,
   handoff,
   pourTurn,
-  yamadaResult,
   roundComplete,
   gameOver,
+  challengeSelection,
+  challengeTypeSelection,
+  challengeResolution,
 }
 
 class _GameStartScreenState extends State<GameStartScreen> {
   /// Whether the neutral handoff screen is showing for the next player.
   bool _showingHandoff = false;
-
-  /// Whether the YAMADA drink result is being shown to the caller.
-  bool _showingYamadaResult = false;
-
-  /// The player who just called YAMADA (drinking the cup).
-  Player? _yamadaPlayer;
 
   /// The authoritative state behind the driver (read-only from the UI's
   /// perspective; actions go through the driver).
@@ -118,13 +115,22 @@ class _GameStartScreenState extends State<GameStartScreen> {
   }
 
   _Stage get _stage {
-    // A YAMADA drink result (including one that eliminates the caller and
-    // ends the game) is always shown before the game-over screen, so the
-    // caller learns why the game ended.
-    if (_showingYamadaResult) return _Stage.yamadaResult;
     if (_game.gameComplete) return _Stage.gameOver;
     if (_game.roundComplete) return _Stage.roundComplete;
     if (_showingHandoff) return _Stage.handoff;
+    // Challenge flow takes priority over normal pouring turn.
+    if (_game.challengeActive) {
+      final cs = _game.challengeState!;
+      if (cs.phase == ChallengePhase.selection) {
+        return _Stage.challengeSelection;
+      }
+      if (cs.phase == ChallengePhase.typeSelection) {
+        return _Stage.challengeTypeSelection;
+      }
+      if (cs.phase == ChallengePhase.resolved) {
+        return _Stage.challengeResolution;
+      }
+    }
     if (_game.pouringStarted) return _Stage.pourTurn;
     if (_game.allPlayersViewed) return _Stage.handoff;
     if (_game.currentPlayerRevealed) return _Stage.revealed;
@@ -156,9 +162,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
     setState(() {
       final player = _game.pourCurrentPlayer;
       widget.driver.callYamada(player);
-      _yamadaPlayer = player;
-      _showingYamadaResult = true;
-      _showingHandoff = false;
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
     _persistGame();
     _playFeedback(FeedbackEvent.yamada);
@@ -174,19 +178,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
     final eliminationsBefore = _game.eliminationHistory.length;
     setState(() {
       widget.driver.holdOut(_game.pourCurrentPlayer);
-      _showingYamadaResult = false;
       _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
     _persistGame();
     _playFeedback(FeedbackEvent.holdOut);
     if (_game.roundComplete && !_game.gameComplete) {
-      // The round ended by a simultaneous reveal (everyone held out).
-      final yamadaCalled = _game.roundResult!.calledYamada.values.any(
-        (called) => called,
-      );
-      if (!yamadaCalled) {
-        _playFeedback(FeedbackEvent.roundReveal);
-      }
+      _playFeedback(FeedbackEvent.roundReveal);
     }
     if (_game.eliminationHistory.length > eliminationsBefore) {
       _playFeedback(FeedbackEvent.elimination);
@@ -196,23 +193,52 @@ class _GameStartScreenState extends State<GameStartScreen> {
     }
   }
 
-  void _yamadaContinue() {
+  void _refuseDrink() {
     setState(() {
-      final player = _yamadaPlayer;
-      _showingYamadaResult = false;
-      // If the caller was eliminated, the phone passes to the next player;
-      // their card must stay hidden until they continue.
-      if (player != null && _game.isEliminated(player) && !_game.gameComplete) {
-        _showingHandoff = true;
+      final initiated = widget.driver.refuseDrink(_game.pourCurrentPlayer);
+      _showingHandoff = false;
+      // If a challenge was NOT initiated (too few players), the player
+      // drinks directly and the turn advances.
+      if (!initiated) {
+        _showingHandoff = !_game.roundComplete && !_game.gameComplete;
       }
     });
+    _persistGame();
+  }
+
+  void _selectChallenger() {
+    setState(() {
+      widget.driver.selectChallenger();
+    });
+    _persistGame();
+  }
+
+  void _chooseChallengeType(ChallengeType type) {
+    setState(() {
+      widget.driver.chooseChallengeType(
+        type,
+        _game.challengeState!.challenger!,
+      );
+    });
+    _persistGame();
+  }
+
+  void _resolveChallenge(ChallengeResult result) {
+    setState(() {
+      widget.driver.resolveChallenge(result);
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
+    });
+    _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
   }
 
   void _startNextRound() {
     setState(() {
       widget.driver.startNextRound();
       _showingHandoff = false;
-      _showingYamadaResult = false;
     });
     _persistGame();
   }
@@ -436,9 +462,16 @@ class _GameStartScreenState extends State<GameStartScreen> {
                       _Stage.revealed => _revealedView(context),
                       _Stage.handoff => _handoffView(context),
                       _Stage.pourTurn => _pourTurnView(context),
-                      _Stage.yamadaResult => _yamadaResultView(context),
                       _Stage.roundComplete => _roundCompleteView(context),
                       _Stage.gameOver => _gameOverView(context),
+                      _Stage.challengeSelection => _challengeSelectionView(
+                        context,
+                      ),
+                      _Stage.challengeTypeSelection =>
+                        _challengeTypeSelectionView(context),
+                      _Stage.challengeResolution => _challengeResolutionView(
+                        context,
+                      ),
                     },
                   ],
                 ),
@@ -600,9 +633,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
         TurtleKingCup(size: _game.cupSize, diameter: 54),
         const SizedBox(height: 8),
         Text(
-          'Water is being poured into the ${_game.cupSize.label} cup. If '
-          'you feel your other card is too small, shout YAMADA — or hold '
-          'out.',
+          'Water is being poured — round ${_game.roundNumber}. '
+          'If you feel your other card is too small, '
+          'shout YAMADA — or hold out.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: style.textPrimary,
@@ -657,7 +690,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                 ),
               ),
               Text(
-                'Admit defeat — drink the cup',
+                'Strategic surrender — see if you were right',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: style.onDanger.withValues(alpha: 0.8),
                 ),
@@ -687,107 +720,19 @@ class _GameStartScreenState extends State<GameStartScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        _backToSetup(context),
-      ],
-    );
-  }
-
-  Widget _yamadaResultView(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = GameTableStyle.of(context);
-    final player = _yamadaPlayer;
-    if (player == null) {
-      // Only reachable right after a YAMADA call.
-      return const SizedBox.shrink();
-    }
-    final eliminated = _game.isEliminated(player);
-    final gameOver = _game.gameComplete;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TurtleKingCup(size: _game.cupSize, diameter: 54),
-        const SizedBox(height: 6),
-        Text(
-          'YAMADA!',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineMedium?.copyWith(
-            color: style.accentText,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '${player.name} admitted defeat and drank the water in the cup.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: style.textPrimary,
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Lifetime drinks: ${_game.drinksOf(player)}',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(color: style.textPrimary),
-        ),
-        if (eliminated) ...[
-          const SizedBox(height: 14),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                color: style.danger,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                'ELIMINATED',
-                style: TextStyle(
-                  color: style.onDanger,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${player.name} has been eliminated!',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: style.danger,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ] else ...[
-          const SizedBox(height: 12),
-          Text(
-            'New cards were dealt. Look at your new visible card, then '
-            'continue.',
-            textAlign: TextAlign.center,
+        // Refuse to drink — triggers challenge if 3+ other players.
+        TextButton(
+          onPressed: _refuseDrink,
+          style: TextButton.styleFrom(foregroundColor: style.textSecondary),
+          child: Text(
+            'Refuse to drink',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: style.textPrimary,
-              height: 1.4,
+              color: style.textSecondary,
             ),
           ),
-        ],
-        if (gameOver) ...[
-          const SizedBox(height: 12),
-          Text(
-            'The game is over!',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: style.danger,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-        const SizedBox(height: 32),
-        FilledButton(
-          onPressed: _yamadaContinue,
-          style: _goldButtonStyle(context),
-          child: Text('Continue', style: _goldButtonLabelStyle(context)),
         ),
+        const SizedBox(height: 4),
+        _backToSetup(context),
       ],
     );
   }
@@ -814,15 +759,64 @@ class _GameStartScreenState extends State<GameStartScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        if (yamadaCalled)
+        if (yamadaCalled) ...[
           Text(
-            'YAMADA was called — the round ended without a reveal.',
+            'YAMADA was called — all cards revealed!',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: style.textSecondary,
             ),
-          )
-        else
+          ),
+          const SizedBox(height: 16),
+          // Show the YAMADA caller's revealed hand.
+          for (final player in _game.revealedPlayers) ...[
+            Text(
+              player.name,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: style.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (var i = 0; i < _game.handOf(player).length; i++)
+                  CardFace(
+                    card: _game.handOf(player)[i],
+                    highlighted: result.smallestHands.contains(player),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 4),
+          if (_game.yamadaWasCorrect)
+            Text(
+              'Correct YAMADA! ${_game.yamadaCallerThisRound!.name} had the '
+              'smallest hand — 0 shots!',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: const Color(0xFF4CAF50),
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            )
+          else
+            Text(
+              'Wrong YAMADA! ${_game.yamadaCallerThisRound!.name} did NOT '
+              'have the smallest hand — 1 shot.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: style.danger,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+        ] else ...[
           Text(
             'Everyone held out — all cards are revealed together!',
             textAlign: TextAlign.center,
@@ -830,7 +824,6 @@ class _GameStartScreenState extends State<GameStartScreen> {
               color: style.textSecondary,
             ),
           ),
-        if (!yamadaCalled) ...[
           const SizedBox(height: 16),
           // One-shot entrance for the group reveal (short, settles).
           TweenAnimationBuilder<double>(
@@ -875,12 +868,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
           Text(
             result.smallestHands.length == 1
                 ? 'Smallest hand: '
-                      '${result.smallestHands.first.name} — drinks a full '
-                      'cup and an extra cup for holding out.'
+                      '${result.smallestHands.first.name} — takes '
+                      '${_game.roundNumber} shot(s) + 1 extra for holding out.'
                 : 'Smallest hands: '
                       '${result.smallestHands.map((p) => p.name).join(', ')} '
-                      '— each drinks a full cup and an extra cup for holding '
-                      'out.',
+                      '— each takes ${_game.roundNumber} shot(s) + 1 extra '
+                      'for holding out.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: style.accentTextSoft,
@@ -917,7 +910,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         if (_game.canStartNextRound) ...[
           const SizedBox(height: 16),
           Text(
-            'Next round cup: ${_game.cupSize.label}',
+            'Next round: ${_game.roundNumber + 1} shot(s) for the loser.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: style.accentText,
@@ -1045,6 +1038,215 @@ class _GameStartScreenState extends State<GameStartScreen> {
           onPressed: () => Navigator.of(context).pop(),
           style: _goldButtonStyle(context),
           child: Text('Back to setup', style: _goldButtonLabelStyle(context)),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Challenge stage views
+  // ---------------------------------------------------------------------
+
+  /// "Place Your Finger" screen — randomly selects a challenger.
+  Widget _challengeSelectionView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final cs = _game.challengeState!;
+    final challenged = cs.challengedPlayer;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'PLACE YOUR FINGER',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: style.textPrimary,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Let the app choose your challenger',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: style.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${challenged.name} refused to drink',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: style.danger,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Show eligible players as colored discs.
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          alignment: WrapAlignment.center,
+          children: [
+            for (final player in cs.eligiblePlayers)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(radius: 24, backgroundColor: player.color),
+                  const SizedBox(height: 4),
+                  Text(
+                    player.name,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: style.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        FilledButton(
+          onPressed: _selectChallenger,
+          style: _goldButtonStyle(context),
+          child: Text(
+            'Select Challenger',
+            style: _goldButtonLabelStyle(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Challenger is chosen — show who was selected and prompt for challenge type.
+  Widget _challengeTypeSelectionView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final cs = _game.challengeState!;
+    final challenger = cs.challenger!;
+    final challenged = cs.challengedPlayer;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${challenger.name} HAS BEEN CHOSEN',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: style.danger,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '${challenger.name} CHALLENGES ${challenged.name}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: style.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'CHOOSE YOUR CHALLENGE',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: style.textSecondary,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Challenge type buttons.
+        for (final type in ChallengeType.values) ...[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => _chooseChallengeType(type),
+              style: FilledButton.styleFrom(
+                backgroundColor: style.accent,
+                foregroundColor: style.onAccent,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
+              ),
+              child: Text(
+                type.label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: style.onAccent,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  /// Challenge resolved — show the result and apply the penalty.
+  Widget _challengeResolutionView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final cs = _game.challengeState!;
+    final challenger = cs.challenger!;
+    final challenged = cs.challengedPlayer;
+    final penalty = cs.penaltyRecipient;
+    final result = cs.result;
+
+    final resultText = switch (result) {
+      ChallengeResult.challengerPenalty => '${challenger.name} takes the shot!',
+      ChallengeResult.challengedPenalty => '${challenged.name} takes the shot!',
+      null => '',
+    };
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'CHALLENGE COMPLETE',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: style.accentText,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          resultText,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: style.danger,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (penalty != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${penalty.name} drinks.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: style.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Lifetime drinks: ${_game.drinksOf(penalty)}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: style.textSecondary,
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: () => _resolveChallenge(result!),
+          style: _goldButtonStyle(context),
+          child: Text('Continue', style: _goldButtonLabelStyle(context)),
         ),
       ],
     );

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../challenge/challenge_state.dart';
 import 'protocol.dart';
 import 'remote_game_controller.dart';
 import 'remote_game_view.dart';
@@ -321,9 +322,31 @@ class RemoteDriver implements RemoteGameController {
   @override
   void startNextRound() => _request(GameAction.startNextRound);
 
-  void _request(GameAction action) {
+  @override
+  void refuseDrink() => _request(GameAction.refuseDrink);
+
+  @override
+  void selectChallenger() => _request(GameAction.selectChallenger);
+
+  @override
+  void chooseChallengeType(ChallengeType type) =>
+      _request(GameAction.chooseChallengeType, challengeType: type.name);
+
+  @override
+  void resolveChallenge(ChallengeResult result) =>
+      _request(GameAction.resolveChallenge, challengeResult: result.name);
+
+  void _request(
+    GameAction action, {
+    String? challengeType,
+    String? challengeResult,
+  }) {
     if (!isConnected || !_gameStarted) return;
-    _session?.requestAction(action);
+    _session?.requestAction(
+      action,
+      challengeType: challengeType,
+      challengeResult: challengeResult,
+    );
   }
 
   // -------------------------------------------------------------------

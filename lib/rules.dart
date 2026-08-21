@@ -104,34 +104,39 @@ class RulesContent {
       title: 'YAMADA',
       body:
           'If you feel your other (hidden) card is too small, you '
-          'can shout "Yamada!" — this means you admit defeat. You '
-          'drink the water currently in the cup, you are dealt two '
-          'new cards (and look at one of them), and the game '
-          'continues.',
+          'can shout "Yamada!" — a strategic surrender. After all '
+          'players have acted, the cards are revealed. If you would '
+          'have been the loser (smallest hand), your YAMADA call was '
+          'correct: 0 shots! If you would NOT have been the loser, '
+          'you take 1 shot for calling YAMADA wrong.',
     ),
     RulesSection(
       id: 'holdOut',
       title: 'Hold Out',
       body:
           'If you do not shout YAMADA, you hold out. If every '
-          'player holds out without shouting, the cup is filled and '
-          'all players reveal their cards together.',
+          'player holds out without shouting, all players reveal '
+          'their cards together. If someone called YAMADA, the '
+          "caller's hand is revealed and the YAMADA is resolved.",
     ),
     RulesSection(
       id: 'reveal',
       title: 'The Reveal',
       body:
-          'When everyone holds out, all hands are revealed at once. '
-          'The player with the smallest cards must drink a full cup '
-          'of water. Because they held out until the end with the '
-          'smallest cards, they must also drink an extra cup of '
-          'water.',
+          'When everyone holds out (or after YAMADA is resolved), '
+          'hands are revealed. The player with the smallest cards '
+          'takes shots: the round number (the cup) plus 1 extra '
+          'shot for holding out.',
       bullets: [
         'Card values: Ace = 1, number cards = their number, '
             'Jack = 11, Queen = 12, King = 13.',
         '"Smallest" means the lowest total value of the two cards. '
             'If players tie for the smallest, all tied players '
-            'drink.',
+            'take shots.',
+        'Round 1: 1 shot + 1 extra = 2 shots total. '
+            'Round 2: 2 shots + 1 extra = 3 shots total. '
+            'Round 3: 3 shots + 1 extra = 4 shots total. '
+            'And so on.',
       ],
       example:
           'Example: a 3 and a 7 total 10 — smaller than a 4 and a '
@@ -139,22 +144,22 @@ class RulesContent {
     ),
     RulesSection(
       id: 'cupSizes',
-      title: 'Cup Sizes',
+      title: 'Shot Escalation',
       body:
-          'The cup grows as the game goes on. The first round uses '
-          'a normal cup. Because no player admitted defeat in the '
-          'first round, the second round switches to a large cup; '
-          'if nobody admits defeat in the second round either, the '
-          'third round switches to an extra-large cup.',
+          'The penalty increases each round. Round 1 loser takes '
+          '1 shot. Round 2 loser takes 2 shots. Round 3 loser '
+          'takes 3 shots. The penalty continues to escalate by 1 '
+          'shot each round. A YAMADA call does not reset the '
+          'escalation.',
     ),
     RulesSection(
       id: 'drinkingCounts',
       title: 'Drinking Counts',
       body:
-          'Every drink counts: a YAMADA drink, a full-cup penalty, '
-          'and the extra holding-out cup are each one drinking '
-          'event. A player who accumulates six drinking events is '
-          'directly eliminated on the spot.',
+          'Every shot counts: the round penalty, the extra '
+          'holding-out shot, and a wrong YAMADA penalty are each '
+          'one drinking event. A player who accumulates six '
+          'drinking events is directly eliminated on the spot.',
     ),
     RulesSection(
       id: 'multipleRounds',
@@ -194,18 +199,17 @@ class RulesContent {
       bullets: [
         '"Smallest cards" means the lowest total value of the two '
             'cards; tied players share the penalty.',
-        'A YAMADA drink, a full-cup penalty, and the extra '
-            'holding-out cup each count as one drinking event.',
-        'The cup grows one step (normal → large → extra-large) '
-            'after each round with no YAMADA, and stays the same '
-            'after a round with YAMADA.',
+        'YAMADA is a strategic surrender: no new cards are dealt. '
+            'After all players act, the cards reveal and the YAMADA '
+            'result is determined.',
+        'Correct YAMADA (caller has smallest hand): 0 shots. '
+            'Wrong YAMADA: 1 shot.',
+        'No YAMADA round: the smallest hand takes the round '
+            'number (shots) + 1 extra shot for holding out.',
+        'Each round increases the base shot count by 1.',
+        'Only one YAMADA call is allowed per round.',
         'The deck is reshuffled when it runs low, so the game can '
             'continue.',
-        'Each new YAMADA hand shows the player one (the first) of '
-            'their two new cards.',
-        'A round ends once every active player has held out in a '
-            'row; if YAMADA was called, no reveal happens and the '
-            'round just completes.',
       ],
       highlighted: true,
     ),

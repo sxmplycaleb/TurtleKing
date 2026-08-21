@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../challenge/challenge_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 import 'private_state.dart';
@@ -39,6 +40,18 @@ abstract class RemoteGameController {
   void callYamada();
 
   void startNextRound();
+
+  /// Refuse to drink — initiates a challenge if 3+ other players.
+  void refuseDrink();
+
+  /// Select a random challenger from eligible players (host-authoritative).
+  void selectChallenger();
+
+  /// The challenger chooses the challenge type.
+  void chooseChallengeType(ChallengeType type);
+
+  /// Resolve the active challenge with the given result.
+  void resolveChallenge(ChallengeResult result);
 
   /// Reconnects after a failed connection. Hosts always report success
   /// (they are the authority); clients retry their last-known host.
@@ -150,6 +163,33 @@ class HostRemoteController implements RemoteGameController {
 
   @override
   void startNextRound() => _act(() => game.startNextRound());
+
+  @override
+  void refuseDrink() => _act(() => game.refuseDrink(game.pourCurrentPlayer));
+
+  @override
+  void selectChallenger() => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.selectChallenger();
+  });
+
+  @override
+  void chooseChallengeType(ChallengeType type) => _act(() {
+    if (!game.challengeActive || game.challengeState?.challenger == null) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.chooseChallengeType(type, game.challengeState!.challenger!);
+  });
+
+  @override
+  void resolveChallenge(ChallengeResult result) => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.resolveChallenge(result);
+  });
 
   void _act(void Function() action) {
     if (!_started) return;

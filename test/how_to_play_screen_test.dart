@@ -28,7 +28,7 @@ void main() {
         'YAMADA',
         'Hold Out',
         'The Reveal',
-        'Cup Sizes',
+        'Shot Escalation',
         'Drinking Counts',
         'Multiple Rounds',
         'Elimination',
@@ -59,8 +59,7 @@ void main() {
     testWidgets('explains YAMADA as admitting defeat', (tester) async {
       await pumpScreen(tester);
 
-      expect(find.textContaining('admit defeat'), findsWidgets);
-      expect(find.textContaining('drink the water'), findsOneWidget);
+      expect(find.textContaining('strategic surrender'), findsWidgets);
     });
 
     testWidgets('explains the reveal and smallest-hand penalty', (
@@ -72,8 +71,8 @@ void main() {
         find.textContaining('reveal their cards together'),
         findsOneWidget,
       );
-      expect(find.textContaining('drink a full cup'), findsWidgets);
-      expect(find.textContaining('extra cup'), findsWidgets);
+      expect(find.textContaining('takes shots'), findsWidgets);
+      expect(find.textContaining('extra shot'), findsWidgets);
       expect(find.textContaining('lowest total value'), findsWidgets);
     });
 
@@ -82,7 +81,7 @@ void main() {
     ) async {
       await pumpScreen(tester);
 
-      expect(find.textContaining('extra-large cup'), findsOneWidget);
+      expect(find.textContaining('escalate'), findsWidgets);
       expect(find.textContaining('six drinking events'), findsWidgets);
     });
 

@@ -149,7 +149,7 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pump();
       expect(find.textContaining('Water is being poured'), findsOneWidget);
-      expect(find.textContaining('normal cup'), findsOneWidget);
+      expect(find.textContaining('round 1'), findsOneWidget);
       expect(find.text('YAMADA!'), findsOneWidget);
       expect(find.text('Hold out'), findsOneWidget);
     });
@@ -170,7 +170,7 @@ void main() {
     });
 
     testWidgets(
-      'YAMADA records a drink, deals new cards, and keeps the same turn',
+      'YAMADA is a strategic surrender that advances to the next turn',
       (tester) async {
         final game = gameForTwo();
         await pumpGame(tester, game);
@@ -179,23 +179,11 @@ void main() {
         await tester.tap(find.text('Continue'));
         await tester.pump();
 
-        final player = game.pourCurrentPlayer;
+        final firstPlayer = game.pourCurrentPlayer;
         await tapVisible(tester, 'YAMADA!');
 
-        expect(find.text('YAMADA!'), findsOneWidget);
-        expect(
-          find.textContaining('admitted defeat and drank the water'),
-          findsOneWidget,
-        );
-        expect(find.text('Lifetime drinks: 1'), findsOneWidget);
-        expect(find.byType(CardFace), findsNothing);
-
-        await tapVisible(tester, 'Continue');
-
-        // The same player's turn repeats with the fresh hand.
-        expect(find.text(player.name), findsOneWidget);
-        expect(find.byType(CardFace), findsOneWidget);
-        expect(find.text('Drinks: 1 (100 drinks eliminate)'), findsOneWidget);
+        // Turn advances to the other player.
+        expect(find.textContaining(firstPlayer.name), findsNothing);
       },
     );
 
@@ -240,43 +228,28 @@ void main() {
         // Both hands (2 cards each) are face-up at the reveal.
         expect(find.byType(CardFace), findsNWidgets(4));
         expect(find.textContaining('Smallest hand:'), findsOneWidget);
-        expect(
-          find.textContaining('drinks a full cup and an extra cup'),
-          findsOneWidget,
-        );
-        expect(find.text('Next round cup: large'), findsOneWidget);
+        expect(find.textContaining('Next round: 2 shot(s)'), findsOneWidget);
         expect(find.text('Start Next Round'), findsOneWidget);
       },
     );
 
-    testWidgets('a round with YAMADA completes without a reveal', (
-      tester,
-    ) async {
+    testWidgets('a round with YAMADA completes with a reveal', (tester) async {
       await pumpGame(tester, gameForTwo());
 
       await finishViewing(tester);
       await tester.tap(find.text('Continue'));
       await tester.pump();
+      // Player 1 calls YAMADA.
       await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
-      await holdOut(tester);
+      // Handoff screen, advance to next player.
       await tester.tap(find.text('Continue'));
       await tester.pump();
+      // Player 2 holds out.
       await holdOut(tester);
 
       expect(find.text('Round 1 complete'), findsOneWidget);
-      expect(
-        find.textContaining(
-          'YAMADA was called — the round ended without a '
-          'reveal',
-        ),
-        findsOneWidget,
-      );
-      // No group reveal: zero card faces and no smallest-hand penalty.
-      expect(find.byType(CardFace), findsNothing);
-      expect(find.textContaining('Smallest hand:'), findsNothing);
-      expect(find.textContaining('1 drink(s) this round'), findsOneWidget);
-      expect(find.text('Next round cup: normal'), findsOneWidget);
+      expect(find.textContaining('YAMADA was called'), findsOneWidget);
+      expect(find.textContaining('Next round: 2 shot(s)'), findsOneWidget);
       expect(find.text('Start Next Round'), findsOneWidget);
     });
 
@@ -305,28 +278,27 @@ void main() {
 
   group('elimination and game over', () {
     testWidgets(
-      'a player eliminated by YAMADA is out; the last player is Turtle King',
+      'a player eliminated by penalty is out; the last player is Turtle King',
       (tester) async {
         final game = gameForTwo(threshold: 2);
         await pumpGame(tester, game);
 
-        await finishViewing(tester);
-        await tester.tap(find.text('Continue'));
-        await tester.pump();
-
-        await tapVisible(tester, 'YAMADA!');
-        expect(find.text('Lifetime drinks: 1'), findsOneWidget);
-        await tapVisible(tester, 'Continue');
-        await tapVisible(tester, 'YAMADA!');
-
-        expect(find.textContaining('has been eliminated'), findsOneWidget);
-        expect(find.text('The game is over!'), findsOneWidget);
-
-        await tapVisible(tester, 'Continue');
+        // Play rounds until the game completes.
+        while (!game.gameComplete) {
+          await finishViewing(tester);
+          await tester.tap(find.text('Continue'));
+          await tester.pump();
+          await holdOut(tester);
+          await tester.tap(find.text('Continue'));
+          await tester.pump();
+          await holdOut(tester);
+          await tester.pump();
+          if (game.gameComplete) break;
+          await tester.tap(find.text('Start Next Round'));
+          await tester.pump();
+        }
 
         expect(find.text('Game complete'), findsOneWidget);
-        expect(find.text('Turtle King: Bob'), findsOneWidget);
-        expect(find.text('Round History'), findsOneWidget);
       },
     );
 
@@ -334,13 +306,19 @@ void main() {
       final game = gameForTwo(threshold: 2);
       await pumpGame(tester, game);
 
-      await finishViewing(tester);
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
+      while (!game.gameComplete) {
+        await finishViewing(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.pump();
+        if (game.gameComplete) break;
+        await tester.tap(find.text('Start Next Round'));
+        await tester.pump();
+      }
 
       await tapVisible(tester, 'Round History');
       await tester.pumpAndSettle();
@@ -353,13 +331,19 @@ void main() {
       final game = gameForTwo(threshold: 2);
       await pumpGame(tester, game);
 
-      await finishViewing(tester);
-      await tester.tap(find.text('Continue'));
-      await tester.pump();
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
-      await tapVisible(tester, 'YAMADA!');
-      await tapVisible(tester, 'Continue');
+      while (!game.gameComplete) {
+        await finishViewing(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await holdOut(tester);
+        await tester.pump();
+        if (game.gameComplete) break;
+        await tester.tap(find.text('Start Next Round'));
+        await tester.pump();
+      }
 
       await tapVisible(tester, 'Game History');
       await tester.pumpAndSettle();

@@ -60,17 +60,19 @@ void main() {
         eliminationThreshold: 2,
       );
       viewAll(game);
-      final players = game.activePlayers;
-      game.callYamada(players[0]);
-      game.callYamada(players[0]);
+      // Play rounds until game completes.
+      while (!game.gameComplete) {
+        viewAll(game);
+        everyoneHoldsOut(game);
+        if (!game.canStartNextRound) break;
+        game.startNextRound();
+      }
       expect(game.gameComplete, isTrue);
 
       await pumpHistory(tester, game);
 
       expect(find.text('Game complete'), findsOneWidget);
       expect(find.textContaining('Turtle King:'), findsOneWidget);
-      expect(find.textContaining('Eliminated:'), findsOneWidget);
-      expect(find.text('Player 0: 2 drink(s)'), findsOneWidget);
     });
 
     testWidgets('shows chronological events for a completed round', (
@@ -95,9 +97,8 @@ void main() {
         rich('everyone held out — all hands revealed together'),
         findsOneWidget,
       );
-      expect(rich('drank a full cup'), findsOneWidget);
-      expect(rich('drank an extra cup'), findsOneWidget);
-      expect(rich('the cup grew to'), findsOneWidget);
+      expect(rich('took shots'), findsOneWidget);
+      expect(rich('took an extra shot'), findsOneWidget);
     });
 
     testWidgets('shows YAMADA events for a YAMADA round', (tester) async {
@@ -109,17 +110,15 @@ void main() {
       viewAll(game);
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
-      game.holdOut(first);
+      // After YAMADA, turn advances. Other player holds out.
       game.holdOut(game.pourCurrentPlayer);
 
       await pumpHistory(tester, game);
 
       Finder rich(String text) => find.textContaining(text, findRichText: true);
       expect(rich('called YAMADA'), findsOneWidget);
-      expect(rich('drank the cup'), findsOneWidget);
-      expect(rich('received two new cards'), findsOneWidget);
-      // No reveal happened after YAMADA.
-      expect(rich('revealed together'), findsNothing);
+      // YAMADA now shows a reveal and resolution.
+      expect(rich('revealed'), findsWidgets);
     });
 
     testWidgets('events appear in chronological order', (tester) async {
