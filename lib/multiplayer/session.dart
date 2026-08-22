@@ -729,6 +729,15 @@ class HostSession {
         owned =
             game.challengeState?.challenger?.id == client.playerId ||
             game.challengeState?.challengedPlayer.id == client.playerId;
+      case GameAction.drawDare:
+        // Only the host can draw dare cards (authoritative).
+        owned = true;
+      case GameAction.completeDare:
+        // Only the challenged player can confirm dare completion.
+        owned = game.challengeState?.challengedPlayer.id == client.playerId;
+      case GameAction.refuseDare:
+        // Only the challenged player can refuse the dare.
+        owned = game.challengeState?.challengedPlayer.id == client.playerId;
     }
     if (!owned) {
       _sendRejected(connection, message, 'not your turn');
@@ -801,6 +810,31 @@ class HostSession {
                 game.resolveChallenge(result);
               }
             }
+          }
+        case GameAction.drawDare:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.dare) {
+            rejection = 'no active dare challenge';
+          } else if (game.currentDare != null) {
+            rejection = 'a dare has already been drawn';
+          } else {
+            game.drawDare();
+          }
+        case GameAction.completeDare:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.dare ||
+              game.currentDare == null) {
+            rejection = 'no active dare to complete';
+          } else {
+            game.completeDare();
+          }
+        case GameAction.refuseDare:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.dare ||
+              game.currentDare == null) {
+            rejection = 'no active dare to refuse';
+          } else {
+            game.refuseDare();
           }
       }
     } on YamadaRoundException catch (error) {

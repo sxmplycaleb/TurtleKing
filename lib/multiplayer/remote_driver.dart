@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../challenge/challenge_state.dart';
+import '../challenge/dare_card.dart';
 import 'protocol.dart';
 import 'remote_game_controller.dart';
 import 'remote_game_view.dart';
@@ -335,6 +336,26 @@ class RemoteDriver implements RemoteGameController {
   @override
   void resolveChallenge(ChallengeResult result) =>
       _request(GameAction.resolveChallenge, challengeResult: result.name);
+
+  @override
+  DareCard drawDare() {
+    // On the client side, drawDare sends the action request to the host.
+    // The actual card draw is host-authoritative. The client receives
+    // the drawn card via the public challenge state update.
+    _request(GameAction.drawDare);
+    // Return a placeholder — the real card comes from the host's state.
+    // The UI should read from challengeState.currentDare after the host
+    // broadcasts the updated state.
+    throw UnimplementedError(
+      'Client drawDare is host-authoritative — read the challenge state',
+    );
+  }
+
+  @override
+  void completeDare() => _request(GameAction.completeDare);
+
+  @override
+  void refuseDare() => _request(GameAction.refuseDare);
 
   void _request(
     GameAction action, {

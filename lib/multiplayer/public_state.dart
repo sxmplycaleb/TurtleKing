@@ -1,4 +1,5 @@
 import '../challenge/challenge_state.dart';
+import '../challenge/dare_card.dart';
 import '../game_state.dart';
 import '../player.dart';
 import 'json_util.dart';
@@ -513,9 +514,14 @@ class PublicChallengeState {
     required this.phase,
     this.eligiblePlayerIds = const [],
     this.result,
+    this.currentDareId,
+    this.currentDareCategory,
+    this.currentDareTitle,
+    this.currentDareDescription,
   });
 
   factory PublicChallengeState.fromChallenge(ChallengeState cs) {
+    final dare = cs.currentDare;
     return PublicChallengeState(
       challengedPlayerId: cs.challengedPlayer.id,
       challengerId: cs.challenger?.id,
@@ -523,6 +529,10 @@ class PublicChallengeState {
       phase: cs.phase.name,
       eligiblePlayerIds: [for (final p in cs.eligiblePlayers) p.id],
       result: cs.result?.name,
+      currentDareId: dare?.id,
+      currentDareCategory: dare?.category.name,
+      currentDareTitle: dare?.title,
+      currentDareDescription: dare?.description,
     );
   }
 
@@ -533,6 +543,34 @@ class PublicChallengeState {
   final List<String> eligiblePlayerIds;
   final String? result;
 
+  /// The drawn Dare card fields (only populated when type == dare).
+  final String? currentDareId;
+  final String? currentDareCategory;
+  final String? currentDareTitle;
+  final String? currentDareDescription;
+
+  /// Whether a Dare card has been drawn and is available.
+  bool get hasDare => currentDareId != null;
+
+  /// Reconstructs the DareCard from the public fields, if present.
+  DareCard? get dareCard {
+    final id = currentDareId;
+    final cat = currentDareCategory;
+    final title = currentDareTitle;
+    final desc = currentDareDescription;
+    if (id == null || cat == null || title == null || desc == null) return null;
+    final category = DareCategory.values.firstWhere(
+      (c) => c.name == cat,
+      orElse: () => DareCategory.risk,
+    );
+    return DareCard(
+      id: id,
+      category: category,
+      title: title,
+      description: desc,
+    );
+  }
+
   Map<String, Object?> toJson() => {
     'challengedPlayerId': challengedPlayerId,
     'challengerId': challengerId,
@@ -540,6 +578,10 @@ class PublicChallengeState {
     'phase': phase,
     'eligiblePlayerIds': eligiblePlayerIds,
     'result': result,
+    'currentDareId': currentDareId,
+    'currentDareCategory': currentDareCategory,
+    'currentDareTitle': currentDareTitle,
+    'currentDareDescription': currentDareDescription,
   };
 
   factory PublicChallengeState.fromJson(Object? value) {
@@ -560,6 +602,10 @@ class PublicChallengeState {
           requireString(id, 'challenge state.eligiblePlayerIds[]'),
       ],
       result: map['result'] as String?,
+      currentDareId: map['currentDareId'] as String?,
+      currentDareCategory: map['currentDareCategory'] as String?,
+      currentDareTitle: map['currentDareTitle'] as String?,
+      currentDareDescription: map['currentDareDescription'] as String?,
     );
   }
 }

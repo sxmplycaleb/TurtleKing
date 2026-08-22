@@ -1,4 +1,5 @@
 import '../challenge/challenge_state.dart';
+import '../challenge/dare_card.dart';
 import '../game_state.dart';
 import '../player.dart';
 
@@ -55,6 +56,15 @@ abstract class GameDriver {
   /// Resolves the active challenge with the given result.
   void resolveChallenge(ChallengeResult result);
 
+  /// Draws a Dare card from the deck. Host-authoritative.
+  DareCard drawDare();
+
+  /// Records that the challenged player completed the Dare.
+  void completeDare();
+
+  /// Records that the challenged player refused/failed the Dare.
+  void refuseDare();
+
   /// Starts the next round after the current one has completed.
   void startNextRound();
 }
@@ -96,6 +106,15 @@ class LocalDriver implements GameDriver {
   @override
   void resolveChallenge(ChallengeResult result) =>
       state.resolveChallenge(result);
+
+  @override
+  DareCard drawDare() => state.drawDare();
+
+  @override
+  void completeDare() => state.completeDare();
+
+  @override
+  void refuseDare() => state.refuseDare();
 
   @override
   void startNextRound() => state.startNextRound();

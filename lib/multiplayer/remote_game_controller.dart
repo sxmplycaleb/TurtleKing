@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../challenge/challenge_state.dart';
+import '../challenge/dare_card.dart';
 import '../game_state.dart';
 import '../player.dart';
 import 'private_state.dart';
@@ -52,6 +53,15 @@ abstract class RemoteGameController {
 
   /// Resolve the active challenge with the given result.
   void resolveChallenge(ChallengeResult result);
+
+  /// Draws a Dare card from the deck (host-authoritative).
+  DareCard drawDare();
+
+  /// Records that the challenged player completed the Dare.
+  void completeDare();
+
+  /// Records that the challenged player refused/failed the Dare.
+  void refuseDare();
 
   /// Reconnects after a failed connection. Hosts always report success
   /// (they are the authority); clients retry their last-known host.
@@ -189,6 +199,34 @@ class HostRemoteController implements RemoteGameController {
       throw const YamadaRoundException('No active challenge');
     }
     game.resolveChallenge(result);
+  });
+
+  @override
+  DareCard drawDare() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    // drawDare is host-authoritative — the host draws and broadcasts.
+    _act(() {
+      game.drawDare();
+    });
+    return game.currentDare!;
+  }
+
+  @override
+  void completeDare() => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.completeDare();
+  });
+
+  @override
+  void refuseDare() => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.refuseDare();
   });
 
   void _act(void Function() action) {

@@ -18,6 +18,9 @@ enum GameAction {
   selectChallenger,
   chooseChallengeType,
   resolveChallenge,
+  drawDare,
+  completeDare,
+  refuseDare,
 }
 
 /// A strongly typed protocol message (see docs/multiplayer/m18-architecture.md

@@ -266,6 +266,12 @@ class _EventRow extends StatelessWidget {
         return 'drank from challenge penalty';
       case GameEventType.refusalDrink:
         return 'drank from refusal (too few for challenge)';
+      case GameEventType.dareSelected:
+        return 'a Dare card was drawn';
+      case GameEventType.dareCompleted:
+        return 'completed the Dare';
+      case GameEventType.dareRefused:
+        return 'refused the Dare';
     }
   }
 
@@ -311,6 +317,10 @@ class _EventRow extends StatelessWidget {
         return Icons.local_drink_outlined;
       case GameEventType.refusalDrink:
         return Icons.block_outlined;
+      case GameEventType.dareSelected:
+      case GameEventType.dareCompleted:
+      case GameEventType.dareRefused:
+        return Icons.style_outlined;
     }
   }
 }

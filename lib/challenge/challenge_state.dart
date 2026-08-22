@@ -1,3 +1,4 @@
+import 'dare_card.dart';
 import '../player.dart';
 
 /// The type of challenge the challenger can choose.
@@ -51,6 +52,7 @@ class ChallengeState {
     this.result,
     this.resolved = false,
     this.eligiblePlayers = const [],
+    this.currentDare,
   });
 
   /// The player who refused to drink (the one being challenged).
@@ -75,6 +77,10 @@ class ChallengeState {
   /// the challenged player). Set when the challenge begins.
   final List<Player> eligiblePlayers;
 
+  /// The current Dare card if the challenge type is Dare and a card has been
+  /// drawn. Null for non-Dare challenges.
+  final DareCard? currentDare;
+
   /// Creates a new challenge in the selection phase.
   factory ChallengeState.begin({
     required Player challengedPlayer,
@@ -95,6 +101,7 @@ class ChallengeState {
     ChallengePhase? phase,
     ChallengeResult? result,
     bool? resolved,
+    DareCard? currentDare,
   }) {
     return ChallengeState(
       challengedPlayer: challengedPlayer,
@@ -104,6 +111,7 @@ class ChallengeState {
       phase: phase ?? this.phase,
       result: result ?? this.result,
       resolved: resolved ?? this.resolved,
+      currentDare: currentDare ?? this.currentDare,
     );
   }
 

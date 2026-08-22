@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Card;
 
 import 'challenge/challenge_state.dart';
+import 'challenge/dare_card.dart';
 import 'card_widgets.dart';
 import 'feedback.dart';
 import 'game_history_screen.dart';
@@ -55,6 +56,7 @@ enum _Stage {
   gameOver,
   challengeSelection,
   challengeTypeSelection,
+  challengeDare,
   challengeResolution,
 }
 
@@ -128,6 +130,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
         return _Stage.challengeTypeSelection;
       }
       if (cs.phase == ChallengePhase.resolved) {
+        return _Stage.challengeResolution;
+      }
+      if (cs.phase == ChallengePhase.inProgress &&
+          cs.type == ChallengeType.dare) {
+        return _Stage.challengeDare;
+      }
+      if (cs.phase == ChallengePhase.inProgress) {
+        // RPS/Trivia integration points — placeholder for future branches.
         return _Stage.challengeResolution;
       }
     }
@@ -219,8 +229,36 @@ class _GameStartScreenState extends State<GameStartScreen> {
         type,
         _game.challengeState!.challenger!,
       );
+      // If Dare was chosen, draw a card immediately.
+      if (type == ChallengeType.dare) {
+        widget.driver.drawDare();
+      }
     });
     _persistGame();
+  }
+
+  void _completeDare() {
+    setState(() {
+      widget.driver.completeDare();
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
+    });
+    _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
+  }
+
+  void _refuseDare() {
+    setState(() {
+      widget.driver.refuseDare();
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
+    });
+    _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
   }
 
   void _resolveChallenge(ChallengeResult result) {
@@ -469,6 +507,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                       ),
                       _Stage.challengeTypeSelection =>
                         _challengeTypeSelectionView(context),
+                      _Stage.challengeDare => _dareView(context),
                       _Stage.challengeResolution => _challengeResolutionView(
                         context,
                       ),
@@ -1183,6 +1222,145 @@ class _GameStartScreenState extends State<GameStartScreen> {
           ),
           const SizedBox(height: 12),
         ],
+      ],
+    );
+  }
+
+  /// Dare challenge — show the drawn dare card with complete/refuse buttons.
+  Widget _dareView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final cs = _game.challengeState!;
+    final challenger = cs.challenger!;
+    final challenged = cs.challengedPlayer;
+    final dare = cs.currentDare;
+
+    if (dare == null) {
+      // Dare not yet drawn — show loading state (should not happen normally
+      // since drawDare is called immediately on type selection).
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Determine button style based on category.
+    final categoryColor = switch (dare.category) {
+      DareCategory.risk => Colors.red.shade400,
+      DareCategory.social => Colors.blue.shade400,
+      DareCategory.truth => Colors.green.shade400,
+      DareCategory.group => Colors.purple.shade400,
+      DareCategory.chaos => Colors.orange.shade400,
+      DareCategory.wild => Colors.pink.shade400,
+    };
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'DARE',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: categoryColor,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${challenger.name} CHALLENGES ${challenged.name}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: style.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Category badge.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: categoryColor.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: categoryColor, width: 1),
+          ),
+          child: Text(
+            dare.category.label,
+            style: TextStyle(
+              color: categoryColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Dare card.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: style.chipBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: categoryColor.withValues(alpha: 0.3),
+              width: 2,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                dare.title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: style.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                dare.description,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: style.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Action buttons.
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton(
+                onPressed: _completeDare,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'COMPLETED',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: _refuseDare,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'REFUSED',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

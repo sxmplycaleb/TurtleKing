@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../player.dart';
 import 'challenge_state.dart';
+import 'dare_card.dart';
 
 /// The minimum number of OTHER players required to trigger the challenge
 /// selection flow when a player refuses to drink.
@@ -109,6 +110,22 @@ class ChallengeEngine {
       resolved: true,
     );
     return _state!;
+  }
+
+  /// Sets the current Dare card on the active challenge state.
+  ///
+  /// Must be called during the inProgress phase when type == Dare.
+  void setDare(DareCard card) {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    if (_state!.type != ChallengeType.dare) {
+      throw StateError('Challenge is not a Dare');
+    }
+    if (_state!.currentDare != null) {
+      throw StateError('A Dare has already been drawn');
+    }
+    _state = _state!.copyWith(currentDare: card);
   }
 
   /// Clears the current challenge, allowing a new one to begin.

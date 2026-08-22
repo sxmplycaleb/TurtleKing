@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'challenge/challenge_engine.dart';
 import 'challenge/challenge_state.dart';
+import 'challenge/dare_card.dart';
+import 'challenge/dare_deck.dart';
 import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
@@ -217,6 +219,15 @@ enum GameEventType {
 
   /// A player refused to drink (too few others for a challenge).
   refusalDrink,
+
+  /// A Dare card was selected for a challenge.
+  dareSelected,
+
+  /// The challenged player completed the Dare.
+  dareCompleted,
+
+  /// The challenged player refused or failed the Dare.
+  dareRefused,
 }
 
 /// One immutable entry in the game replay log.
@@ -446,6 +457,21 @@ class GameState {
 
   /// The challenge engine managing refusal/challenge state.
   final ChallengeEngine _challengeEngine = ChallengeEngine();
+
+  /// The dare deck for drawing dare cards during challenges.
+  DareDeck? _dareDeck;
+
+  /// Sets the dare deck for this game session.
+  ///
+  /// Must be called before any dare-related challenge actions. The deck is
+  /// not persisted with the game — it is a content layer managed separately.
+  void setDareDeck(DareDeck deck) {
+    _dareDeck = deck;
+  }
+
+  /// The current dare card if the active challenge is a Dare and a card has
+  /// been drawn. Null otherwise.
+  DareCard? get currentDare => _challengeEngine.state?.currentDare;
 
   /// Whether a challenge is currently active.
   bool get challengeActive => _challengeEngine.isActive;
@@ -874,6 +900,106 @@ class GameState {
       // penalty recipient's position.
       _pourIndex = _pourIndex % activePlayers.length;
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // Dare system
+  // ---------------------------------------------------------------------
+
+  /// Draws a Dare card from the deck and records it in the challenge state.
+  ///
+  /// Must be called after [chooseChallengeType] with [ChallengeType.dare].
+  /// The host draws the card authoritatively — clients receive the card via
+  /// the public challenge state.
+  ///
+  /// Throws [StateError] if no dare deck has been set or the challenge is
+  /// not in the inProgress phase with type == dare.
+  DareCard drawDare() {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.dare) {
+      throw const YamadaRoundException('Challenge is not a Dare');
+    }
+    if (state.phase != ChallengePhase.inProgress) {
+      throw const YamadaRoundException(
+        'Dare can only be drawn during inProgress phase',
+      );
+    }
+    if (state.currentDare != null) {
+      throw const YamadaRoundException('A Dare has already been drawn');
+    }
+    if (_dareDeck == null) {
+      throw StateError('No dare deck has been set on this game');
+    }
+
+    final card = _dareDeck!.draw();
+    _challengeEngine.setDare(card);
+
+    _record(
+      GameEvent(
+        type: GameEventType.dareSelected,
+        round: _roundNumber,
+        player: state.challenger,
+      ),
+    );
+
+    return card;
+  }
+
+  /// Records that the challenged player completed the Dare.
+  ///
+  /// The challenger takes the shot. Challenge resolves with
+  /// [ChallengeResult.challengerPenalty].
+  void completeDare() {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.dare) {
+      throw const YamadaRoundException('Challenge is not a Dare');
+    }
+    if (state.currentDare == null) {
+      throw const YamadaRoundException('No Dare has been drawn yet');
+    }
+
+    _record(
+      GameEvent(
+        type: GameEventType.dareCompleted,
+        round: _roundNumber,
+        player: state.challengedPlayer,
+      ),
+    );
+
+    resolveChallenge(ChallengeResult.challengerPenalty);
+  }
+
+  /// Records that the challenged player refused or failed the Dare.
+  ///
+  /// The challenged player takes the shot. Challenge resolves with
+  /// [ChallengeResult.challengedPenalty].
+  void refuseDare() {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.dare) {
+      throw const YamadaRoundException('Challenge is not a Dare');
+    }
+    if (state.currentDare == null) {
+      throw const YamadaRoundException('No Dare has been drawn yet');
+    }
+
+    _record(
+      GameEvent(
+        type: GameEventType.dareRefused,
+        round: _roundNumber,
+        player: state.challengedPlayer,
+      ),
+    );
+
+    resolveChallenge(ChallengeResult.challengedPenalty);
   }
 
   /// Validates a pouring action and rejects it without mutating anything.
