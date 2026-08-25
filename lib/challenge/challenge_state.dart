@@ -1,4 +1,5 @@
 import 'dare_card.dart';
+import 'rps_state.dart';
 import '../player.dart';
 
 /// The type of challenge the challenger can choose.
@@ -53,6 +54,7 @@ class ChallengeState {
     this.resolved = false,
     this.eligiblePlayers = const [],
     this.currentDare,
+    this.rpsState,
   });
 
   /// The player who refused to drink (the one being challenged).
@@ -81,6 +83,10 @@ class ChallengeState {
   /// drawn. Null for non-Dare challenges.
   final DareCard? currentDare;
 
+  /// The current RPS state if the challenge type is RPS and RPS has started.
+  /// Null for non-RPS challenges.
+  final RpsState? rpsState;
+
   /// Creates a new challenge in the selection phase.
   factory ChallengeState.begin({
     required Player challengedPlayer,
@@ -102,6 +108,7 @@ class ChallengeState {
     ChallengeResult? result,
     bool? resolved,
     DareCard? currentDare,
+    RpsState? rpsState,
   }) {
     return ChallengeState(
       challengedPlayer: challengedPlayer,
@@ -112,6 +119,7 @@ class ChallengeState {
       result: result ?? this.result,
       resolved: resolved ?? this.resolved,
       currentDare: currentDare ?? this.currentDare,
+      rpsState: rpsState ?? this.rpsState,
     );
   }
 

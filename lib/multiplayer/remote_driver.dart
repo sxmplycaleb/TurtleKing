@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../challenge/challenge_state.dart';
 import '../challenge/dare_card.dart';
+import '../challenge/rps_state.dart';
 import 'protocol.dart';
 import 'remote_game_controller.dart';
 import 'remote_game_view.dart';
@@ -357,16 +358,40 @@ class RemoteDriver implements RemoteGameController {
   @override
   void refuseDare() => _request(GameAction.refuseDare);
 
+  @override
+  RpsState startRps() {
+    _request(GameAction.startRps);
+    // Return a placeholder — the real state comes from the host.
+    throw UnimplementedError(
+      'Client startRps is host-authoritative — read the challenge state',
+    );
+  }
+
+  @override
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome) => _request(
+    GameAction.recordRpsRound,
+    rpsRoundNumber: roundNumber,
+    rpsOutcome: outcome.name,
+  );
+
+  @override
+  void resolveRps(ChallengeResult result) =>
+      _request(GameAction.resolveRps, challengeResult: result.name);
+
   void _request(
     GameAction action, {
     String? challengeType,
     String? challengeResult,
+    int? rpsRoundNumber,
+    String? rpsOutcome,
   }) {
     if (!isConnected || !_gameStarted) return;
     _session?.requestAction(
       action,
       challengeType: challengeType,
       challengeResult: challengeResult,
+      rpsRoundNumber: rpsRoundNumber,
+      rpsOutcome: rpsOutcome,
     );
   }
 

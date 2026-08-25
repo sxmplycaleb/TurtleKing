@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../challenge/challenge_state.dart';
 import '../challenge/dare_card.dart';
+import '../challenge/rps_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 import 'private_state.dart';
@@ -62,6 +63,15 @@ abstract class RemoteGameController {
 
   /// Records that the challenged player refused/failed the Dare.
   void refuseDare();
+
+  /// Starts the RPS match for the active challenge. Host-authoritative.
+  RpsState startRps();
+
+  /// Records the outcome of one RPS round.
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome);
+
+  /// Resolves the RPS match and applies the penalty.
+  void resolveRps(ChallengeResult result);
 
   /// Reconnects after a failed connection. Hosts always report success
   /// (they are the authority); clients retry their last-known host.
@@ -227,6 +237,36 @@ class HostRemoteController implements RemoteGameController {
       throw const YamadaRoundException('No active challenge');
     }
     game.refuseDare();
+  });
+
+  @override
+  RpsState startRps() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    _act(() {
+      if (!game.challengeActive) {
+        throw const YamadaRoundException('No active challenge');
+      }
+      game.startRps();
+    });
+    return game.rpsState!;
+  }
+
+  @override
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome) => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.recordRpsRound(roundNumber, outcome);
+  });
+
+  @override
+  void resolveRps(ChallengeResult result) => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.resolveRps(result);
   });
 
   void _act(void Function() action) {

@@ -3,6 +3,7 @@ import 'dart:math';
 import '../player.dart';
 import 'challenge_state.dart';
 import 'dare_card.dart';
+import 'rps_state.dart';
 
 /// The minimum number of OTHER players required to trigger the challenge
 /// selection flow when a player refuses to drink.
@@ -126,6 +127,97 @@ class ChallengeEngine {
       throw StateError('A Dare has already been drawn');
     }
     _state = _state!.copyWith(currentDare: card);
+  }
+
+  /// Starts the RPS match for this challenge.
+  ///
+  /// Must be called during the inProgress phase when type == RPS.
+  RpsState startRps() {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    if (_state!.type != ChallengeType.rockPaperScissors) {
+      throw StateError('Challenge is not RPS');
+    }
+    if (_state!.rpsState != null) {
+      throw StateError('RPS has already been started');
+    }
+    final rps = RpsState(
+      challengedPlayer: _state!.challengedPlayer,
+      challenger: _state!.challenger!,
+    );
+    _state = _state!.copyWith(rpsState: rps);
+    return rps;
+  }
+
+  /// Records the outcome of one RPS round.
+  ///
+  /// [roundNumber] must match the expected round (1-based).
+  /// [outcome] is the result of the physical RPS round.
+  ///
+  /// After recording, the match may be complete if a player has 2 wins.
+  /// The caller should check `rpsState.isMatchComplete` to determine
+  /// whether to continue to the next round or resolve the match.
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome) {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    final rps = _state!.rpsState;
+    if (rps == null) {
+      throw StateError('RPS has not been started');
+    }
+    if (rps.resolved) {
+      throw StateError('RPS is already resolved');
+    }
+    if (rps.isMatchComplete) {
+      throw StateError('RPS match is already complete');
+    }
+    if (roundNumber != rps.currentRound) {
+      throw StateError(
+        'Expected round ${rps.currentRound} but got $roundNumber',
+      );
+    }
+    final newResults = [
+      ...rps.roundResults,
+      RpsRoundResult(roundNumber: roundNumber, outcome: outcome),
+    ];
+    _state = _state!.copyWith(rpsState: rps.copyWith(roundResults: newResults));
+  }
+
+  /// Resolves the RPS match and applies the penalty.
+  ///
+  /// The winner/loser is determined automatically from the round results.
+  /// Must be called after the match is complete (one player has 2 wins).
+  ///
+  /// The loser receives the shot penalty.
+  ChallengeState resolveRps(ChallengeResult result) {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    final rps = _state!.rpsState;
+    if (rps == null) {
+      throw StateError('RPS has not been started');
+    }
+    if (rps.resolved) {
+      throw StateError('RPS is already resolved');
+    }
+    if (!rps.isMatchComplete) {
+      throw StateError(
+        'RPS match is not complete — must have a winner (2 rounds won)',
+      );
+    }
+
+    // Validate that the result matches the automatic winner/loser.
+    // ChallengeResult determines who takes the shot (the loser).
+    final penaltyRecipient = result == ChallengeResult.challengerPenalty
+        ? rps.challenger
+        : rps.challengedPlayer;
+    if (penaltyRecipient.id != rps.loser!.id) {
+      throw ArgumentError('ChallengeResult does not match the RPS loser');
+    }
+
+    _state = _state!.copyWith(rpsState: rps.copyWith(resolved: true));
+    return resolve(result);
   }
 
   /// Clears the current challenge, allowing a new one to begin.

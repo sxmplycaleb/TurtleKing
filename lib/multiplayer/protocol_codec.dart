@@ -107,6 +107,8 @@ class MessageCodec {
         playerId: requireString(body['playerId'], 'playerId'),
         challengeType: body['challengeType'] as String?,
         challengeResult: body['challengeResult'] as String?,
+        rpsRoundNumber: body['rpsRoundNumber'] as int?,
+        rpsOutcome: body['rpsOutcome'] as String?,
       ),
       'ACTION_ACCEPTED' => ActionAcceptedMessage(
         seq: seq,

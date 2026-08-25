@@ -4,6 +4,7 @@ import 'challenge/challenge_engine.dart';
 import 'challenge/challenge_state.dart';
 import 'challenge/dare_card.dart';
 import 'challenge/dare_deck.dart';
+import 'challenge/rps_state.dart';
 import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
@@ -228,6 +229,15 @@ enum GameEventType {
 
   /// The challenged player refused or failed the Dare.
   dareRefused,
+
+  /// RPS was started for a challenge.
+  rpsStarted,
+
+  /// An RPS round result was recorded.
+  rpsRoundRecorded,
+
+  /// RPS resolved with a final penalty.
+  rpsResolved,
 }
 
 /// One immutable entry in the game replay log.
@@ -1001,6 +1011,128 @@ class GameState {
 
     resolveChallenge(ChallengeResult.challengedPenalty);
   }
+
+  // ---------------------------------------------------------------------
+  // RPS system
+  // ---------------------------------------------------------------------
+
+  /// Starts the RPS match for the active challenge.
+  ///
+  /// Must be called after [chooseChallengeType] with [ChallengeType.rockPaperScissors].
+  /// The RPS state is created and tracked in the challenge state.
+  RpsState startRps() {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.rockPaperScissors) {
+      throw const YamadaRoundException('Challenge is not RPS');
+    }
+    if (state.phase != ChallengePhase.inProgress) {
+      throw const YamadaRoundException(
+        'RPS can only be started during inProgress phase',
+      );
+    }
+    if (state.rpsState != null) {
+      throw const YamadaRoundException('RPS has already been started');
+    }
+    final rps = _challengeEngine.startRps();
+    _record(
+      GameEvent(
+        type: GameEventType.rpsStarted,
+        round: _roundNumber,
+        player: state.challenger,
+      ),
+    );
+    return rps;
+  }
+
+  /// Records the outcome of one RPS round.
+  ///
+  /// [roundNumber] must match the expected round (1-based, 1–3).
+  /// [outcome] is the result of the physical RPS round.
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.rockPaperScissors) {
+      throw const YamadaRoundException('Challenge is not RPS');
+    }
+    if (state.rpsState == null) {
+      throw const YamadaRoundException('RPS has not been started');
+    }
+    _challengeEngine.recordRpsRound(roundNumber, outcome);
+    _record(
+      GameEvent(
+        type: GameEventType.rpsRoundRecorded,
+        round: _roundNumber,
+        player: _challengeEngine.state!.challenger,
+      ),
+    );
+  }
+
+  /// Resolves the RPS match and applies the penalty.
+  ///
+  /// The winner/loser is determined automatically from round results.
+  /// Must be called after the match is complete (one player has 2 wins).
+  /// The loser receives exactly 1 shot.
+  void resolveRps(ChallengeResult result) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.rockPaperScissors) {
+      throw const YamadaRoundException('Challenge is not RPS');
+    }
+    if (state.rpsState == null) {
+      throw const YamadaRoundException('RPS has not been started');
+    }
+    final rps = state.rpsState!;
+    if (!rps.isMatchComplete) {
+      throw const YamadaRoundException(
+        'RPS match is not complete — must have a winner (2 rounds won)',
+      );
+    }
+    // Validate that the result matches the automatic winner/loser.
+    // ChallengeResult determines who takes the shot (the loser).
+    final penaltyRecipient = result == ChallengeResult.challengerPenalty
+        ? rps.challenger
+        : rps.challengedPlayer;
+    if (penaltyRecipient.id != rps.loser!.id) {
+      throw const YamadaRoundException(
+        'ChallengeResult does not match the RPS loser',
+      );
+    }
+    _record(
+      GameEvent(
+        type: GameEventType.rpsResolved,
+        round: _roundNumber,
+        player: rps.loser,
+      ),
+    );
+    _challengeEngine.resolveRps(result);
+    // Apply the penalty.
+    final resolved = _challengeEngine.state!;
+    final drinkRecipient = resolved.penaltyRecipient!;
+    _drink(drinkRecipient, GameEventType.challengePenalty);
+    _record(
+      GameEvent(
+        type: GameEventType.challengeResolved,
+        round: _roundNumber,
+        player: drinkRecipient,
+      ),
+    );
+    _challengeEngine.reset();
+    _maybeCompleteGame();
+    if (!_gameComplete) {
+      _pourIndex = _pourIndex % activePlayers.length;
+    }
+  }
+
+  /// The current RPS state if the active challenge is RPS and RPS has started.
+  /// Null otherwise.
+  RpsState? get rpsState => _challengeEngine.state?.rpsState;
 
   /// Validates a pouring action and rejects it without mutating anything.
   void _validatePourAction(Player player) {

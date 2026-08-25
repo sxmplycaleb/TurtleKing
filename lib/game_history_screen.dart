@@ -272,6 +272,12 @@ class _EventRow extends StatelessWidget {
         return 'completed the Dare';
       case GameEventType.dareRefused:
         return 'refused the Dare';
+      case GameEventType.rpsStarted:
+        return 'started RPS';
+      case GameEventType.rpsRoundRecorded:
+        return 'recorded RPS round';
+      case GameEventType.rpsResolved:
+        return 'RPS resolved';
     }
   }
 
@@ -321,6 +327,10 @@ class _EventRow extends StatelessWidget {
       case GameEventType.dareCompleted:
       case GameEventType.dareRefused:
         return Icons.style_outlined;
+      case GameEventType.rpsStarted:
+      case GameEventType.rpsRoundRecorded:
+      case GameEventType.rpsResolved:
+        return Icons.sports_mma_outlined;
     }
   }
 }

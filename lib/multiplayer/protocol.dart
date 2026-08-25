@@ -21,6 +21,9 @@ enum GameAction {
   drawDare,
   completeDare,
   refuseDare,
+  startRps,
+  recordRpsRound,
+  resolveRps,
 }
 
 /// A strongly typed protocol message (see docs/multiplayer/m18-architecture.md
@@ -161,6 +164,8 @@ class ActionRequestMessage extends MultiplayerMessage {
     required this.playerId,
     this.challengeType,
     this.challengeResult,
+    this.rpsRoundNumber,
+    this.rpsOutcome,
   });
 
   final GameAction action;
@@ -172,6 +177,12 @@ class ActionRequestMessage extends MultiplayerMessage {
   /// The challenge result for resolveChallenge actions.
   final String? challengeResult;
 
+  /// The RPS round number for recordRpsRound actions.
+  final int? rpsRoundNumber;
+
+  /// The RPS outcome for recordRpsRound actions.
+  final String? rpsOutcome;
+
   @override
   String get type => 'ACTION_REQUEST';
 
@@ -181,6 +192,8 @@ class ActionRequestMessage extends MultiplayerMessage {
     'playerId': playerId,
     if (challengeType != null) 'challengeType': challengeType,
     if (challengeResult != null) 'challengeResult': challengeResult,
+    if (rpsRoundNumber != null) 'rpsRoundNumber': rpsRoundNumber,
+    if (rpsOutcome != null) 'rpsOutcome': rpsOutcome,
   };
 }
 
