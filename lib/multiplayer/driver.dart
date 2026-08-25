@@ -77,6 +77,9 @@ abstract class GameDriver {
   /// Resolves the RPS match and applies the penalty.
   void resolveRps(ChallengeResult result);
 
+  /// Draws a Trivia card from the deck. Host-authoritative.
+  TriviaCard drawTrivia();
+
   /// Starts the Trivia challenge with the given question.
   TriviaState startTrivia(TriviaCard card);
 
@@ -146,6 +149,9 @@ class LocalDriver implements GameDriver {
 
   @override
   void resolveRps(ChallengeResult result) => state.resolveRps(result);
+
+  @override
+  TriviaCard drawTrivia() => state.drawTrivia();
 
   @override
   TriviaState startTrivia(TriviaCard card) => state.startTrivia(card);

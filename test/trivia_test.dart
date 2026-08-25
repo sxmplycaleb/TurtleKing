@@ -262,7 +262,9 @@ void main() {
   group('TriviaState', () {
     test('initial state is correct', () {
       final alice = Player(
-        id: 'a', name: 'Alice', color: PlayerColors.palette[0],
+        id: 'a',
+        name: 'Alice',
+        color: PlayerColors.palette[0],
       );
       final bob = Player(id: 'b', name: 'Bob', color: PlayerColors.palette[1]);
       final card = TriviaCard(
@@ -287,7 +289,9 @@ void main() {
 
     test('copyWith preserves other fields', () {
       final alice = Player(
-        id: 'a', name: 'Alice', color: PlayerColors.palette[0],
+        id: 'a',
+        name: 'Alice',
+        color: PlayerColors.palette[0],
       );
       final bob = Player(id: 'b', name: 'Bob', color: PlayerColors.palette[1]);
       final card = TriviaCard(
@@ -318,11 +322,15 @@ void main() {
   group('ChallengeEngine Trivia', () {
     test('startTrivia creates Trivia state', () {
       final alice = Player(
-        id: 'a', name: 'Alice', color: PlayerColors.palette[0],
+        id: 'a',
+        name: 'Alice',
+        color: PlayerColors.palette[0],
       );
       final bob = Player(id: 'b', name: 'Bob', color: PlayerColors.palette[1]);
       final carol = Player(
-        id: 'c', name: 'Carol', color: PlayerColors.palette[2],
+        id: 'c',
+        name: 'Carol',
+        color: PlayerColors.palette[2],
       );
       final card = TriviaCard(
         id: 'test',
@@ -347,11 +355,15 @@ void main() {
 
     test('recordTriviaAnswer records answer', () {
       final alice = Player(
-        id: 'a', name: 'Alice', color: PlayerColors.palette[0],
+        id: 'a',
+        name: 'Alice',
+        color: PlayerColors.palette[0],
       );
       final bob = Player(id: 'b', name: 'Bob', color: PlayerColors.palette[1]);
       final carol = Player(
-        id: 'c', name: 'Carol', color: PlayerColors.palette[2],
+        id: 'c',
+        name: 'Carol',
+        color: PlayerColors.palette[2],
       );
       final card = TriviaCard(
         id: 'test',
@@ -374,11 +386,15 @@ void main() {
 
     test('resolveTrivia resolves challenge', () {
       final alice = Player(
-        id: 'a', name: 'Alice', color: PlayerColors.palette[0],
+        id: 'a',
+        name: 'Alice',
+        color: PlayerColors.palette[0],
       );
       final bob = Player(id: 'b', name: 'Bob', color: PlayerColors.palette[1]);
       final carol = Player(
-        id: 'c', name: 'Carol', color: PlayerColors.palette[2],
+        id: 'c',
+        name: 'Carol',
+        color: PlayerColors.palette[2],
       );
       final card = TriviaCard(
         id: 'test',
@@ -403,11 +419,15 @@ void main() {
 
     test('resolveTrivia rejects mismatched result', () {
       final alice = Player(
-        id: 'a', name: 'Alice', color: PlayerColors.palette[0],
+        id: 'a',
+        name: 'Alice',
+        color: PlayerColors.palette[0],
       );
       final bob = Player(id: 'b', name: 'Bob', color: PlayerColors.palette[1]);
       final carol = Player(
-        id: 'c', name: 'Carol', color: PlayerColors.palette[2],
+        id: 'c',
+        name: 'Carol',
+        color: PlayerColors.palette[2],
       );
       final card = TriviaCard(
         id: 'test',
@@ -665,7 +685,10 @@ void main() {
       expect(events.any((e) => e.type == GameEventType.triviaStarted), isTrue);
       expect(events.any((e) => e.type == GameEventType.triviaCorrect), isTrue);
       expect(events.any((e) => e.type == GameEventType.triviaResolved), isTrue);
-      expect(events.any((e) => e.type == GameEventType.challengePenalty), isTrue);
+      expect(
+        events.any((e) => e.type == GameEventType.challengePenalty),
+        isTrue,
+      );
     });
   });
 

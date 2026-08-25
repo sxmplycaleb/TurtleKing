@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_version.dart';
+import 'challenge/dare_repository.dart';
+import 'challenge/trivia_repository.dart';
 import 'game_save.dart';
 import 'game_start_screen.dart';
 import 'game_state.dart';
@@ -111,6 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _resumeGame() {
     final saved = _saved;
     if (saved == null) return;
+    saved.setDareDeck(DareRepository.newDeck());
+    saved.setTriviaDeck(TriviaRepository.newDeck());
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) =>

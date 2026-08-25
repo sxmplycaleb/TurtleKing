@@ -6,6 +6,7 @@ import 'challenge/dare_card.dart';
 import 'challenge/dare_deck.dart';
 import 'challenge/rps_state.dart';
 import 'challenge/trivia_card.dart';
+import 'challenge/trivia_deck.dart';
 import 'challenge/trivia_state.dart';
 import 'card.dart';
 import 'deck.dart';
@@ -485,12 +486,22 @@ class GameState {
   /// The dare deck for drawing dare cards during challenges.
   DareDeck? _dareDeck;
 
+  /// The trivia deck for drawing trivia cards during challenges.
+  TriviaDeck? _triviaDeck;
+
   /// Sets the dare deck for this game session.
   ///
   /// Must be called before any dare-related challenge actions. The deck is
   /// not persisted with the game — it is a content layer managed separately.
   void setDareDeck(DareDeck deck) {
     _dareDeck = deck;
+  }
+
+  /// Sets the trivia deck for this game session.
+  ///
+  /// Must be called before any trivia-related challenge actions.
+  void setTriviaDeck(TriviaDeck deck) {
+    _triviaDeck = deck;
   }
 
   /// The current dare card if the active challenge is a Dare and a card has
@@ -1270,6 +1281,43 @@ class GameState {
   /// The current Trivia state if the active challenge is Trivia and trivia has started.
   /// Null otherwise.
   TriviaState? get triviaState => _challengeEngine.state?.triviaState;
+
+  /// Draws a Trivia card from the deck and starts the trivia challenge.
+  ///
+  /// Must be called after [chooseChallengeType] with [ChallengeType.trivia].
+  TriviaCard drawTrivia() {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.trivia) {
+      throw const YamadaRoundException('Challenge is not Trivia');
+    }
+    if (state.phase != ChallengePhase.inProgress) {
+      throw const YamadaRoundException(
+        'Trivia can only be drawn during inProgress phase',
+      );
+    }
+    if (state.triviaState != null) {
+      throw const YamadaRoundException('Trivia has already been started');
+    }
+    if (_triviaDeck == null) {
+      throw StateError('No trivia deck has been set on this game');
+    }
+
+    final card = _triviaDeck!.draw();
+    _challengeEngine.startTrivia(card);
+
+    _record(
+      GameEvent(
+        type: GameEventType.triviaStarted,
+        round: _roundNumber,
+        player: state.challenger,
+      ),
+    );
+
+    return card;
+  }
 
   /// Validates a pouring action and rejects it without mutating anything.
   void _validatePourAction(Player player) {

@@ -69,6 +69,9 @@ abstract class RemoteGameController {
   /// Starts the RPS match for the active challenge. Host-authoritative.
   RpsState startRps();
 
+  /// Draws a Trivia card from the deck (host-authoritative).
+  TriviaCard drawTrivia();
+
   /// Records the outcome of one RPS round.
   void recordRpsRound(int roundNumber, RpsRoundOutcome outcome);
 
@@ -232,6 +235,17 @@ class HostRemoteController implements RemoteGameController {
       game.drawDare();
     });
     return game.currentDare!;
+  }
+
+  @override
+  TriviaCard drawTrivia() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    _act(() {
+      game.drawTrivia();
+    });
+    return game.triviaState!.question;
   }
 
   @override

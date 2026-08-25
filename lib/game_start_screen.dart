@@ -238,12 +238,21 @@ class _GameStartScreenState extends State<GameStartScreen> {
         type,
         _game.challengeState!.challenger!,
       );
-      // If Dare was chosen, draw a card immediately.
-      if (type == ChallengeType.dare) {
-        widget.driver.drawDare();
-      }
     });
     _persistGame();
+    // Draw the appropriate card AFTER setState completes, so a card-draw
+    // failure cannot corrupt the challenge phase state.
+    if (type == ChallengeType.dare) {
+      setState(() {
+        widget.driver.drawDare();
+      });
+      _persistGame();
+    } else if (type == ChallengeType.trivia) {
+      setState(() {
+        widget.driver.drawTrivia();
+      });
+      _persistGame();
+    }
   }
 
   void _completeDare() {
