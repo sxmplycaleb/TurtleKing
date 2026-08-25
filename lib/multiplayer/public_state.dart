@@ -522,11 +522,20 @@ class PublicChallengeState {
     this.rpsRoundOutcomes = const [],
     this.rpsFinalLoserId,
     this.rpsResolved = false,
+    this.triviaQuestionId,
+    this.triviaCategory,
+    this.triviaQuestion,
+    this.triviaAnswer,
+    this.triviaIsPersonal = false,
+    this.triviaIsGroupQuestion = false,
+    this.triviaIsCorrect,
+    this.triviaResolved = false,
   });
 
   factory PublicChallengeState.fromChallenge(ChallengeState cs) {
     final dare = cs.currentDare;
     final rps = cs.rpsState;
+    final trivia = cs.triviaState;
     return PublicChallengeState(
       challengedPlayerId: cs.challengedPlayer.id,
       challengerId: cs.challenger?.id,
@@ -544,6 +553,14 @@ class PublicChallengeState {
       ],
       rpsFinalLoserId: rps?.loser?.id,
       rpsResolved: rps?.resolved ?? false,
+      triviaQuestionId: trivia?.question.id,
+      triviaCategory: trivia?.question.category.name,
+      triviaQuestion: trivia?.question.question,
+      triviaAnswer: trivia?.question.answer,
+      triviaIsPersonal: trivia?.question.isPersonal ?? false,
+      triviaIsGroupQuestion: trivia?.question.isGroupQuestion ?? false,
+      triviaIsCorrect: trivia?.isCorrect,
+      triviaResolved: trivia?.resolved ?? false,
     );
   }
 
@@ -577,6 +594,19 @@ class PublicChallengeState {
 
   /// Whether a Dare card has been drawn and is available.
   bool get hasDare => currentDareId != null;
+
+  // Trivia fields (only populated when type == trivia).
+  final String? triviaQuestionId;
+  final String? triviaCategory;
+  final String? triviaQuestion;
+  final String? triviaAnswer;
+  final bool triviaIsPersonal;
+  final bool triviaIsGroupQuestion;
+  final bool? triviaIsCorrect;
+  final bool triviaResolved;
+
+  /// Whether a Trivia question has been drawn and is available.
+  bool get hasTrivia => triviaQuestionId != null;
 
   /// Reconstructs the DareCard from the public fields, if present.
   DareCard? get dareCard {
@@ -612,6 +642,14 @@ class PublicChallengeState {
     'rpsRoundOutcomes': rpsRoundOutcomes,
     'rpsFinalLoserId': rpsFinalLoserId,
     'rpsResolved': rpsResolved,
+    'triviaQuestionId': triviaQuestionId,
+    'triviaCategory': triviaCategory,
+    'triviaQuestion': triviaQuestion,
+    'triviaAnswer': triviaAnswer,
+    'triviaIsPersonal': triviaIsPersonal,
+    'triviaIsGroupQuestion': triviaIsGroupQuestion,
+    'triviaIsCorrect': triviaIsCorrect,
+    'triviaResolved': triviaResolved,
   };
 
   factory PublicChallengeState.fromJson(Object? value) {
@@ -646,6 +684,14 @@ class PublicChallengeState {
       ],
       rpsFinalLoserId: map['rpsFinalLoserId'] as String?,
       rpsResolved: map['rpsResolved'] as bool? ?? false,
+      triviaQuestionId: map['triviaQuestionId'] as String?,
+      triviaCategory: map['triviaCategory'] as String?,
+      triviaQuestion: map['triviaQuestion'] as String?,
+      triviaAnswer: map['triviaAnswer'] as String?,
+      triviaIsPersonal: map['triviaIsPersonal'] as bool? ?? false,
+      triviaIsGroupQuestion: map['triviaIsGroupQuestion'] as bool? ?? false,
+      triviaIsCorrect: map['triviaIsCorrect'] as bool?,
+      triviaResolved: map['triviaResolved'] as bool? ?? false,
     );
   }
 }

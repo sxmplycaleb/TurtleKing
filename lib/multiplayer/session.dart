@@ -750,6 +750,17 @@ class HostSession {
         owned =
             game.challengeState?.challenger?.id == client.playerId ||
             game.challengeState?.challengedPlayer.id == client.playerId;
+      case GameAction.startTrivia:
+        // Only the host can start Trivia (authoritative).
+        owned = true;
+      case GameAction.recordTriviaAnswer:
+        // Only the host can record trivia answers (authoritative).
+        owned = true;
+      case GameAction.resolveTrivia:
+        // Only the challenger or challenged player can resolve Trivia.
+        owned =
+            game.challengeState?.challenger?.id == client.playerId ||
+            game.challengeState?.challengedPlayer.id == client.playerId;
     }
     if (!owned) {
       _sendRejected(connection, message, 'not your turn');
@@ -895,6 +906,51 @@ class HostSession {
                 rejection = 'invalid challenge result: $resultStr';
               } else {
                 game.resolveRps(result);
+              }
+            }
+          }
+        case GameAction.startTrivia:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.trivia) {
+            rejection = 'no active Trivia challenge';
+          } else if (game.triviaState != null) {
+            rejection = 'Trivia has already been started';
+          } else {
+            // For trivia, the host draws the question authoritatively
+            // The trivia card ID should be provided, but for now we draw a random one
+            // In a real implementation, the host would select the question
+            rejection = 'trivia question selection not yet implemented';
+          }
+        case GameAction.recordTriviaAnswer:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.trivia ||
+              game.triviaState == null) {
+            rejection = 'no active Trivia to record answer for';
+          } else {
+            final isCorrect = message.triviaIsCorrect;
+            if (isCorrect == null) {
+              rejection = 'trivia answer result is required';
+            } else {
+              game.recordTriviaAnswer(isCorrect);
+            }
+          }
+        case GameAction.resolveTrivia:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.trivia ||
+              game.triviaState == null) {
+            rejection = 'no active Trivia to resolve';
+          } else {
+            final resultStr = message.challengeResult;
+            if (resultStr == null) {
+              rejection = 'challenge result is required';
+            } else {
+              final result = ChallengeResult.values
+                  .where((r) => r.name == resultStr)
+                  .firstOrNull;
+              if (result == null) {
+                rejection = 'invalid challenge result: $resultStr';
+              } else {
+                game.resolveTrivia(result);
               }
             }
           }
@@ -1532,6 +1588,7 @@ class ClientSession {
     String? challengeResult,
     int? rpsRoundNumber,
     String? rpsOutcome,
+    bool? triviaIsCorrect,
   }) {
     final connection = _connection;
     final self = _self;
@@ -1550,6 +1607,7 @@ class ClientSession {
                   challengeResult: challengeResult,
                   rpsRoundNumber: rpsRoundNumber,
                   rpsOutcome: rpsOutcome,
+                  triviaIsCorrect: triviaIsCorrect,
                 ),
               ),
             )

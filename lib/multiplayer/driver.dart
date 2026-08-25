@@ -1,6 +1,8 @@
 import '../challenge/challenge_state.dart';
 import '../challenge/dare_card.dart';
 import '../challenge/rps_state.dart';
+import '../challenge/trivia_card.dart';
+import '../challenge/trivia_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 
@@ -75,6 +77,15 @@ abstract class GameDriver {
   /// Resolves the RPS match and applies the penalty.
   void resolveRps(ChallengeResult result);
 
+  /// Starts the Trivia challenge with the given question.
+  TriviaState startTrivia(TriviaCard card);
+
+  /// Records the answer to a trivia question.
+  void recordTriviaAnswer(bool isCorrect);
+
+  /// Resolves the Trivia challenge and applies the penalty.
+  void resolveTrivia(ChallengeResult result);
+
   /// Starts the next round after the current one has completed.
   void startNextRound();
 }
@@ -135,6 +146,16 @@ class LocalDriver implements GameDriver {
 
   @override
   void resolveRps(ChallengeResult result) => state.resolveRps(result);
+
+  @override
+  TriviaState startTrivia(TriviaCard card) => state.startTrivia(card);
+
+  @override
+  void recordTriviaAnswer(bool isCorrect) =>
+      state.recordTriviaAnswer(isCorrect);
+
+  @override
+  void resolveTrivia(ChallengeResult result) => state.resolveTrivia(result);
 
   @override
   void startNextRound() => state.startNextRound();

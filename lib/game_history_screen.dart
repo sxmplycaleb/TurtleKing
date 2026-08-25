@@ -278,6 +278,14 @@ class _EventRow extends StatelessWidget {
         return 'recorded RPS round';
       case GameEventType.rpsResolved:
         return 'RPS resolved';
+      case GameEventType.triviaStarted:
+        return 'started Trivia';
+      case GameEventType.triviaCorrect:
+        return 'answered correctly';
+      case GameEventType.triviaWrong:
+        return 'answered incorrectly';
+      case GameEventType.triviaResolved:
+        return 'Trivia resolved';
     }
   }
 
@@ -331,6 +339,11 @@ class _EventRow extends StatelessWidget {
       case GameEventType.rpsRoundRecorded:
       case GameEventType.rpsResolved:
         return Icons.sports_mma_outlined;
+      case GameEventType.triviaStarted:
+      case GameEventType.triviaCorrect:
+      case GameEventType.triviaWrong:
+      case GameEventType.triviaResolved:
+        return Icons.quiz_outlined;
     }
   }
 }

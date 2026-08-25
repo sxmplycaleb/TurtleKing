@@ -3,6 +3,8 @@ import 'dart:async';
 import '../challenge/challenge_state.dart';
 import '../challenge/dare_card.dart';
 import '../challenge/rps_state.dart';
+import '../challenge/trivia_card.dart';
+import '../challenge/trivia_state.dart';
 import 'protocol.dart';
 import 'remote_game_controller.dart';
 import 'remote_game_view.dart';
@@ -378,12 +380,28 @@ class RemoteDriver implements RemoteGameController {
   void resolveRps(ChallengeResult result) =>
       _request(GameAction.resolveRps, challengeResult: result.name);
 
+  @override
+  TriviaState startTrivia(TriviaCard card) {
+    throw UnimplementedError(
+      'Client startTrivia is host-authoritative — read the challenge state',
+    );
+  }
+
+  @override
+  void recordTriviaAnswer(bool isCorrect) =>
+      _request(GameAction.recordTriviaAnswer, triviaIsCorrect: isCorrect);
+
+  @override
+  void resolveTrivia(ChallengeResult result) =>
+      _request(GameAction.resolveTrivia, challengeResult: result.name);
+
   void _request(
     GameAction action, {
     String? challengeType,
     String? challengeResult,
     int? rpsRoundNumber,
     String? rpsOutcome,
+    bool? triviaIsCorrect,
   }) {
     if (!isConnected || !_gameStarted) return;
     _session?.requestAction(
@@ -392,6 +410,7 @@ class RemoteDriver implements RemoteGameController {
       challengeResult: challengeResult,
       rpsRoundNumber: rpsRoundNumber,
       rpsOutcome: rpsOutcome,
+      triviaIsCorrect: triviaIsCorrect,
     );
   }
 

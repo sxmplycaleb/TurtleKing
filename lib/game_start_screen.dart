@@ -3,6 +3,8 @@ import 'package:flutter/material.dart' hide Card;
 import 'challenge/challenge_state.dart';
 import 'challenge/dare_card.dart';
 import 'challenge/rps_state.dart';
+import 'challenge/trivia_card.dart';
+import 'challenge/trivia_state.dart';
 import 'card_widgets.dart';
 import 'feedback.dart';
 import 'game_history_screen.dart';
@@ -59,6 +61,7 @@ enum _Stage {
   challengeTypeSelection,
   challengeDare,
   challengeRps,
+  challengeTrivia,
   challengeResolution,
 }
 
@@ -142,9 +145,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
           cs.type == ChallengeType.rockPaperScissors) {
         return _Stage.challengeRps;
       }
-      if (cs.phase == ChallengePhase.inProgress) {
-        // Trivia integration point — placeholder for future branch.
-        return _Stage.challengeResolution;
+      if (cs.phase == ChallengePhase.inProgress &&
+          cs.type == ChallengeType.trivia) {
+        return _Stage.challengeTrivia;
       }
     }
     if (_game.pouringStarted) return _Stage.pourTurn;
@@ -258,6 +261,25 @@ class _GameStartScreenState extends State<GameStartScreen> {
   void _refuseDare() {
     setState(() {
       widget.driver.refuseDare();
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
+    });
+    _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
+  }
+
+  void _triviaAnswer(bool isCorrect) {
+    setState(() {
+      widget.driver.recordTriviaAnswer(isCorrect);
+      // Resolve the trivia challenge
+      final result = isCorrect
+          ? ChallengeResult
+                .challengerPenalty // Correct → challenger takes shot
+          : ChallengeResult
+                .challengedPenalty; // Wrong → challenged player takes shot
+      widget.driver.resolveTrivia(result);
       _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
     _persistGame();
@@ -541,6 +563,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                         _challengeTypeSelectionView(context),
                       _Stage.challengeDare => _dareView(context),
                       _Stage.challengeRps => _rpsView(context),
+                      _Stage.challengeTrivia => _triviaView(context),
                       _Stage.challengeResolution => _challengeResolutionView(
                         context,
                       ),
@@ -1654,6 +1677,178 @@ class _GameStartScreenState extends State<GameStartScreen> {
             ),
           ),
           if (result != rps.roundResults.last) const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+
+  /// Trivia challenge — show the question and answer buttons.
+  Widget _triviaView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final cs = _game.challengeState!;
+    final challenger = cs.challenger!;
+    final challenged = cs.challengedPlayer;
+    final trivia = cs.triviaState;
+
+    if (trivia == null) {
+      // Trivia not yet started — show loading state.
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Determine category color.
+    final categoryColor = switch (trivia.question.category) {
+      TriviaCategory.generalKnowledge => Colors.blue.shade400,
+      TriviaCategory.geography => Colors.green.shade400,
+      TriviaCategory.history => Colors.brown.shade400,
+      TriviaCategory.science => Colors.purple.shade400,
+      TriviaCategory.technology => Colors.cyan.shade400,
+      TriviaCategory.sports => Colors.orange.shade400,
+      TriviaCategory.music => Colors.pink.shade400,
+      TriviaCategory.moviesAndTv => Colors.red.shade400,
+      TriviaCategory.food => Colors.yellow.shade700,
+      TriviaCategory.kenyaAfrica => Colors.teal.shade400,
+      TriviaCategory.personal => Colors.indigo.shade400,
+      TriviaCategory.aToZ => Colors.deepOrange.shade400,
+      TriviaCategory.rapidFire => Colors.amber.shade700,
+    };
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'TRIVIA',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: categoryColor,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${challenger.name} CHALLENGES ${challenged.name}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: style.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Category badge.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: categoryColor.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: categoryColor, width: 1),
+          ),
+          child: Text(
+            trivia.question.category.label,
+            style: TextStyle(
+              color: categoryColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Question card.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: style.chipBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: categoryColor.withValues(alpha: 0.3),
+              width: 2,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                trivia.question.question,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: style.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (trivia.question.isPersonal ||
+                  trivia.question.isGroupQuestion) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    trivia.question.isPersonal
+                        ? 'Personal Question'
+                        : 'Group Question',
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                'Answer: ${trivia.question.answer}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: style.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Action buttons.
+        if (trivia.phase == TriviaPhase.questionReady ||
+            trivia.phase == TriviaPhase.awaitingAnswer) ...[
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _triviaAnswer(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    'CORRECT',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _triviaAnswer(false),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    'WRONG',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ],
     );

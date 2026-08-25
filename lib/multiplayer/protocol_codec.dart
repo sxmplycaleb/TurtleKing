@@ -109,6 +109,8 @@ class MessageCodec {
         challengeResult: body['challengeResult'] as String?,
         rpsRoundNumber: body['rpsRoundNumber'] as int?,
         rpsOutcome: body['rpsOutcome'] as String?,
+        triviaQuestionId: body['triviaQuestionId'] as String?,
+        triviaIsCorrect: body['triviaIsCorrect'] as bool?,
       ),
       'ACTION_ACCEPTED' => ActionAcceptedMessage(
         seq: seq,

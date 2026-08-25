@@ -3,6 +3,8 @@ import 'dart:async';
 import '../challenge/challenge_state.dart';
 import '../challenge/dare_card.dart';
 import '../challenge/rps_state.dart';
+import '../challenge/trivia_card.dart';
+import '../challenge/trivia_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 import 'private_state.dart';
@@ -72,6 +74,15 @@ abstract class RemoteGameController {
 
   /// Resolves the RPS match and applies the penalty.
   void resolveRps(ChallengeResult result);
+
+  /// Starts the Trivia challenge with the given question. Host-authoritative.
+  TriviaState startTrivia(TriviaCard card);
+
+  /// Records the answer to a trivia question.
+  void recordTriviaAnswer(bool isCorrect);
+
+  /// Resolves the Trivia challenge and applies the penalty.
+  void resolveTrivia(ChallengeResult result);
 
   /// Reconnects after a failed connection. Hosts always report success
   /// (they are the authority); clients retry their last-known host.
@@ -267,6 +278,32 @@ class HostRemoteController implements RemoteGameController {
       throw const YamadaRoundException('No active challenge');
     }
     game.resolveRps(result);
+  });
+
+  @override
+  TriviaState startTrivia(TriviaCard card) {
+    if (!_started) {
+      throw StateError('Game not started');
+    }
+    game.startTrivia(card);
+    hostSession.broadcastHostAction();
+    return game.triviaState!;
+  }
+
+  @override
+  void recordTriviaAnswer(bool isCorrect) => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.recordTriviaAnswer(isCorrect);
+  });
+
+  @override
+  void resolveTrivia(ChallengeResult result) => _act(() {
+    if (!game.challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    game.resolveTrivia(result);
   });
 
   void _act(void Function() action) {
