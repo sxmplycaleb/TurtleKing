@@ -30,6 +30,8 @@ void main() {
         'The Reveal',
         'Shot Escalation',
         'Drinking Counts',
+        'Refuse to Drink',
+        'Challenges',
         'Multiple Rounds',
         'Elimination',
         'Turtle King',

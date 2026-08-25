@@ -3,6 +3,45 @@
 All notable changes to Turtle King are recorded here. Milestone-by-milestone
 detail lives in the README; this file is the release-level summary.
 
+## [1.5.1] — Challenge system and refusal flow
+
+### Added
+
+- **Refusal / challenge system** — when a player would take a shot, they can
+  instead refuse to drink. If 3+ other players are active, a challenge is
+  triggered: all other players place a finger on the screen and the app
+  randomly selects a challenger.
+- **Dare challenges** — the challenger draws from a 100+ card deck across 6
+  categories (Risk, Social, Truth, Group, Chaos, Wild). The challenged player
+  completes the dare (challenger drinks) or refuses (challenged player drinks).
+- **Rock Paper Scissors** — best-of-3 with sudden death. The loser takes 1
+  shot. Round results are recorded human-reported (the app does not detect
+  gestures).
+- **Trivia challenges** — a trivia question is drawn from a 100+ card deck
+  across 13 categories (General Knowledge, Geography, History, Science,
+  Technology, Sports, Music, Movies & TV, Food, Kenya/Africa, Personal,
+  A-Z, Rapid Fire). Correct answer → challenger drinks; wrong answer →
+  challenged player drinks.
+- **Challenge penalty** — always exactly 1 shot for the loser.
+- **Too-few-players fallback** — when fewer than 3 other players are active,
+  refusing triggers a direct drink instead of a challenge.
+- **Game event types** for challenge flow: `challengeStarted`,
+  `challengerSelected`, `challengeTypeChosen`, `challengeResolved`,
+  `challengePenalty`, `refusalDrink`, `dareSelected`, `dareCompleted`,
+  `dareRefused`, `rpsStarted`, `rpsRoundRecorded`, `rpsResolved`,
+  `triviaStarted`, `triviaCorrect`, `triviaWrong`, `triviaResolved`.
+
+### Changed
+
+- **YAMADA is now a strategic surrender** — calling YAMADA commits to a
+  strategic surrender. After all players act, only the YAMADA caller's hand
+  is revealed. Correct YAMADA (caller has smallest hand): 0 shots. Wrong
+  YAMADA: 1 shot. No new cards are dealt.
+- **How to Play screen** updated to reflect YAMADA strategic surrender,
+  challenge system, and refusal flow.
+- **Drinking Counts** section updated to include challenge penalties as
+  drinking events.
+
 ## [1.4.1] — Other Games and play-count ranking
 
 ### Added

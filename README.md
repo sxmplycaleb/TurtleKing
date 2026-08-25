@@ -18,20 +18,30 @@ The game is implemented directly from the authoritative Turtle King rules:
 - **The pouring cup** — after everyone has viewed, a water cup is placed and
   water begins to be poured. In turn, each active player holds out or shouts
   **YAMADA**.
-- **YAMADA = admit defeat** — calling YAMADA means the player admits defeat:
-  they drink the water currently in the cup, are dealt two new cards (and
-  look at one of them), and continue the game. The round is not revealed.
+- **YAMADA = strategic surrender** — calling YAMADA means the player commits
+  to a strategic surrender. After all players have acted, only the YAMADA
+  caller's hand is revealed. If the caller would have been the loser
+  (smallest hand): 0 shots. If the caller would NOT have been the loser:
+  1 shot. No new cards are dealt; the round continues to the next action.
 - **Everyone holds out → reveal** — if all players hold out without
   shouting, all hands are revealed together and the player with the
   **smallest** cards drinks a **full cup**, plus an **extra cup** because
   they held out with the smallest cards. Ties share the penalty.
-- **Cup sizes** — the cup starts normal; because no player admitted defeat
-  in round one, round two switches to a **large** cup, and round three to an
-  **extra-large** cup (a round with YAMADA keeps the current size).
+- **Shot escalation** — the penalty increases each round: Round 1 = 1 shot
+  + 1 extra, Round 2 = 2 shots + 1 extra, Round 3 = 3 shots + 1 extra, and
+  so on. A YAMADA call does not reset the escalation. The cup grows visually
+  (normal → large → extra-large) but the cup size is decoupled from the shot
+  penalty.
+- **Refuse to drink** — instead of taking a shot, a player can refuse to
+  drink. If there are at least 3 other active players, this triggers a
+  challenge: all other players place a finger on the screen, and the app
+  randomly selects one of them as the challenger. The challenger then
+  chooses a challenge type: **Dare**, **Rock Paper Scissors**, or **Trivia**.
+  The challenge penalty is always exactly 1 shot.
 - **Six drinks = elimination** — each drink (YAMADA, full-cup penalty, extra
-  cup) counts as one drinking event. A player who accumulates **six**
-  drinking events is directly eliminated on the spot; eliminated players
-  receive no hands, take no turns, and cannot act.
+  cup, challenge penalty) counts as one drinking event. A player who
+  accumulates **six** drinking events is directly eliminated on the spot;
+  eliminated players receive no hands, take no turns, and cannot act.
 - **Turtle King** — the last player remaining on the field wins the crown
   and becomes the Turtle King. If every remaining player is eliminated by
   the same event, no Turtle King is declared.
@@ -41,22 +51,43 @@ The game is implemented directly from the authoritative Turtle King rules:
 Card values are Ace = 1, number cards = their number, Jack = 11, Queen = 12,
 King = 13, and "smallest" means the lowest total of a player's two cards.
 
+### Challenge system
+
+The challenge system adds a refusal option to the pouring phase:
+
+- **Refuse to drink** — available when there are 3+ other active players.
+  Triggers the challenge selection flow.
+- **Place your finger** — all eligible players (everyone except the one who
+  refused) place a finger on the screen. The app randomly selects a
+  challenger.
+- **Challenge types** — the challenger chooses one of:
+  - **Dare** — a dare card is drawn from the 100+ card deck (6 categories:
+    Risk, Social, Truth, Group, Chaos, Wild). The challenged player
+    completes it (challenger drinks) or refuses (challenged player drinks).
+  - **Rock Paper Scissors** — best of 3 rounds with sudden death. The loser
+    takes 1 shot.
+  - **Trivia** — a trivia question is drawn. A correct answer means the
+    challenger takes the shot; a wrong answer means the challenged player
+    takes the shot.
+- **Challenge penalty** — always exactly 1 shot for the loser.
+- **Too few players** — if fewer than 3 others are active, refusing is not
+  available and the player takes the shot directly.
+
 ### Assumptions (the rules are silent)
 
 The authoritative rules leave a few details open; the game implements them
 as clearly-labeled project rules (also listed on the How to Play screen):
 
 - "Smallest" = lowest total hand value; tied players all drink.
-- A YAMADA drink, the full-cup penalty, and the extra cup each count as one
-  drinking event.
+- A YAMADA drink, the full-cup penalty, the extra cup, and a challenge
+  penalty each count as one drinking event.
 - The cup grows one step after every round with no YAMADA and stays the
   same after a round with YAMADA.
 - When the deck runs low it is reset to a full 52-card deck (shuffled) so
   the game can continue.
-- Each new YAMADA hand shows the player the first of their two new cards.
-- A round ends once every active player has held out in a row; if YAMADA
-  was called during the round, no reveal happens and the round simply
-  completes with the YAMADA drinks recorded.
+- Only one YAMADA call is allowed per round.
+- Refusing to drink requires at least 3 other active players.
+- A challenge penalty is always exactly 1 shot.
 
 ### Superseded provisional mechanics
 
@@ -1295,6 +1326,8 @@ lib/
   card.dart               # Suit, Rank, and Card model
   deck.dart               # Standard 52-card deck (shuffle/deal/reset)
   game_state.dart         # Hands, turns, rounds, cup, scoring, elimination, result, event log
+  challenge/              # Refusal challenge engine: Dare, RPS, Trivia system
+  other_games/            # Other Games catalog, game preview screens, play-count ranking
   feedback.dart           # Sound/haptic feedback: events, patterns, GameFeedbackService, engine, scope
   app_version.dart        # Settings → About: version read from package metadata (never hardcoded)
   multiplayer/            # Phase 18: host/join lobbies, codec, transports, relay, RemoteDriver
