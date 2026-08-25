@@ -518,10 +518,15 @@ class PublicChallengeState {
     this.currentDareCategory,
     this.currentDareTitle,
     this.currentDareDescription,
+    this.rpsCurrentRound,
+    this.rpsRoundOutcomes = const [],
+    this.rpsFinalLoserId,
+    this.rpsResolved = false,
   });
 
   factory PublicChallengeState.fromChallenge(ChallengeState cs) {
     final dare = cs.currentDare;
+    final rps = cs.rpsState;
     return PublicChallengeState(
       challengedPlayerId: cs.challengedPlayer.id,
       challengerId: cs.challenger?.id,
@@ -533,6 +538,12 @@ class PublicChallengeState {
       currentDareCategory: dare?.category.name,
       currentDareTitle: dare?.title,
       currentDareDescription: dare?.description,
+      rpsCurrentRound: rps?.currentRound,
+      rpsRoundOutcomes: [
+        for (final r in rps?.roundResults ?? []) r.outcome.name,
+      ],
+      rpsFinalLoserId: rps?.loser?.id,
+      rpsResolved: rps?.resolved ?? false,
     );
   }
 
@@ -548,6 +559,21 @@ class PublicChallengeState {
   final String? currentDareCategory;
   final String? currentDareTitle;
   final String? currentDareDescription;
+
+  /// The current RPS round (1-based, 1–3). Null when RPS hasn't started.
+  final int? rpsCurrentRound;
+
+  /// Outcomes of completed RPS rounds (list of outcome names).
+  final List<String> rpsRoundOutcomes;
+
+  /// The player id of the final RPS loser (null until set).
+  final String? rpsFinalLoserId;
+
+  /// Whether the RPS match has been fully resolved.
+  final bool rpsResolved;
+
+  /// Whether an RPS match is active and has started.
+  bool get hasRps => rpsCurrentRound != null;
 
   /// Whether a Dare card has been drawn and is available.
   bool get hasDare => currentDareId != null;
@@ -582,6 +608,10 @@ class PublicChallengeState {
     'currentDareCategory': currentDareCategory,
     'currentDareTitle': currentDareTitle,
     'currentDareDescription': currentDareDescription,
+    'rpsCurrentRound': rpsCurrentRound,
+    'rpsRoundOutcomes': rpsRoundOutcomes,
+    'rpsFinalLoserId': rpsFinalLoserId,
+    'rpsResolved': rpsResolved,
   };
 
   factory PublicChallengeState.fromJson(Object? value) {
@@ -606,6 +636,16 @@ class PublicChallengeState {
       currentDareCategory: map['currentDareCategory'] as String?,
       currentDareTitle: map['currentDareTitle'] as String?,
       currentDareDescription: map['currentDareDescription'] as String?,
+      rpsCurrentRound: map['rpsCurrentRound'] as int?,
+      rpsRoundOutcomes: [
+        for (final o in requireList(
+          map['rpsRoundOutcomes'],
+          'challenge state.rpsRoundOutcomes',
+        ))
+          requireString(o, 'challenge state.rpsRoundOutcomes[]'),
+      ],
+      rpsFinalLoserId: map['rpsFinalLoserId'] as String?,
+      rpsResolved: map['rpsResolved'] as bool? ?? false,
     );
   }
 }

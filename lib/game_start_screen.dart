@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide Card;
 
 import 'challenge/challenge_state.dart';
 import 'challenge/dare_card.dart';
+import 'challenge/rps_state.dart';
 import 'card_widgets.dart';
 import 'feedback.dart';
 import 'game_history_screen.dart';
@@ -57,6 +58,7 @@ enum _Stage {
   challengeSelection,
   challengeTypeSelection,
   challengeDare,
+  challengeRps,
   challengeResolution,
 }
 
@@ -136,8 +138,12 @@ class _GameStartScreenState extends State<GameStartScreen> {
           cs.type == ChallengeType.dare) {
         return _Stage.challengeDare;
       }
+      if (cs.phase == ChallengePhase.inProgress &&
+          cs.type == ChallengeType.rockPaperScissors) {
+        return _Stage.challengeRps;
+      }
       if (cs.phase == ChallengePhase.inProgress) {
-        // RPS/Trivia integration points — placeholder for future branches.
+        // Trivia integration point — placeholder for future branch.
         return _Stage.challengeResolution;
       }
     }
@@ -252,6 +258,32 @@ class _GameStartScreenState extends State<GameStartScreen> {
   void _refuseDare() {
     setState(() {
       widget.driver.refuseDare();
+      _showingHandoff = !_game.roundComplete && !_game.gameComplete;
+    });
+    _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
+  }
+
+  void _startRps() {
+    setState(() {
+      widget.driver.startRps();
+    });
+    _persistGame();
+  }
+
+  void _recordRpsRound(int roundNumber, RpsRoundOutcome outcome) {
+    setState(() {
+      widget.driver.recordRpsRound(roundNumber, outcome);
+    });
+    _persistGame();
+  }
+
+  void _resolveRps(ChallengeResult result) {
+    setState(() {
+      widget.driver.resolveRps(result);
       _showingHandoff = !_game.roundComplete && !_game.gameComplete;
     });
     _persistGame();
@@ -508,6 +540,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                       _Stage.challengeTypeSelection =>
                         _challengeTypeSelectionView(context),
                       _Stage.challengeDare => _dareView(context),
+                      _Stage.challengeRps => _rpsView(context),
                       _Stage.challengeResolution => _challengeResolutionView(
                         context,
                       ),
@@ -1361,6 +1394,267 @@ class _GameStartScreenState extends State<GameStartScreen> {
             ),
           ],
         ),
+      ],
+    );
+  }
+
+  /// RPS challenge — show best-of-3 with sudden death.
+  Widget _rpsView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final cs = _game.challengeState!;
+    final challenger = cs.challenger!;
+    final challenged = cs.challengedPlayer;
+    final rps = cs.rpsState;
+
+    // RPS not started yet — show intro screen.
+    if (rps == null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'ROCK PAPER SCISSORS',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              color: style.textPrimary,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Best of 3',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: style.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${challenged.name} vs ${challenger.name}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: style.accentText,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 32),
+          FilledButton(
+            onPressed: _startRps,
+            style: _goldButtonStyle(context),
+            child: Text('START', style: _goldButtonLabelStyle(context)),
+          ),
+        ],
+      );
+    }
+
+    // Match is complete — show final result.
+    if (rps.isMatchComplete) {
+      final winner = rps.winner!;
+      final loser = rps.loser!;
+      final result = loser.id == challenger.id
+          ? ChallengeResult.challengerPenalty
+          : ChallengeResult.challengedPenalty;
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'RPS RESULT',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              color: style.textPrimary,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _rpsRoundResultsSummary(context, rps),
+          const SizedBox(height: 24),
+          // Winner
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green.shade600.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.shade400, width: 2),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'WINS',
+                  style: TextStyle(
+                    color: Colors.green.shade400,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  winner.name,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: style.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Loser
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade600.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red.shade400, width: 2),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'LOSES',
+                  style: TextStyle(
+                    color: Colors.red.shade400,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  loser.name,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: style.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Takes 1 shot',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: style.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: () => _resolveRps(result),
+            style: _goldButtonStyle(context),
+            child: Text('Continue', style: _goldButtonLabelStyle(context)),
+          ),
+        ],
+      );
+    }
+
+    // Show current round.
+    final currentRound = rps.currentRound;
+    final isSuddenDeath = rps.isInSuddenDeath;
+    final roundOutcomes = [
+      RpsRoundOutcome.challengerWon,
+      RpsRoundOutcome.challengedPlayerWon,
+      RpsRoundOutcome.draw,
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'ROCK PAPER SCISSORS',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: style.textPrimary,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          isSuddenDeath
+              ? 'ROUND $currentRound — SUDDEN DEATH'
+              : 'ROUND $currentRound',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: isSuddenDeath ? Colors.red : style.accentText,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (rps.roundResults.isNotEmpty) ...[
+          _rpsRoundResultsSummary(context, rps),
+          const SizedBox(height: 16),
+        ],
+        Text(
+          'WHO WON THIS ROUND?',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: style.textSecondary,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 24),
+        for (final outcome in roundOutcomes) ...[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => _recordRpsRound(currentRound, outcome),
+              style: FilledButton.styleFrom(
+                backgroundColor: style.accent,
+                foregroundColor: style.onAccent,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
+              ),
+              child: Text(
+                outcome == RpsRoundOutcome.challengerWon
+                    ? challenger.name
+                    : outcome == RpsRoundOutcome.challengedPlayerWon
+                    ? challenged.name
+                    : 'DRAW',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: style.onAccent,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  /// Shows a summary of completed RPS round results.
+  Widget _rpsRoundResultsSummary(BuildContext context, RpsState rps) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (final result in rps.roundResults) ...[
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: result.outcome == RpsRoundOutcome.challengerWon
+                  ? Colors.blue.shade400
+                  : result.outcome == RpsRoundOutcome.challengedPlayerWon
+                  ? Colors.orange.shade400
+                  : Colors.grey.shade400,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${result.roundNumber}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          if (result != rps.roundResults.last) const SizedBox(width: 8),
+        ],
       ],
     );
   }

@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/material.dart' show Color;
 
 import '../challenge/challenge_state.dart';
+import '../challenge/rps_state.dart';
 import '../game_state.dart';
 import '../player_colors.dart';
 import 'errors.dart';
@@ -738,6 +739,17 @@ class HostSession {
       case GameAction.refuseDare:
         // Only the challenged player can refuse the dare.
         owned = game.challengeState?.challengedPlayer.id == client.playerId;
+      case GameAction.startRps:
+        // Only the host can start RPS (authoritative).
+        owned = true;
+      case GameAction.recordRpsRound:
+        // Only the host can record RPS rounds (authoritative).
+        owned = true;
+      case GameAction.resolveRps:
+        // Only the challenger or challenged player can resolve RPS.
+        owned =
+            game.challengeState?.challenger?.id == client.playerId ||
+            game.challengeState?.challengedPlayer.id == client.playerId;
     }
     if (!owned) {
       _sendRejected(connection, message, 'not your turn');
@@ -835,6 +847,56 @@ class HostSession {
             rejection = 'no active dare to refuse';
           } else {
             game.refuseDare();
+          }
+        case GameAction.startRps:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.rockPaperScissors) {
+            rejection = 'no active RPS challenge';
+          } else if (game.rpsState != null) {
+            rejection = 'RPS has already been started';
+          } else {
+            game.startRps();
+          }
+        case GameAction.recordRpsRound:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.rockPaperScissors ||
+              game.rpsState == null) {
+            rejection = 'no active RPS to record round for';
+          } else {
+            final roundNumber = message.rpsRoundNumber;
+            final outcomeStr = message.rpsOutcome;
+            if (roundNumber == null || outcomeStr == null) {
+              rejection = 'round number and outcome are required';
+            } else {
+              final outcome = RpsRoundOutcome.values
+                  .where((o) => o.name == outcomeStr)
+                  .firstOrNull;
+              if (outcome == null) {
+                rejection = 'invalid RPS outcome: $outcomeStr';
+              } else {
+                game.recordRpsRound(roundNumber, outcome);
+              }
+            }
+          }
+        case GameAction.resolveRps:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.rockPaperScissors ||
+              game.rpsState == null) {
+            rejection = 'no active RPS to resolve';
+          } else {
+            final resultStr = message.challengeResult;
+            if (resultStr == null) {
+              rejection = 'challenge result is required';
+            } else {
+              final result = ChallengeResult.values
+                  .where((r) => r.name == resultStr)
+                  .firstOrNull;
+              if (result == null) {
+                rejection = 'invalid challenge result: $resultStr';
+              } else {
+                game.resolveRps(result);
+              }
+            }
           }
       }
     } on YamadaRoundException catch (error) {
@@ -1468,6 +1530,8 @@ class ClientSession {
     GameAction action, {
     String? challengeType,
     String? challengeResult,
+    int? rpsRoundNumber,
+    String? rpsOutcome,
   }) {
     final connection = _connection;
     final self = _self;
@@ -1484,6 +1548,8 @@ class ClientSession {
                   playerId: self.id,
                   challengeType: challengeType,
                   challengeResult: challengeResult,
+                  rpsRoundNumber: rpsRoundNumber,
+                  rpsOutcome: rpsOutcome,
                 ),
               ),
             )

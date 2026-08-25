@@ -1,5 +1,6 @@
 import '../challenge/challenge_state.dart';
 import '../challenge/dare_card.dart';
+import '../challenge/rps_state.dart';
 import '../game_state.dart';
 import '../player.dart';
 
@@ -65,6 +66,15 @@ abstract class GameDriver {
   /// Records that the challenged player refused/failed the Dare.
   void refuseDare();
 
+  /// Starts the RPS match for the active challenge. Host-authoritative.
+  RpsState startRps();
+
+  /// Records the outcome of one RPS round.
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome);
+
+  /// Resolves the RPS match and applies the penalty.
+  void resolveRps(ChallengeResult result);
+
   /// Starts the next round after the current one has completed.
   void startNextRound();
 }
@@ -115,6 +125,16 @@ class LocalDriver implements GameDriver {
 
   @override
   void refuseDare() => state.refuseDare();
+
+  @override
+  RpsState startRps() => state.startRps();
+
+  @override
+  void recordRpsRound(int roundNumber, RpsRoundOutcome outcome) =>
+      state.recordRpsRound(roundNumber, outcome);
+
+  @override
+  void resolveRps(ChallengeResult result) => state.resolveRps(result);
 
   @override
   void startNextRound() => state.startNextRound();
