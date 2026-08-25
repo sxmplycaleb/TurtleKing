@@ -97,7 +97,7 @@ class RulesContent {
           'After everyone has looked at their card, a water cup is '
           'placed on the table and water begins to be poured. In '
           'turn, each player decides what to do while the water '
-          'rises: hold out, or shout YAMADA.',
+          'rises: hold out, shout YAMADA, or refuse to drink.',
     ),
     RulesSection(
       id: 'yamada',
@@ -105,10 +105,11 @@ class RulesContent {
       body:
           'If you feel your other (hidden) card is too small, you '
           'can shout "Yamada!" — a strategic surrender. After all '
-          'players have acted, the cards are revealed. If you would '
-          'have been the loser (smallest hand), your YAMADA call was '
-          'correct: 0 shots! If you would NOT have been the loser, '
-          'you take 1 shot for calling YAMADA wrong.',
+          'players have acted, only the YAMADA caller\'s hand is '
+          'revealed. If you would have been the loser (smallest '
+          'hand), your YAMADA call was correct: 0 shots! If you '
+          'would NOT have been the loser, you take 1 shot for '
+          'calling YAMADA wrong.',
     ),
     RulesSection(
       id: 'holdOut',
@@ -123,10 +124,9 @@ class RulesContent {
       id: 'reveal',
       title: 'The Reveal',
       body:
-          'When everyone holds out (or after YAMADA is resolved), '
-          'hands are revealed. The player with the smallest cards '
-          'takes shots: the round number (the cup) plus 1 extra '
-          'shot for holding out.',
+          'When everyone holds out, hands are revealed. The player '
+          'with the smallest cards takes shots: the round number '
+          '(the cup) plus 1 extra shot for holding out.',
       bullets: [
         'Card values: Ace = 1, number cards = their number, '
             'Jack = 11, Queen = 12, King = 13.',
@@ -157,9 +157,43 @@ class RulesContent {
       title: 'Drinking Counts',
       body:
           'Every shot counts: the round penalty, the extra '
-          'holding-out shot, and a wrong YAMADA penalty are each '
-          'one drinking event. A player who accumulates six '
-          'drinking events is directly eliminated on the spot.',
+          'holding-out shot, a wrong YAMADA penalty, and a '
+          'challenge penalty are each one drinking event. A player '
+          'who accumulates six drinking events is directly '
+          'eliminated on the spot.',
+    ),
+    RulesSection(
+      id: 'refuseToDrink',
+      title: 'Refuse to Drink',
+      body:
+          'Instead of taking a shot, a player can refuse to drink. '
+          'If there are at least 3 other active players, this '
+          'triggers a challenge: all other players place a finger '
+          'on the screen, and the app randomly selects one of them '
+          'as the challenger.',
+      bullets: [
+        'If fewer than 3 other players are active, refusing is '
+            'not available — the player must take the shot.',
+      ],
+    ),
+    RulesSection(
+      id: 'challenges',
+      title: 'Challenges',
+      body:
+          'When a player refuses to drink, a random challenger is '
+          'selected. The challenger then chooses one of three '
+          'challenge types:',
+      bullets: [
+        'Dare — the challenger draws a dare card. The challenged '
+            'player completes the dare (challenger drinks) or '
+            'refuses (challenged player drinks).',
+        'Rock Paper Scissors — best of 3 rounds with sudden '
+            'death if tied. The loser takes 1 shot.',
+        'Trivia — the challenger picks a trivia question. A '
+            'correct answer means the challenger takes the shot; '
+            'a wrong answer means the challenged player takes '
+            'the shot.',
+      ],
     ),
     RulesSection(
       id: 'multipleRounds',
@@ -200,8 +234,8 @@ class RulesContent {
         '"Smallest cards" means the lowest total value of the two '
             'cards; tied players share the penalty.',
         'YAMADA is a strategic surrender: no new cards are dealt. '
-            'After all players act, the cards reveal and the YAMADA '
-            'result is determined.',
+            'After all players act, only the YAMADA caller\'s hand '
+            'is revealed.',
         'Correct YAMADA (caller has smallest hand): 0 shots. '
             'Wrong YAMADA: 1 shot.',
         'No YAMADA round: the smallest hand takes the round '
@@ -210,6 +244,9 @@ class RulesContent {
         'Only one YAMADA call is allowed per round.',
         'The deck is reshuffled when it runs low, so the game can '
             'continue.',
+        'Refusing to drink requires at least 3 other active '
+            'players; otherwise the player takes the shot directly.',
+        'A challenge penalty is always exactly 1 shot.',
       ],
       highlighted: true,
     ),
