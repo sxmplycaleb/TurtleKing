@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'challenge/dare_repository.dart';
+import 'challenge/trivia_repository.dart';
 import 'game_start_screen.dart';
 import 'game_state.dart';
 import 'multiplayer/driver.dart';
@@ -88,6 +90,8 @@ class _PlayerSetupScreenState extends State<PlayerSetupScreen> {
       return;
     }
     final game = GameState(players: List.unmodifiable(_players));
+    game.setDareDeck(DareRepository.newDeck());
+    game.setTriviaDeck(TriviaRepository.newDeck());
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => GameStartScreen(driver: LocalDriver(game)),

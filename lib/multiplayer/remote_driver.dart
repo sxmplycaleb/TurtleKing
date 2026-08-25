@@ -355,6 +355,14 @@ class RemoteDriver implements RemoteGameController {
   }
 
   @override
+  TriviaCard drawTrivia() {
+    _request(GameAction.drawTrivia);
+    throw UnimplementedError(
+      'Client drawTrivia is host-authoritative — read the challenge state',
+    );
+  }
+
+  @override
   void completeDare() => _request(GameAction.completeDare);
 
   @override

@@ -733,6 +733,9 @@ class HostSession {
       case GameAction.drawDare:
         // Only the host can draw dare cards (authoritative).
         owned = true;
+      case GameAction.drawTrivia:
+        // Only the host can draw trivia cards (authoritative).
+        owned = true;
       case GameAction.completeDare:
         // Only the challenged player can confirm dare completion.
         owned = game.challengeState?.challengedPlayer.id == client.playerId;
@@ -842,6 +845,15 @@ class HostSession {
             rejection = 'a dare has already been drawn';
           } else {
             game.drawDare();
+          }
+        case GameAction.drawTrivia:
+          if (!game.challengeActive ||
+              game.challengeState?.type != ChallengeType.trivia) {
+            rejection = 'no active trivia challenge';
+          } else if (game.triviaState != null) {
+            rejection = 'trivia has already been started';
+          } else {
+            game.drawTrivia();
           }
         case GameAction.completeDare:
           if (!game.challengeActive ||

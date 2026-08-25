@@ -19,6 +19,7 @@ enum GameAction {
   chooseChallengeType,
   resolveChallenge,
   drawDare,
+  drawTrivia,
   completeDare,
   refuseDare,
   startRps,
