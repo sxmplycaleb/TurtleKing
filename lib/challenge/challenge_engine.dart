@@ -4,6 +4,8 @@ import '../player.dart';
 import 'challenge_state.dart';
 import 'dare_card.dart';
 import 'rps_state.dart';
+import 'trivia_card.dart';
+import 'trivia_state.dart';
 
 /// The minimum number of OTHER players required to trigger the challenge
 /// selection flow when a player refuses to drink.
@@ -148,6 +150,86 @@ class ChallengeEngine {
     );
     _state = _state!.copyWith(rpsState: rps);
     return rps;
+  }
+
+  /// Starts the Trivia challenge for this challenge.
+  ///
+  /// Must be called during the inProgress phase when type == Trivia.
+  TriviaState startTrivia(TriviaCard card) {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    if (_state!.type != ChallengeType.trivia) {
+      throw StateError('Challenge is not Trivia');
+    }
+    if (_state!.triviaState != null) {
+      throw StateError('Trivia has already been started');
+    }
+    final trivia = TriviaState(
+      challengedPlayer: _state!.challengedPlayer,
+      challenger: _state!.challenger!,
+      question: card,
+    );
+    _state = _state!.copyWith(triviaState: trivia);
+    return trivia;
+  }
+
+  /// Records the answer to a trivia question.
+  ///
+  /// [isCorrect] indicates whether the challenged player's answer was correct.
+  void recordTriviaAnswer(bool isCorrect) {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    final trivia = _state!.triviaState;
+    if (trivia == null) {
+      throw StateError('Trivia has not been started');
+    }
+    if (trivia.resolved) {
+      throw StateError('Trivia is already resolved');
+    }
+    if (trivia.phase == TriviaPhase.answered) {
+      throw StateError('Answer has already been recorded');
+    }
+    _state = _state!.copyWith(
+      triviaState: trivia.copyWith(
+        isCorrect: isCorrect,
+        phase: TriviaPhase.answered,
+      ),
+    );
+  }
+
+  /// Resolves the Trivia challenge and applies the penalty.
+  ///
+  /// Correct answer: challenger takes the penalty.
+  /// Wrong answer: challenged player takes the penalty.
+  ChallengeState resolveTrivia(ChallengeResult result) {
+    if (_state == null) {
+      throw StateError('No active challenge');
+    }
+    final trivia = _state!.triviaState;
+    if (trivia == null) {
+      throw StateError('Trivia has not been started');
+    }
+    if (trivia.resolved) {
+      throw StateError('Trivia is already resolved');
+    }
+    if (trivia.phase != TriviaPhase.answered) {
+      throw StateError('Trivia answer has not been recorded yet');
+    }
+
+    // Validate that the result matches the answer.
+    final expectedResult = trivia.isCorrect!
+        ? ChallengeResult
+              .challengerPenalty // Correct → challenger takes shot
+        : ChallengeResult
+              .challengedPenalty; // Wrong → challenged player takes shot
+    if (result != expectedResult) {
+      throw ArgumentError('ChallengeResult does not match the Trivia answer');
+    }
+
+    _state = _state!.copyWith(triviaState: trivia.copyWith(resolved: true));
+    return resolve(result);
   }
 
   /// Records the outcome of one RPS round.

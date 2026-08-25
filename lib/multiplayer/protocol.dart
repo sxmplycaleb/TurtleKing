@@ -24,6 +24,9 @@ enum GameAction {
   startRps,
   recordRpsRound,
   resolveRps,
+  startTrivia,
+  recordTriviaAnswer,
+  resolveTrivia,
 }
 
 /// A strongly typed protocol message (see docs/multiplayer/m18-architecture.md
@@ -166,6 +169,8 @@ class ActionRequestMessage extends MultiplayerMessage {
     this.challengeResult,
     this.rpsRoundNumber,
     this.rpsOutcome,
+    this.triviaQuestionId,
+    this.triviaIsCorrect,
   });
 
   final GameAction action;
@@ -183,6 +188,12 @@ class ActionRequestMessage extends MultiplayerMessage {
   /// The RPS outcome for recordRpsRound actions.
   final String? rpsOutcome;
 
+  /// The trivia question ID for startTrivia actions.
+  final String? triviaQuestionId;
+
+  /// Whether the trivia answer was correct for recordTriviaAnswer actions.
+  final bool? triviaIsCorrect;
+
   @override
   String get type => 'ACTION_REQUEST';
 
@@ -194,6 +205,8 @@ class ActionRequestMessage extends MultiplayerMessage {
     if (challengeResult != null) 'challengeResult': challengeResult,
     if (rpsRoundNumber != null) 'rpsRoundNumber': rpsRoundNumber,
     if (rpsOutcome != null) 'rpsOutcome': rpsOutcome,
+    if (triviaQuestionId != null) 'triviaQuestionId': triviaQuestionId,
+    if (triviaIsCorrect != null) 'triviaIsCorrect': triviaIsCorrect,
   };
 }
 

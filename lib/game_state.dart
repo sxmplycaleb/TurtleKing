@@ -5,6 +5,8 @@ import 'challenge/challenge_state.dart';
 import 'challenge/dare_card.dart';
 import 'challenge/dare_deck.dart';
 import 'challenge/rps_state.dart';
+import 'challenge/trivia_card.dart';
+import 'challenge/trivia_state.dart';
 import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
@@ -238,6 +240,18 @@ enum GameEventType {
 
   /// RPS resolved with a final penalty.
   rpsResolved,
+
+  /// Trivia was started for a challenge.
+  triviaStarted,
+
+  /// The challenged player answered correctly.
+  triviaCorrect,
+
+  /// The challenged player answered incorrectly.
+  triviaWrong,
+
+  /// Trivia resolved with a final penalty.
+  triviaResolved,
 }
 
 /// One immutable entry in the game replay log.
@@ -1133,6 +1147,129 @@ class GameState {
   /// The current RPS state if the active challenge is RPS and RPS has started.
   /// Null otherwise.
   RpsState? get rpsState => _challengeEngine.state?.rpsState;
+
+  // ---------------------------------------------------------------------
+  // Trivia system
+  // ---------------------------------------------------------------------
+
+  /// Starts the Trivia challenge for the active challenge.
+  ///
+  /// Must be called after [chooseChallengeType] with [ChallengeType.trivia].
+  /// The Trivia state is created and tracked in the challenge state.
+  TriviaState startTrivia(TriviaCard card) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.trivia) {
+      throw const YamadaRoundException('Challenge is not Trivia');
+    }
+    if (state.phase != ChallengePhase.inProgress) {
+      throw const YamadaRoundException(
+        'Trivia can only be started during inProgress phase',
+      );
+    }
+    if (state.triviaState != null) {
+      throw const YamadaRoundException('Trivia has already been started');
+    }
+    final trivia = _challengeEngine.startTrivia(card);
+    _record(
+      GameEvent(
+        type: GameEventType.triviaStarted,
+        round: _roundNumber,
+        player: state.challenger,
+      ),
+    );
+    return trivia;
+  }
+
+  /// Records the answer to a trivia question.
+  ///
+  /// [isCorrect] indicates whether the challenged player's answer was correct.
+  void recordTriviaAnswer(bool isCorrect) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.trivia) {
+      throw const YamadaRoundException('Challenge is not Trivia');
+    }
+    if (state.triviaState == null) {
+      throw const YamadaRoundException('Trivia has not been started');
+    }
+    _challengeEngine.recordTriviaAnswer(isCorrect);
+    _record(
+      GameEvent(
+        type: isCorrect
+            ? GameEventType.triviaCorrect
+            : GameEventType.triviaWrong,
+        round: _roundNumber,
+        player: state.challenger,
+      ),
+    );
+  }
+
+  /// Resolves the Trivia challenge and applies the penalty.
+  ///
+  /// Correct answer: challenger takes the penalty.
+  /// Wrong answer: challenged player takes the penalty.
+  void resolveTrivia(ChallengeResult result) {
+    if (!challengeActive) {
+      throw const YamadaRoundException('No active challenge');
+    }
+    final state = _challengeEngine.state!;
+    if (state.type != ChallengeType.trivia) {
+      throw const YamadaRoundException('Challenge is not Trivia');
+    }
+    if (state.triviaState == null) {
+      throw const YamadaRoundException('Trivia has not been started');
+    }
+    final trivia = state.triviaState!;
+    if (trivia.phase != TriviaPhase.answered) {
+      throw const YamadaRoundException(
+        'Trivia answer has not been recorded yet',
+      );
+    }
+    // Validate that the result matches the answer.
+    final expectedResult = trivia.isCorrect!
+        ? ChallengeResult
+              .challengerPenalty // Correct → challenger takes shot
+        : ChallengeResult
+              .challengedPenalty; // Wrong → challenged player takes shot
+    if (result != expectedResult) {
+      throw const YamadaRoundException(
+        'ChallengeResult does not match the Trivia answer',
+      );
+    }
+    _record(
+      GameEvent(
+        type: GameEventType.triviaResolved,
+        round: _roundNumber,
+        player: trivia.isCorrect! ? state.challenger : state.challengedPlayer,
+      ),
+    );
+    _challengeEngine.resolveTrivia(result);
+    // Apply the penalty.
+    final resolved = _challengeEngine.state!;
+    final drinkRecipient = resolved.penaltyRecipient!;
+    _drink(drinkRecipient, GameEventType.challengePenalty);
+    _record(
+      GameEvent(
+        type: GameEventType.challengeResolved,
+        round: _roundNumber,
+        player: drinkRecipient,
+      ),
+    );
+    _challengeEngine.reset();
+    _maybeCompleteGame();
+    if (!_gameComplete) {
+      _pourIndex = _pourIndex % activePlayers.length;
+    }
+  }
+
+  /// The current Trivia state if the active challenge is Trivia and trivia has started.
+  /// Null otherwise.
+  TriviaState? get triviaState => _challengeEngine.state?.triviaState;
 
   /// Validates a pouring action and rejects it without mutating anything.
   void _validatePourAction(Player player) {
