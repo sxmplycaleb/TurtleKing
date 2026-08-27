@@ -46,9 +46,16 @@ abstract class GameDriver {
 
   /// [player]'s pouring-turn action: refuse to drink.
   ///
-  /// Returns `true` if a challenge was initiated, `false` if the player
-  /// drinks directly.
+  /// Deprecated: refusal now happens after the round result via [refuseShot].
+  @Deprecated('Use takeShot() or refuseShot() after round completion')
   bool refuseDrink(Player player);
+
+  /// Confirms the current player will take 1 shot (pending decision).
+  void takeShot();
+
+  /// The current player refuses to take the shot and enters the challenge
+  /// flow. Returns `true` if a challenge was initiated.
+  bool refuseShot();
 
   /// Selects a random challenger from eligible players.
   ChallengeState selectChallenger();
@@ -118,7 +125,14 @@ class LocalDriver implements GameDriver {
   void callYamada(Player player) => state.callYamada(player);
 
   @override
+  @Deprecated('Use takeShot() or refuseShot() after round completion')
   bool refuseDrink(Player player) => state.refuseDrink(player);
+
+  @override
+  void takeShot() => state.takeShot();
+
+  @override
+  bool refuseShot() => state.refuseShot();
 
   @override
   ChallengeState selectChallenger() => state.selectChallenger();

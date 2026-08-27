@@ -115,6 +115,10 @@ class GameSaveCodec {
       ],
       'yamadaCallerThisRound': game.yamadaCallerThisRound?.id,
       'playersActedThisRound': List.of(game.playersActedThisRound),
+      // M20: pending shot decision state.
+      'shotDecisionPending': game.shotDecisionPending,
+      'shotDecisionPlayer': game.shotDecisionPlayer?.id,
+      'shotOwingPlayers': [for (final p in game.shotOwingPlayers) p.id],
     };
   }
 
@@ -219,6 +223,16 @@ class GameSaveCodec {
             for (final id in (map['playersActedThisRound'] as List<dynamic>))
               id as String,
         },
+        // M20: pending shot decision state (backward-compatible).
+        shotDecisionPending: map['shotDecisionPending'] as bool? ?? false,
+        shotDecisionPlayer: map['shotDecisionPlayer'] != null
+            ? _playerRef(map['shotDecisionPlayer'] as String, playersById)
+            : null,
+        shotOwingPlayers: [
+          if (map['shotOwingPlayers'] != null)
+            for (final id in (map['shotOwingPlayers'] as List<dynamic>))
+              _playerRef(id as String, playersById),
+        ],
       );
     } on GameSaveException {
       rethrow;

@@ -27,10 +27,14 @@ void main() {
     }
   }
 
-  /// Every active player holds out until the round completes.
+  /// Every active player holds out once, then resolves pending shots.
   void everyoneHoldsOut(GameState game) {
-    while (!game.roundComplete) {
+    final count = game.activePlayerCount;
+    for (var i = 0; i < count; i++) {
       game.holdOut(game.pourCurrentPlayer);
+    }
+    while (game.shotDecisionPending) {
+      game.takeShot();
     }
   }
 
@@ -107,6 +111,10 @@ void main() {
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
       game.holdOut(game.pourCurrentPlayer);
+      // Incorrect YAMADA creates a pending shot; resolve it to finalize round.
+      if (game.shotDecisionPending) {
+        game.takeShot();
+      }
       expect(game.roundComplete, isTrue);
 
       await pumpHistory(tester, game);
@@ -179,6 +187,10 @@ void main() {
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
       game.holdOut(game.pourCurrentPlayer);
+      // Incorrect YAMADA creates a pending shot; resolve it to finalize round.
+      if (game.shotDecisionPending) {
+        game.takeShot();
+      }
 
       await pumpHistory(tester, game);
 

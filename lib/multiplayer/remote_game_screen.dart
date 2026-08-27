@@ -365,6 +365,9 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
     if (view.gameComplete) {
       return [_gameOverContent(theme, view)];
     }
+    if (view.shotDecisionPending) {
+      return [_shotDecisionContent(theme, view)];
+    }
     if (view.roundComplete) {
       return [_roundCompleteContent(theme, view)];
     }
@@ -378,7 +381,7 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Water is being poured — round ${view.roundNumber}. '
+          'Your shot is being poured — round ${view.roundNumber}. '
           'If your other card feels too small, '
           'shout YAMADA — or hold out.',
           textAlign: TextAlign.center,
@@ -445,6 +448,17 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
               ),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Text(
+            'Waiting for ${view.currentPlayer?.name ?? 'the next player'} '
+            'to decide.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: style.textSecondary,
+            ),
+          ),
+        ),
       ];
     }
     if (view.allPlayersViewed) {
@@ -517,6 +531,123 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
     ];
   }
 
+  Widget _shotDecisionContent(ThemeData theme, RemoteGameView view) {
+    final style = GameTableStyle.of(context);
+    final controller = _controller;
+    final decisionPlayer = view.shotDecisionPlayerId;
+    final isMyDecision = view.isMyShotDecision;
+    final player = view.players
+        .where((p) => p.id == decisionPlayer)
+        .firstOrNull;
+    return Column(
+      children: [
+        Icon(Icons.local_bar, size: 48, color: style.danger),
+        const SizedBox(height: 16),
+        Text(
+          'YOU OWE 1 SHOT',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: style.danger,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (player != null) ...[
+          CircleAvatar(radius: 18, backgroundColor: Color(player.color)),
+          const SizedBox(height: 8),
+          Text(
+            player.name,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: style.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        if (isMyDecision) ...[
+          FilledButton(
+            onPressed: controller.takeShot,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text(
+                  'TAKE 1 SHOT',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                Text('Accept the penalty'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Builder(
+            builder: (context) {
+              final canRefuse = view.players.length >= 4;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton.tonal(
+                    onPressed: canRefuse ? controller.refuseShot : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: canRefuse
+                          ? style.danger.withValues(alpha: 0.15)
+                          : style.danger.withValues(alpha: 0.06),
+                      foregroundColor: canRefuse
+                          ? style.danger
+                          : style.danger.withValues(alpha: 0.4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 16,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'REFUSE TO DRINK',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: canRefuse
+                                ? style.danger
+                                : style.danger.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        Text(
+                          canRefuse
+                              ? 'Challenge another player'
+                              : 'Requires at least 4 players',
+                          style: TextStyle(
+                            color: canRefuse
+                                ? style.danger.withValues(alpha: 0.8)
+                                : style.danger.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ] else
+          Text(
+            'Waiting for ${player?.name ?? 'the player'} to decide.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: style.textSecondary,
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _roundCompleteContent(ThemeData theme, RemoteGameView view) {
     final style = GameTableStyle.of(context);
     final result = view.roundResults.isNotEmpty ? view.roundResults.last : null;
@@ -536,7 +667,7 @@ class _RemoteGameScreenState extends State<RemoteGameScreen> {
         const SizedBox(height: 12),
         if (yamadaCalled) ...[
           Text(
-            'YAMADA was called — cards revealed!',
+            "YAMADA was called — the caller's hand was revealed!",
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: style.textPrimary,

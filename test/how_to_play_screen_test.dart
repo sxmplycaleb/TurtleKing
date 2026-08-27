@@ -28,7 +28,7 @@ void main() {
         'YAMADA',
         'Hold Out',
         'The Reveal',
-        'Shot Escalation',
+        'Cup Sizes',
         'Drinking Counts',
         'Refuse to Drink',
         'Challenges',
@@ -73,8 +73,7 @@ void main() {
         find.textContaining('reveal their cards together'),
         findsOneWidget,
       );
-      expect(find.textContaining('takes shots'), findsWidgets);
-      expect(find.textContaining('extra shot'), findsWidgets);
+      expect(find.textContaining('owes 1 shot'), findsWidgets);
       expect(find.textContaining('lowest total value'), findsWidgets);
     });
 
@@ -83,7 +82,7 @@ void main() {
     ) async {
       await pumpScreen(tester);
 
-      expect(find.textContaining('escalate'), findsWidgets);
+      expect(find.textContaining('visual'), findsWidgets);
       expect(find.textContaining('six drinking events'), findsWidgets);
     });
 

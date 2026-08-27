@@ -27,8 +27,12 @@ void main() {
   }
 
   void everyoneHoldsOut(GameState game) {
-    while (!game.roundComplete) {
+    final count = game.activePlayerCount;
+    for (var i = 0; i < count; i++) {
       game.holdOut(game.pourCurrentPlayer);
+    }
+    while (game.shotDecisionPending) {
+      game.takeShot();
     }
   }
 
@@ -97,8 +101,8 @@ void main() {
         rich('everyone held out — all hands revealed together'),
         findsOneWidget,
       );
-      expect(rich('took shots'), findsOneWidget);
-      expect(rich('took an extra shot'), findsOneWidget);
+      // M20: flat 1-shot penalty — the loser takes exactly one shot.
+      expect(rich('took the shot'), findsOneWidget);
     });
 
     testWidgets('shows YAMADA events for a YAMADA round', (tester) async {

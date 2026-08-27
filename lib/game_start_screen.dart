@@ -55,6 +55,7 @@ enum _Stage {
   revealed,
   handoff,
   pourTurn,
+  shotDecision,
   roundComplete,
   gameOver,
   challengeSelection,
@@ -123,6 +124,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   _Stage get _stage {
     if (_game.gameComplete) return _Stage.gameOver;
+    // Shot decision takes highest priority after round completes.
+    if (_game.shotDecisionPending) return _Stage.shotDecision;
     if (_game.roundComplete) return _Stage.roundComplete;
     if (_showingHandoff) return _Stage.handoff;
     // Challenge flow takes priority over normal pouring turn.
@@ -203,6 +206,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
     _playFeedback(FeedbackEvent.holdOut);
     if (_game.roundComplete && !_game.gameComplete) {
       _playFeedback(FeedbackEvent.roundReveal);
+    } else if (_game.shotDecisionPending && !_game.gameComplete) {
+      _playFeedback(FeedbackEvent.roundReveal);
     }
     if (_game.eliminationHistory.length > eliminationsBefore) {
       _playFeedback(FeedbackEvent.elimination);
@@ -212,15 +217,27 @@ class _GameStartScreenState extends State<GameStartScreen> {
     }
   }
 
-  void _refuseDrink() {
+  void _takeShot() {
+    final eliminationsBefore = _game.eliminationHistory.length;
     setState(() {
-      final initiated = widget.driver.refuseDrink(_game.pourCurrentPlayer);
-      _showingHandoff = false;
-      // If a challenge was NOT initiated (too few players), the player
-      // drinks directly and the turn advances.
-      if (!initiated) {
-        _showingHandoff = !_game.roundComplete && !_game.gameComplete;
-      }
+      widget.driver.takeShot();
+    });
+    _persistGame();
+    _playFeedback(FeedbackEvent.holdOut);
+    if (_game.roundComplete && !_game.gameComplete) {
+      _playFeedback(FeedbackEvent.roundReveal);
+    }
+    if (_game.eliminationHistory.length > eliminationsBefore) {
+      _playFeedback(FeedbackEvent.elimination);
+    }
+    if (_game.gameComplete) {
+      _playFeedback(FeedbackEvent.victory);
+    }
+  }
+
+  void _refuseShot() {
+    setState(() {
+      widget.driver.refuseShot();
     });
     _persistGame();
   }
@@ -563,6 +580,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
                       _Stage.revealed => _revealedView(context),
                       _Stage.handoff => _handoffView(context),
                       _Stage.pourTurn => _pourTurnView(context),
+                      _Stage.shotDecision => _shotDecisionView(context),
                       _Stage.roundComplete => _roundCompleteView(context),
                       _Stage.gameOver => _gameOverView(context),
                       _Stage.challengeSelection => _challengeSelectionView(
@@ -705,7 +723,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 8),
         Text(
           _game.pouringStarted
-              ? 'The cup is on the table and water is being poured. Their '
+              ? 'The cup is on the table and the shot is being prepared. Their '
                     'turn begins when they continue.'
               : 'Their card stays hidden until they choose to reveal it.',
           textAlign: TextAlign.center,
@@ -737,7 +755,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         TurtleKingCup(size: _game.cupSize, diameter: 54),
         const SizedBox(height: 8),
         Text(
-          'Water is being poured — round ${_game.roundNumber}. '
+          'Your shot is being poured — round ${_game.roundNumber}. '
           'If you feel your other card is too small, '
           'shout YAMADA — or hold out.',
           textAlign: TextAlign.center,
@@ -823,18 +841,6 @@ class _GameStartScreenState extends State<GameStartScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        // Refuse to drink — triggers challenge if 3+ other players.
-        TextButton(
-          onPressed: _refuseDrink,
-          style: TextButton.styleFrom(foregroundColor: style.textSecondary),
-          child: Text(
-            'Refuse to drink',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: style.textSecondary,
-            ),
-          ),
-        ),
         const SizedBox(height: 4),
         _backToSetup(context),
       ],
@@ -865,7 +871,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         const SizedBox(height: 8),
         if (yamadaCalled) ...[
           Text(
-            'YAMADA was called — all cards revealed!',
+            "YAMADA was called — the caller's hand was revealed!",
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: style.textSecondary,
@@ -912,7 +918,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
           else
             Text(
               'Wrong YAMADA! ${_game.yamadaCallerThisRound!.name} did NOT '
-              'have the smallest hand — 1 shot.',
+              'have the smallest hand — owes 1 shot.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: style.danger,
@@ -972,12 +978,10 @@ class _GameStartScreenState extends State<GameStartScreen> {
           Text(
             result.smallestHands.length == 1
                 ? 'Smallest hand: '
-                      '${result.smallestHands.first.name} — takes '
-                      '${_game.roundNumber} shot(s) + 1 extra for holding out.'
+                      '${result.smallestHands.first.name} — owes 1 shot.'
                 : 'Smallest hands: '
                       '${result.smallestHands.map((p) => p.name).join(', ')} '
-                      '— each takes ${_game.roundNumber} shot(s) + 1 extra '
-                      'for holding out.',
+                      '— each owes 1 shot.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: style.accentTextSoft,
@@ -1014,7 +1018,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
         if (_game.canStartNextRound) ...[
           const SizedBox(height: 16),
           Text(
-            'Next round: ${_game.roundNumber + 1} shot(s) for the loser.',
+            'Next round: loser owes 1 shot.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: style.accentText,
@@ -1859,6 +1863,128 @@ class _GameStartScreenState extends State<GameStartScreen> {
             ],
           ),
         ],
+      ],
+    );
+  }
+
+  /// Shot decision — the player owes 1 shot and must choose.
+  Widget _shotDecisionView(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = GameTableStyle.of(context);
+    final player = _game.shotDecisionPlayer!;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: style.danger.withValues(alpha: 0.15),
+            border: Border.all(color: style.danger, width: 2),
+          ),
+          child: Icon(Icons.local_bar, color: style.danger, size: 34),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'YOU OWE 1 SHOT',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: style.danger,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _turnAvatar(context, player),
+        const SizedBox(height: 8),
+        Text(
+          player.name,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: style.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 24),
+        // TAKE 1 SHOT — the primary, prominent action.
+        FilledButton(
+          onPressed: _takeShot,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2E7D32),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'TAKE 1 SHOT',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                'Accept the penalty',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // REFUSE TO DRINK — secondary action, triggers challenge.
+        // Disabled when fewer than 4 total players (not enough for a challenge).
+        Builder(
+          builder: (context) {
+            final canRefuse = _game.canRefuseShot;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton.tonal(
+                  onPressed: canRefuse ? _refuseShot : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: canRefuse
+                        ? style.danger.withValues(alpha: 0.15)
+                        : style.danger.withValues(alpha: 0.06),
+                    foregroundColor: canRefuse
+                        ? style.danger
+                        : style.danger.withValues(alpha: 0.4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 16,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'REFUSE TO DRINK',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: canRefuse
+                              ? style.danger
+                              : style.danger.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      Text(
+                        canRefuse
+                            ? 'Challenge another player'
+                            : 'Requires at least 4 players',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: canRefuse
+                              ? style.danger.withValues(alpha: 0.8)
+                              : style.danger.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _backToSetup(context),
       ],
     );
   }

@@ -56,6 +56,8 @@ void main() {
     await tapVisible(tester, 'Hold out');
     await tapVisible(tester, 'Continue');
     await tapVisible(tester, 'Hold out');
+    // M20: resolve pending shot decision to reach round complete screen.
+    await tapVisible(tester, 'TAKE 1 SHOT');
   }
 
   Future<void> holdOut(WidgetTester tester) async {
@@ -189,8 +191,12 @@ void main() {
         await tester.pump();
         await holdOut(tester);
         await tester.pump();
+        // M20: resolve pending shot decisions.
+        while (game.shotDecisionPending) {
+          await tapVisible(tester, 'TAKE 1 SHOT');
+        }
         if (game.gameComplete) break;
-        await tester.tap(find.text('Start Next Round'));
+        await tapVisible(tester, 'Start Next Round');
         await tester.pump();
       }
 
@@ -214,8 +220,12 @@ void main() {
         await tester.pump();
         await holdOut(tester);
         await tester.pump();
+        // M20: resolve pending shot decisions.
+        while (game.shotDecisionPending) {
+          await tapVisible(tester, 'TAKE 1 SHOT');
+        }
         if (game.gameComplete) break;
-        await tester.tap(find.text('Start Next Round'));
+        await tapVisible(tester, 'Start Next Round');
         await tester.pump();
       }
 
@@ -258,6 +268,9 @@ void main() {
       await tapVisible(tester, 'Continue');
       expect(tester.takeException(), isNull);
       await tapVisible(tester, 'Hold out');
+      expect(tester.takeException(), isNull);
+      // M20: resolve pending shot decision.
+      await tapVisible(tester, 'TAKE 1 SHOT');
       expect(tester.takeException(), isNull);
       expect(find.byType(CardFace), findsNWidgets(4));
     });

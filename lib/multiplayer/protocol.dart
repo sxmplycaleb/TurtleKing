@@ -15,6 +15,8 @@ enum GameAction {
   callYamada,
   startNextRound,
   refuseDrink,
+  takeShot,
+  refuseShot,
   selectChallenger,
   chooseChallengeType,
   resolveChallenge,

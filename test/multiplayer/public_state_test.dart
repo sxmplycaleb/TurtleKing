@@ -55,6 +55,10 @@ void main() {
       // After YAMADA, turn advanced. Other players hold out.
       game.holdOut(game.pourCurrentPlayer);
       game.holdOut(game.pourCurrentPlayer);
+      // M20: resolve pending shot decisions before checking roundComplete.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
       final view = PublicStateView.fromGame(game);
       expect(view.calledYamada['p0'], isTrue);
       expect(view.roundComplete, isTrue);
@@ -70,8 +74,11 @@ void main() {
         // Play rounds until a player is eliminated via normal gameplay.
         viewThrough(game);
         while (!game.gameComplete) {
-          while (!game.roundComplete) {
+          while (!game.roundComplete && !game.shotDecisionPending) {
             game.holdOut(game.pourCurrentPlayer);
+          }
+          while (game.shotDecisionPending) {
+            game.takeShot();
           }
           if (!game.canStartNextRound) break;
           game.startNextRound();
@@ -134,8 +141,14 @@ void main() {
       final game = testGame(3);
       viewThrough(game);
       // Everyone holds out: the reveal happens and smallest hands drink.
-      for (var i = 0; i < game.players.length * 2 && !game.roundComplete; i++) {
-        game.holdOut(game.players[game.pourIndex]);
+      while (!game.roundComplete &&
+          !game.gameComplete &&
+          !game.shotDecisionPending) {
+        game.holdOut(game.pourCurrentPlayer);
+      }
+      // M20: resolve pending shot decisions so the round finalizes.
+      while (game.shotDecisionPending) {
+        game.takeShot();
       }
       final view = PublicStateView.fromGame(game);
       expect(view.roundResults, hasLength(1));

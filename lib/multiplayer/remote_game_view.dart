@@ -109,4 +109,15 @@ class RemoteGameView {
 
   /// The final result names this client, if the game completed.
   bool get iWon => finalResult?.turtleKings.contains(selfPlayerId) ?? false;
+
+  // -------------------------------------------------------------------
+  // M20: Shot decision state
+  // -------------------------------------------------------------------
+
+  bool get shotDecisionPending => publicState.shotDecisionPending;
+  String? get shotDecisionPlayerId => publicState.shotDecisionPlayerId;
+  List<String> get shotOwingPlayerIds => publicState.shotOwingPlayerIds;
+
+  /// Whether it's this client's turn to decide (take or refuse).
+  bool get isMyShotDecision => shotDecisionPlayerId == selfPlayerId;
 }

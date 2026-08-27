@@ -58,7 +58,7 @@ class RulesContent {
           'Turtle King is a game that cannot be stopped: hold out '
           'until the end. Players take turns on a single phone, '
           'deciding whether to admit defeat or hold out while a '
-          'water cup is being poured. The last player remaining on '
+          'shot cup is being poured. The last player remaining on '
           'the field wins the crown and becomes the Turtle King.',
     ),
     RulesSection(
@@ -94,9 +94,9 @@ class RulesContent {
       id: 'pouringCup',
       title: 'The Pouring Cup',
       body:
-          'After everyone has looked at their card, a water cup is '
-          'placed on the table and water begins to be poured. In '
-          'turn, each player decides what to do while the water '
+          'After everyone has looked at their card, a shot cup is '
+          'placed on the table and the shot begins to be poured. In '
+          'turn, each player decides what to do while the shot '
           'rises: hold out, shout YAMADA, or refuse to drink.',
     ),
     RulesSection(
@@ -125,18 +125,15 @@ class RulesContent {
       title: 'The Reveal',
       body:
           'When everyone holds out, hands are revealed. The player '
-          'with the smallest cards takes shots: the round number '
-          '(the cup) plus 1 extra shot for holding out.',
+          'with the smallest cards owes 1 shot.',
       bullets: [
         'Card values: Ace = 1, number cards = their number, '
             'Jack = 11, Queen = 12, King = 13.',
         '"Smallest" means the lowest total value of the two cards. '
             'If players tie for the smallest, all tied players '
-            'take shots.',
-        'Round 1: 1 shot + 1 extra = 2 shots total. '
-            'Round 2: 2 shots + 1 extra = 3 shots total. '
-            'Round 3: 3 shots + 1 extra = 4 shots total. '
-            'And so on.',
+            'each owe 1 shot.',
+        'The loser decides: take the shot or refuse to drink '
+            '(see Refuse to Drink below).',
       ],
       example:
           'Example: a 3 and a 7 total 10 — smaller than a 4 and a '
@@ -144,23 +141,21 @@ class RulesContent {
     ),
     RulesSection(
       id: 'cupSizes',
-      title: 'Shot Escalation',
+      title: 'Cup Sizes',
       body:
-          'The penalty increases each round. Round 1 loser takes '
-          '1 shot. Round 2 loser takes 2 shots. Round 3 loser '
-          'takes 3 shots. The penalty continues to escalate by 1 '
-          'shot each round. A YAMADA call does not reset the '
-          'escalation.',
+          'The cup grows visually each round: normal, large, '
+          'extra-large. The cup size is a visual indicator of '
+          'game progression — it does not change the number of '
+          'shots owed. Every penalty is always exactly 1 shot.',
     ),
     RulesSection(
       id: 'drinkingCounts',
       title: 'Drinking Counts',
       body:
-          'Every shot counts: the round penalty, the extra '
-          'holding-out shot, a wrong YAMADA penalty, and a '
-          'challenge penalty are each one drinking event. A player '
-          'who accumulates six drinking events is directly '
-          'eliminated on the spot.',
+          'Every shot counts: the round penalty, a wrong YAMADA '
+          'penalty, and a challenge penalty are each one drinking '
+          'event. A player who accumulates six drinking events '
+          'is directly eliminated on the spot.',
     ),
     RulesSection(
       id: 'refuseToDrink',
@@ -172,8 +167,10 @@ class RulesContent {
           'on the screen, and the app randomly selects one of them '
           'as the challenger.',
       bullets: [
-        'If fewer than 3 other players are active, refusing is '
-            'not available — the player must take the shot.',
+        'If fewer than 4 total players are active, the REFUSE '
+            'button is visible but disabled with the message '
+            '"Requires at least 4 players". The player must '
+            'take the shot.',
       ],
     ),
     RulesSection(
@@ -240,12 +237,14 @@ class RulesContent {
             'Wrong YAMADA: 1 shot.',
         'No YAMADA round: the smallest hand takes the round '
             'number (shots) + 1 extra shot for holding out.',
-        'Each round increases the base shot count by 1.',
+        'Normal round loser owes exactly 1 shot regardless of '
+            'round number.',
         'Only one YAMADA call is allowed per round.',
         'The deck is reshuffled when it runs low, so the game can '
             'continue.',
         'Refusing to drink requires at least 3 other active '
-            'players; otherwise the player takes the shot directly.',
+            'players (4+ total). If fewer, the button is disabled '
+            'with "Requires at least 4 players".',
         'A challenge penalty is always exactly 1 shot.',
       ],
       highlighted: true,

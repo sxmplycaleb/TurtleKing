@@ -24,10 +24,14 @@ void main() {
     }
   }
 
-  /// Every active player holds out until the round completes.
+  /// Every active player holds out once, then resolves pending shots.
   void everyoneHoldsOut(GameState game) {
-    while (!game.roundComplete) {
+    final count = game.activePlayerCount;
+    for (var i = 0; i < count; i++) {
       game.holdOut(game.pourCurrentPlayer);
+    }
+    while (game.shotDecisionPending) {
+      game.takeShot();
     }
   }
 
@@ -91,7 +95,7 @@ void main() {
       expect([for (final e in viewedEvents) e.player!.id], seen);
     });
 
-    test('a hold-out round records reveal, smallest, both penalties and '
+    test('a hold-out round records reveal, smallest, shot-taken and '
         'round completion', () {
       final game = GameState(
         players: makePlayers(2),
@@ -104,10 +108,9 @@ void main() {
       final log = types(game);
       expect(log, contains(GameEventType.revealOccurred));
       expect(log, contains(GameEventType.smallestDetermined));
-      final full = log.where((t) => t == GameEventType.fullCupPenalty);
-      final extra = log.where((t) => t == GameEventType.extraCupPenalty);
-      expect(full, hasLength(1));
-      expect(extra, hasLength(1));
+      // M20: single flat 1-shot penalty recorded as shotTaken.
+      final shots = log.where((t) => t == GameEventType.shotTaken);
+      expect(shots, hasLength(1));
       expect(log, contains(GameEventType.roundResult));
       expect(log, contains(GameEventType.roundCompleted));
     });
@@ -122,6 +125,11 @@ void main() {
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
       game.holdOut(game.pourCurrentPlayer);
+
+      // M20: if YAMADA is wrong, pending shot must be resolved first.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
 
       final log = types(game);
       expect(log, contains(GameEventType.playerCalledYamada));
@@ -168,11 +176,8 @@ void main() {
       expect(eliminations, hasLength(1));
     });
 
-    test('ties: every tied smallest player receives both penalties', () {
-      // A seeded game where two players tie for the smallest hand. We force
-      // the tie by checking the result: at least the round result's smallest
-      // list drives the recorded events, so assert the event plumbing, not
-      // the seed.
+    test('ties: every tied smallest player receives a shot-taken event', () {
+      // A seeded game where two players tie for the smallest hand.
       final game = GameState(
         players: makePlayers(2),
         random: Random(1),
@@ -182,17 +187,12 @@ void main() {
       everyoneHoldsOut(game);
 
       final smallest = game.smallestHands;
-      final full = game.events
-          .where((e) => e.type == GameEventType.fullCupPenalty)
+      // M20: each tied player gets one flat 1-shot penalty.
+      final shots = game.events
+          .where((e) => e.type == GameEventType.shotTaken)
           .toList();
-      final extra = game.events
-          .where((e) => e.type == GameEventType.extraCupPenalty)
-          .toList();
-      // Whatever the seed produced, the penalty events mirror the smallest
-      // list exactly: one full + one extra per tied player, no more.
-      expect(full, hasLength(smallest.length));
-      expect(extra, hasLength(smallest.length));
-      expect([for (final e in full) e.player], smallest);
+      expect(shots, hasLength(smallest.length));
+      expect([for (final e in shots) e.player], smallest);
     });
 
     test('a new round records round start and a fresh deal', () {

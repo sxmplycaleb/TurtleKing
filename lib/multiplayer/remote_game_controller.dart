@@ -48,6 +48,13 @@ abstract class RemoteGameController {
   /// Refuse to drink — initiates a challenge if 3+ other players.
   void refuseDrink();
 
+  /// Confirms the current player will take 1 shot (pending decision).
+  void takeShot();
+
+  /// The current player refuses to take the shot and enters the challenge
+  /// flow.
+  void refuseShot();
+
   /// Select a random challenger from eligible players (host-authoritative).
   void selectChallenger();
 
@@ -200,6 +207,12 @@ class HostRemoteController implements RemoteGameController {
 
   @override
   void refuseDrink() => _act(() => game.refuseDrink(game.pourCurrentPlayer));
+
+  @override
+  void takeShot() => _act(() => game.takeShot());
+
+  @override
+  void refuseShot() => _act(() => game.refuseShot());
 
   @override
   void selectChallenger() => _act(() {

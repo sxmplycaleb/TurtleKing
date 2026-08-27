@@ -23,8 +23,11 @@ detail lives in the README; this file is the release-level summary.
   A-Z, Rapid Fire). Correct answer → challenger drinks; wrong answer →
   challenged player drinks.
 - **Challenge penalty** — always exactly 1 shot for the loser.
-- **Too-few-players fallback** — when fewer than 3 other players are active,
-  refusing triggers a direct drink instead of a challenge.
+- **Too-few-players UX** — when fewer than 3 other players are active (4+
+  total required), the REFUSE TO DRINK button is visible but disabled with
+  "Requires at least 4 players". Attempting to refuse is rejected.
+- **Shot terminology** — UI now says "Your shot is being poured" instead of
+  "Water is being poured" to accurately reflect the drinking-game context.
 - **Game event types** for challenge flow: `challengeStarted`,
   `challengerSelected`, `challengeTypeChosen`, `challengeResolved`,
   `challengePenalty`, `refusalDrink`, `dareSelected`, `dareCompleted`,

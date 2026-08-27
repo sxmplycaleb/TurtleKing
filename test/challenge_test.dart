@@ -249,38 +249,55 @@ void main() {
       game = GameState(players: [alice, bob, carol, dave], random: Random(42));
     });
 
-    test('refuseDrink with 4 players initiates challenge', () {
-      // Fast-forward to pouring phase.
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
+    /// Helper: complete viewing phase, then everyone holds out to create
+    /// a pending shot decision.
+    void completeRoundToPendingShot(GameState g) {
+      for (final _ in g.activePlayers) {
+        g.revealCurrentPlayer();
+        g.passToNextPlayer();
       }
-      expect(game.pouringStarted, isTrue);
+      expect(g.pouringStarted, isTrue);
+      // Everyone holds out → round resolves → pending shot decision.
+      final count = g.activePlayerCount;
+      for (var i = 0; i < count; i++) {
+        g.holdOut(g.pourCurrentPlayer);
+      }
+      expect(g.shotDecisionPending, isTrue);
+      expect(g.shotDecisionPlayer, isNotNull);
+    }
 
-      final initiated = game.refuseDrink(game.pourCurrentPlayer);
+    test('refuseShot with 4 players initiates challenge', () {
+      completeRoundToPendingShot(game);
+      final owing = game.shotDecisionPlayer!;
+
+      final initiated = game.refuseShot();
       expect(initiated, isTrue);
       expect(game.challengeActive, isTrue);
       expect(game.challengeState, isNotNull);
-      expect(game.challengeState!.challengedPlayer, game.pourCurrentPlayer);
+      expect(game.challengeState!.challengedPlayer, owing);
     });
 
-    test('refuseDrink with 2 players does not initiate challenge', () {
+    test('refuseShot with 2 players is rejected', () {
       final smallGame = GameState(players: [alice, bob], random: Random(42));
       for (final _ in smallGame.activePlayers) {
         smallGame.revealCurrentPlayer();
         smallGame.passToNextPlayer();
       }
-      final initiated = smallGame.refuseDrink(smallGame.pourCurrentPlayer);
-      expect(initiated, isFalse);
+      for (var i = 0; i < smallGame.activePlayerCount; i++) {
+        smallGame.holdOut(smallGame.pourCurrentPlayer);
+      }
+      expect(smallGame.shotDecisionPending, isTrue);
+      expect(
+        () => smallGame.refuseShot(),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      expect(smallGame.shotDecisionPending, isTrue);
       expect(smallGame.challengeActive, isFalse);
     });
 
     test('selectChallenger returns challenger from eligible players', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
 
       final state = game.selectChallenger();
       expect(state.challenger, isNotNull);
@@ -291,11 +308,8 @@ void main() {
     });
 
     test('resolveChallenge applies penalty to correct player', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -307,11 +321,8 @@ void main() {
     });
 
     test('challenge is single resolution — cannot resolve twice', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -324,31 +335,25 @@ void main() {
     });
 
     test('penalty cannot trigger another challenge', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
       game.resolveChallenge(ChallengeResult.challengerPenalty);
 
-      // After resolution, the game should be in normal pouring flow.
+      // After resolution, the round should finalize.
       expect(game.challengeActive, isFalse);
-      expect(game.pouringStarted, isTrue);
+      expect(game.roundComplete, isTrue);
     });
 
     test('eligible players exclude challenged player', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      final current = game.pourCurrentPlayer;
-      game.refuseDrink(current);
+      completeRoundToPendingShot(game);
+      final owing = game.shotDecisionPlayer!;
+      game.refuseShot();
 
       final eligible = game.eligiblePlayersForChallenge;
-      expect(eligible.every((p) => p.id != current.id), isTrue);
+      expect(eligible.every((p) => p.id != owing.id), isTrue);
       expect(eligible.length, game.activePlayerCount - 1);
     });
   });

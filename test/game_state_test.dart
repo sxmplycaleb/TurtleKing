@@ -28,11 +28,16 @@ void main() {
     expect(game.pouringStarted, isTrue);
   }
 
-  /// Every active player holds out once, completing the round's reveal.
+  /// Every active player holds out once, completing the round's reveal,
+  /// then resolves any pending shot decisions (M20: 1-shot pending).
   void everyoneHoldsOut(GameState game) {
     final count = game.activePlayerCount;
     for (var i = 0; i < count; i++) {
       game.holdOut(game.pourCurrentPlayer);
+    }
+    // M20: resolve pending shot decisions so the round finalizes.
+    while (game.shotDecisionPending) {
+      game.takeShot();
     }
     expect(game.roundComplete, isTrue);
   }
@@ -210,17 +215,12 @@ void main() {
       final game = pouringGame();
       final first = game.pourCurrentPlayer;
       game.callYamada(first); // Player 1 calls YAMADA
-      // Now all 3 players have acted (1 YAMADA'd, but the set tracks actors)
-      // Actually, after player 1 calls YAMADA, the turn goes to player 2.
-      // Player 2 holds out, player 3 holds out. But player 1 already acted.
-      // So 3 players have acted — round should complete.
-      // Wait, no. After YAMADA from player 1, _playersActedThisRound has {player1}.
-      // Player 2 holds out -> {player1, player2}. Player 3 holds out -> {player1, player2, player3}.
-      // That's 3 == activePlayerCount, so round completes.
-      // Actually: holdOut from player 2 increments _playersActedThisRound to 2.
-      // holdOut from player 3 increments to 3 == activePlayerCount. Round completes.
       game.holdOut(game.pourCurrentPlayer);
       game.holdOut(game.pourCurrentPlayer);
+      // M20: YAMADA resolution may produce a pending shot decision.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
       expect(game.roundComplete, isTrue);
     });
 
@@ -254,14 +254,11 @@ void main() {
       final game = GameState(
         players: makePlayers(3),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
-      // Everyone holds out in round 1: smallest hand gets 2 drinks (1 + 1).
-      // If a player is the smallest, they get 2 drinks = elimination at threshold 2.
-      // With 3 players, smallest hand gets 1 + 1 = 2 drinks. If threshold is 2, that's elimination.
+      // M20: round 1 smallest hand gets 1 shot. With threshold 1, that's elimination.
       everyoneHoldsOut(game);
-      // Check if anyone was eliminated by the reveal penalty.
       final eliminated = game.eliminatedPlayers;
       if (eliminated.isNotEmpty) {
         expect(
@@ -284,6 +281,8 @@ void main() {
       // everyone holds out + YAMADA was called → the caller is checked.
       // In a 2-player game, if player 1 calls YAMADA and has smaller hand,
       // they get 0 shots. Otherwise, 1 shot.
+      // M20: after wrong YAMADA, round isn't finalized until takeShot.
+      // We need to check the state after all actions but before/after takeShot.
       GameState? foundCorrect;
       GameState? foundWrong;
       for (var seed = 0; seed < 500; seed++) {
@@ -295,12 +294,10 @@ void main() {
         viewAll(game);
         final p1 = game.pourCurrentPlayer;
         game.callYamada(p1);
-        // Other player holds out.
         game.holdOut(game.pourCurrentPlayer);
-        if (!game.roundComplete) {
-          // The first player already acted via YAMADA, now need the other.
-          // After YAMADA from p1, turn goes to p2. p2 holds out.
-          // Both have acted. Round should complete.
+        // M20: resolve pending shot if any.
+        while (game.shotDecisionPending) {
+          game.takeShot();
         }
         if (game.roundComplete) {
           final t1 = handTotal(game, p1);
@@ -331,7 +328,6 @@ void main() {
         final caller = game.yamadaCallerThisRound!;
         expect(game.yamadaCalledThisRound, isTrue);
         expect(game.yamadaWasCorrect, isFalse);
-        expect(game.roundDrinksOf(caller), 1);
         expect(game.drinksOf(caller), 1);
       }
     });
@@ -347,6 +343,10 @@ void main() {
       game.callYamada(p1);
       game.holdOut(game.pourCurrentPlayer);
       game.holdOut(game.pourCurrentPlayer);
+      // M20: resolve pending shot if wrong YAMADA.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
       expect(game.roundComplete, isTrue);
       expect(game.revealedPlayers, [p1]);
     });
@@ -365,14 +365,16 @@ void main() {
           final p1 = game.pourCurrentPlayer;
           game.callYamada(p1);
           game.holdOut(game.pourCurrentPlayer);
-          if (game.roundComplete && !game.yamadaWasCorrect) {
+          // M20: wrong YAMADA creates a pending shot decision.
+          if (!game.yamadaWasCorrect && game.shotDecisionPending) {
+            game.takeShot();
             found = game;
             break;
           }
         }
         if (found != null) {
           final caller = found.yamadaCallerThisRound!;
-          expect(found.roundDrinksOf(caller), 1);
+          expect(found.drinksOf(caller), 1);
           // Only the caller is revealed.
           expect(found.revealedPlayers, [caller]);
           // No smallest hands penalty (wrong YAMADA already penalized).
@@ -391,34 +393,29 @@ void main() {
       expect(game.roundResult, isNotNull);
     });
 
-    test(
-      'the smallest hand takes roundNumber shots + 1 extra for holding out',
-      () {
-        final game = GameState(players: makePlayers(3), random: Random(1));
-        viewAll(game);
-        final totals = {
-          for (final player in game.activePlayers)
-            player: handTotal(game, player),
-        };
-        final minTotal = totals.values.reduce((a, b) => a < b ? a : b);
-        final smallest = [
-          for (final player in game.activePlayers)
-            if (totals[player] == minTotal) player,
-        ];
-        everyoneHoldsOut(game);
-        expect(game.smallestHands, smallest);
-        for (final player in game.activePlayers) {
-          if (smallest.contains(player)) {
-            // Round 1: 1 shot (fullCupPenalty) + 1 shot (extraCupPenalty) = 2
-            expect(game.roundDrinksOf(player), 2);
-            expect(game.drinksOf(player), 2);
-          } else {
-            expect(game.roundDrinksOf(player), 0);
-            expect(game.drinksOf(player), 0);
-          }
+    test('the smallest hand owes exactly 1 shot (M20: flat penalty)', () {
+      final game = GameState(players: makePlayers(3), random: Random(1));
+      viewAll(game);
+      final totals = {
+        for (final player in game.activePlayers)
+          player: handTotal(game, player),
+      };
+      final minTotal = totals.values.reduce((a, b) => a < b ? a : b);
+      final smallest = [
+        for (final player in game.activePlayers)
+          if (totals[player] == minTotal) player,
+      ];
+      everyoneHoldsOut(game);
+      expect(game.smallestHands, smallest);
+      for (final player in game.activePlayers) {
+        if (smallest.contains(player)) {
+          // M20: flat 1-shot penalty regardless of round number.
+          expect(game.drinksOf(player), 1);
+        } else {
+          expect(game.drinksOf(player), 0);
         }
-      },
-    );
+      }
+    });
 
     test('tied smallest hands all drink the penalty', () {
       GameState? found;
@@ -437,8 +434,8 @@ void main() {
       everyoneHoldsOut(game);
       expect(game.smallestHands, hasLength(2));
       for (final player in game.players) {
-        expect(game.roundDrinksOf(player), 2);
-        expect(game.drinksOf(player), 2);
+        // M20: each tied player takes exactly 1 shot.
+        expect(game.drinksOf(player), 1);
       }
     });
 
@@ -459,6 +456,10 @@ void main() {
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
       game.holdOut(game.pourCurrentPlayer);
+      // M20: resolve pending shot if any.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
       expect(game.roundComplete, isTrue);
       final result = game.roundResult!;
       expect(result.calledYamada[first], isTrue);
@@ -543,6 +544,10 @@ void main() {
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
       game.holdOut(game.pourCurrentPlayer);
+      // M20: resolve pending shot if wrong YAMADA.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
       expect(game.roundComplete, isTrue);
       game.startNextRound();
       // Cup still escalates to round 2 regardless of YAMADA.
@@ -596,6 +601,10 @@ void main() {
       final first = game.pourCurrentPlayer;
       game.callYamada(first);
       game.holdOut(game.pourCurrentPlayer);
+      // M20: resolve pending shot if any.
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
       // Round 1 complete.
       game.startNextRound();
       final lifetimeAfterRound1 = game.drinksOf(first);
@@ -649,30 +658,31 @@ void main() {
 
   group('elimination', () {
     test('a player is eliminated by the smallest-hand penalty', () {
+      // M20: flat 1-shot penalty, so threshold=1 to trigger elimination.
       final game = GameState(
         players: makePlayers(3),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
-      // Round 1: smallest hand gets 2 drinks (1 + 1) = elimination at threshold 2.
       final eliminated = game.eliminatedPlayers;
       expect(eliminated, isNotEmpty);
       expect(game.isEliminated(eliminated.first), isTrue);
     });
 
     test('elimination records the player, round, drinks, and reason', () {
+      // M20: flat 1-shot penalty, so threshold=1 to trigger elimination.
       final game = GameState(
         players: makePlayers(3),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
       final record = game.eliminationHistory.single;
       expect(record.round, 1);
-      expect(record.drinks, 2);
+      expect(record.drinks, 1);
       expect(record.reason, EliminationReason.sixDrinks);
     });
 
@@ -680,7 +690,7 @@ void main() {
       final game = GameState(
         players: makePlayers(3),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
@@ -691,7 +701,7 @@ void main() {
       final game = GameState(
         players: makePlayers(3),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       final eliminatedBefore = game.eliminatedPlayers.length;
@@ -707,7 +717,7 @@ void main() {
       final game = GameState(
         players: makePlayers(3),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
@@ -722,12 +732,11 @@ void main() {
       final game = GameState(
         players: makePlayers(2),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
-      // Round 1: smallest hand gets 2 drinks. In a 2-player game, both could
-      // tie or one could be smallest. Check if the game ended.
+      // M20: 1 shot penalty. With threshold=1, the loser is eliminated.
       if (game.gameComplete) {
         expect(game.activePlayerCount, lessThan(2));
         expect(game.finalResult, isNotNull);
@@ -738,7 +747,7 @@ void main() {
       final game = GameState(
         players: makePlayers(2),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
@@ -755,10 +764,11 @@ void main() {
 
   group('Turtle King', () {
     test('the last player remaining is the Turtle King', () {
+      // M20: flat 1-shot penalty, so threshold=1 to trigger elimination.
       final game = GameState(
         players: makePlayers(2),
         random: Random(1),
-        eliminationThreshold: 2,
+        eliminationThreshold: 1,
       );
       viewAll(game);
       everyoneHoldsOut(game);
@@ -790,10 +800,11 @@ void main() {
     test(
       'when every remaining player is eliminated no Turtle King is declared',
       () {
+        // M20: flat 1-shot penalty, so threshold=1 to trigger elimination.
         final game = GameState(
           players: makePlayers(2),
           random: Random(1),
-          eliminationThreshold: 2,
+          eliminationThreshold: 1,
         );
         viewAll(game);
         everyoneHoldsOut(game);

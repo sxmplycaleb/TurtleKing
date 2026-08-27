@@ -617,8 +617,12 @@ void main() {
         await tester.pump();
         await holdOut(tester);
         await tester.pump();
+        // M20: resolve pending shot decision.
+        while (game.shotDecisionPending) {
+          await tapVisible(tester, 'TAKE 1 SHOT');
+        }
         if (game.gameComplete) break;
-        await tester.tap(find.text('Start Next Round'));
+        await tapVisible(tester, 'Start Next Round');
         await tester.pump();
       }
 

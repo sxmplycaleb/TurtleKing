@@ -62,8 +62,11 @@ void main() {
       final game = testGame(3);
       viewThrough(game);
       // Everyone holds out to complete the round.
-      while (!game.roundComplete) {
+      while (!game.roundComplete && !game.shotDecisionPending) {
         game.holdOut(game.players[game.pourIndex]);
+      }
+      while (game.shotDecisionPending) {
+        game.takeShot();
       }
       final driver = LocalDriver(game);
       final roundBefore = game.roundNumber;
@@ -123,8 +126,11 @@ void main() {
       // Play rounds until someone is eliminated.
       while (!game.gameComplete) {
         viewThrough(game);
-        while (!game.roundComplete) {
+        while (!game.roundComplete && !game.shotDecisionPending) {
           game.holdOut(game.pourCurrentPlayer);
+        }
+        while (game.shotDecisionPending) {
+          game.takeShot();
         }
         if (game.eliminatedPlayers.isNotEmpty) break;
         if (!game.canStartNextRound) break;
@@ -161,8 +167,11 @@ void main() {
               d.revealCurrentPlayer();
               d.passToNextPlayer();
             }
-            while (!d.state.roundComplete) {
+            while (!d.state.roundComplete && !d.state.shotDecisionPending) {
               d.holdOut(d.state.pourCurrentPlayer);
+            }
+            while (d.state.shotDecisionPending) {
+              d.takeShot();
             }
             if (d.state.canStartNextRound) {
               d.startNextRound();
@@ -176,8 +185,11 @@ void main() {
               g.revealCurrentPlayer();
               g.passToNextPlayer();
             }
-            while (!g.roundComplete) {
+            while (!g.roundComplete && !g.shotDecisionPending) {
               g.holdOut(g.pourCurrentPlayer);
+            }
+            while (g.shotDecisionPending) {
+              g.takeShot();
             }
             if (g.canStartNextRound) {
               g.startNextRound();

@@ -81,7 +81,7 @@ void main() {
 
       expect(find.byType(GameStartScreen), findsOneWidget);
       // Pouring has started; the first pourer's turn is showing.
-      expect(find.textContaining('Water is being poured'), findsOneWidget);
+      expect(find.textContaining('Your shot is being poured'), findsOneWidget);
       expect(find.text('YAMADA!'), findsOneWidget);
     });
 
@@ -125,8 +125,11 @@ void main() {
       startPouring(game);
       // Play rounds until the game completes.
       while (!game.gameComplete) {
-        while (!game.roundComplete) {
+        while (!game.roundComplete && !game.shotDecisionPending) {
           game.holdOut(game.pourCurrentPlayer);
+        }
+        while (game.shotDecisionPending) {
+          game.takeShot();
         }
         if (!game.canStartNextRound) break;
         game.startNextRound();
@@ -192,8 +195,11 @@ void main() {
         game.passToNextPlayer();
       }
       // Hold out for both players to complete the round.
-      while (!game.roundComplete) {
+      while (!game.roundComplete && !game.shotDecisionPending) {
         game.holdOut(game.pourCurrentPlayer);
+      }
+      while (game.shotDecisionPending) {
+        game.takeShot();
       }
       final store = await pumpGame(tester, game);
 
