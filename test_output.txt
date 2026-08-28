@@ -1,0 +1,72 @@
+../../runtime/vm/os_thread.cc: 345: error: Could not start thread DartWorker: 22 (The device does not recognize the command.
+)
+version=3.12.2 (stable) (Tue Jun 9 01:11:39 2026 -0700) on "windows_x64"
+pid=18208, thread=4136, isolate_group=main(0000013AC8E47270), isolate=main(0000013AC8E582F0)
+os=windows, arch=x64, comp=no, sim=no
+isolate_instructions=13acb7b0000, vm_instructions=7ff69fd883e0
+fp=37c51fca50, sp=37c51fca10, pc=7ff6a008e2f3
+  pc 0x00007ff6a008e2f3 fp 0x00000037c51fca50 Dart_DetectNullSafety+0x2fd853
+-- End of DumpStackTrace
+  pc 0x0000000000000000 fp 0x00000037c51fd5a0 sp 0x0000000000000000 [Stub] Exit frame
+  pc 0x0000013acbe0302d fp 0x00000037c51fd5d8 sp 0x00000037c51fd5b0 [Stub] OptimizeFunction+0x2d
+  pc 0x0000013acf1c3ef3 fp 0x00000037c51fd658 sp 0x00000037c51fd5e8 [Optimized] _StringBase@0150898.indexOf+0x383
+  pc 0x0000013ad3061f43 fp 0x00000037c51fd6c0 sp 0x00000037c51fd668 [Optimized] _StringAllMatchesIterator@0150898.moveNext+0x1a3
+  pc 0x0000013ad306972d fp 0x00000037c51fd748 sp 0x00000037c51fd6d0 [Optimized] _StringBase@0150898.replaceAll+0x19d
+  pc 0x0000013acb97160b fp 0x00000037c51fd7a0 sp 0x00000037c51fd758 [Unoptimized] WindowsStdoutLogger.writeToStdOut+0x12b
+  pc 0x0000013acb96b95d fp 0x00000037c51fd838 sp 0x00000037c51fd7b0 [Unoptimized] StdoutLogger.printStatus+0x96d
+  pc 0x0000013ad471537f fp 0x00000037c51fd8b8 sp 0x00000037c51fd848 [Unoptimized] FlutterTesterTestDevice._pipeStandardStreamsToConsole@866249636.<anonymous closure>+0x61f
+  pc 0x0000013ad3050bcf fp 0x00000037c51fd958 sp 0x00000037c51fd8c8 [Optimized] _rootRunUnary@5048458+0x7f
+  pc 0x0000013ad304f412 fp 0x00000037c51fd9b0 sp 0x00000037c51fd968 [Optimized] _rootRunUnary@5048458+0x92
+  pc 0x0000013ad306938c fp 0x00000037c51fda88 sp 0x00000037c51fd9c0 [Optimized] _CustomZone@5048458.runUnaryGuarded+0x10c
+  pc 0x0000013ad3035564 fp 0x00000037c51fdad8 sp 0x00000037c51fda98 [Optimized] _BufferingStreamSubscription@5048458._sendData@5048458+0x134
+  pc 0x0000013ad3060aec fp 0x00000037c51fdb20 sp 0x00000037c51fdae8 [Optimized] _BufferingStreamSubscription@5048458._add@5048458+0x10c
+  pc 0x0000013ad470a0f3 fp 0x00000037c51fdba8 sp 0x00000037c51fdb30 [Optimized] _LineSplitterSink@12003594._addLines@12003594+0x183
+  pc 0x0000013ad25c2eee fp 0x00000037c51fdc00 sp 0x00000037c51fdbb8 [Unoptimized] _LineSplitterSink@12003594.addSlice+0x2be
+  pc 0x0000013ad25c2bd2 fp 0x00000037c51fdc58 sp 0x00000037c51fdc10 [Unoptimized] StringConversionSink.add+0x192
+  pc 0x0000013acb7d6c40 fp 0x00000037c51fdcc0 sp 0x00000037c51fdc68 [Unoptimized] _SinkTransformerStreamSubscription@5048458._handleData@5048458+0x1e0
+  pc 0x0000013acb7d6e57 fp 0x00000037c51fdd00 sp 0x00000037c51fdcd0 [Unoptimized] _SinkTransformerStreamSubscription@5048458._handleData@5048458+0x87
+  pc 0x0000013ad3050bcf fp 0x00000037c51fdda0 sp 0x00000037c51fdd10 [Optimized] _rootRunUnary@5048458+0x7f
+  pc 0x0000013ad304f412 fp 0x00000037c51fddf8 sp 0x00000037c51fddb0 [Optimized] _rootRunUnary@5048458+0x92
+  pc 0x0000013ad306938c fp 0x00000037c51fded0 sp 0x00000037c51fde08 [Optimized] _CustomZone@5048458.runUnaryGuarded+0x10c
+  pc 0x0000013ad3035564 fp 0x00000037c51fdf20 sp 0x00000037c51fdee0 [Optimized] _BufferingStreamSubscription@5048458._sendData@5048458+0x134
+  pc 0x0000013ad3060aec fp 0x00000037c51fdf68 sp 0x00000037c51fdf30 [Optimized] _BufferingStreamSubscription@5048458._add@5048458+0x10c
+  pc 0x0000013acb7d57b8 fp 0x00000037c51fdfa8 sp 0x00000037c51fdf78 [Unoptimized] _SinkTransformerStreamSubscription@5048458._add@5048458+0x208
+  pc 0x0000013acb7d554a fp 0x00000037c51fdfe8 sp 0x00000037c51fdfb8 [Unoptimized] _EventSinkWrapper@5048458.add+0x19a
+  pc 0x0000013ad25c29fb fp 0x00000037c51fe028 sp 0x00000037c51fdff8 [Unoptimized] StackTraceTransform|transformWithCallSite.<anonymous closure>+0x9b
+  pc 0x0000013ad25c2734 fp 0x00000037c51fe088 sp 0x00000037c51fe038 [Unoptimized] _HandlerEventSink@5048458.add+0x2d4
+  pc 0x0000013acb7d6c40 fp 0x00000037c51fe0f0 sp 0x00000037c51fe098 [Unoptimized] _SinkTransformerStreamSubscription@5048458._handleData@5048458+0x1e0
+  pc 0x0000013acb7d6e57 fp 0x00000037c51fe130 sp 0x00000037c51fe100 [Unoptimized] _SinkTransformerStreamSubscription@5048458._handleData@5048458+0x87
+  pc 0x0000013ad3050bcf fp 0x00000037c51fe1d0 sp 0x00000037c51fe140 [Optimized] _rootRunUnary@5048458+0x7f
+  pc 0x0000013ad304f412 fp 0x00000037c51fe228 sp 0x00000037c51fe1e0 [Optimized] _rootRunUnary@5048458+0x92
+  pc 0x0000013ad306938c fp 0x00000037c51fe300 sp 0x00000037c51fe238 [Optimized] _CustomZone@5048458.runUnaryGuarded+0x10c
+  pc 0x0000013ad3035564 fp 0x00000037c51fe350 sp 0x00000037c51fe310 [Optimized] _BufferingStreamSubscription@5048458._sendData@5048458+0x134
+  pc 0x0000013ad3060aec fp 0x00000037c51fe398 sp 0x00000037c51fe360 [Optimized] _BufferingStreamSubscription@5048458._add@5048458+0x10c
+  pc 0x0000013acb7d57b8 fp 0x00000037c51fe3d8 sp 0x00000037c51fe3a8 [Unoptimized] _SinkTransformerStreamSubscription@5048458._add@5048458+0x208
+  pc 0x0000013acb7d554a fp 0x00000037c51fe418 sp 0x00000037c51fe3e8 [Unoptimized] _EventSinkWrapper@5048458.add+0x19a
+  pc 0x0000013ad25c2376 fp 0x00000037c51fe458 sp 0x00000037c51fe428 [Unoptimized] _StringAdapterSink@12003594.add+0x186
+  pc 0x0000013ad25c2096 fp 0x00000037c51fe4a0 sp 0x00000037c51fe468 [Unoptimized] _StringAdapterSink@12003594.addSlice+0x156
+  pc 0x0000013ad25bfb8c fp 0x00000037c51fe500 sp 0x00000037c51fe4b0 [Unoptimized] _Utf8ConversionSink@12003594.addSlice+0x27c
+  pc 0x0000013ad25bf8b2 fp 0x00000037c51fe558 sp 0x00000037c51fe510 [Unoptimized] _Utf8ConversionSink@12003594.add+0x192
+  pc 0x0000013acb7d69fa fp 0x00000037c51fe598 sp 0x00000037c51fe568 [Unoptimized] _ConverterStreamEventSink@12003594.add+0x19a
+  pc 0x0000013acb7d6c40 fp 0x00000037c51fe600 sp 0x00000037c51fe5a8 [Unoptimized] _SinkTransformerStreamSubscription@5048458._handleData@5048458+0x1e0
+  pc 0x0000013acb7d6e57 fp 0x00000037c51fe640 sp 0x00000037c51fe610 [Unoptimized] _SinkTransformerStreamSubscription@5048458._handleData@5048458+0x87
+  pc 0x0000013ad3050bcf fp 0x00000037c51fe6e0 sp 0x00000037c51fe650 [Optimized] _rootRunUnary@5048458+0x7f
+  pc 0x0000013ad304f412 fp 0x00000037c51fe738 sp 0x00000037c51fe6f0 [Optimized] _rootRunUnary@5048458+0x92
+  pc 0x0000013ad306938c fp 0x00000037c51fe810 sp 0x00000037c51fe748 [Optimized] _CustomZone@5048458.runUnaryGuarded+0x10c
+  pc 0x0000013ad3035564 fp 0x00000037c51fe860 sp 0x00000037c51fe820 [Optimized] _BufferingStreamSubscription@5048458._sendData@5048458+0x134
+  pc 0x0000013ad3060aec fp 0x00000037c51fe8a8 sp 0x00000037c51fe870 [Optimized] _BufferingStreamSubscription@5048458._add@5048458+0x10c
+  pc 0x0000013ad3062cb9 fp 0x00000037c51fe8f8 sp 0x00000037c51fe8b8 [Optimized] _StreamController@5048458.add+0x1a9
+  pc 0x0000013ad4711b01 fp 0x00000037c51fe938 sp 0x00000037c51fe908 [Optimized] _Socket@16069316._onData@16069316+0x171
+  pc 0x0000013ad4713b50 fp 0x00000037c51fe970 sp 0x00000037c51fe948 [Optimized] _Socket@16069316._onData@16069316+0x40
+  pc 0x0000013ad3050c72 fp 0x00000037c51fea10 sp 0x00000037c51fe980 [Optimized] _rootRunUnary@5048458+0x122
+  pc 0x0000013ad304f412 fp 0x00000037c51fea68 sp 0x00000037c51fea20 [Optimized] _rootRunUnary@5048458+0x92
+  pc 0x0000013ad306938c fp 0x00000037c51feb40 sp 0x00000037c51fea78 [Optimized] _CustomZone@5048458.runUnaryGuarded+0x10c
+  pc 0x0000013ad3035564 fp 0x00000037c51feb90 sp 0x00000037c51feb50 [Optimized] _BufferingStreamSubscription@5048458._sendData@5048458+0x134
+  pc 0x0000013ad3060aec fp 0x00000037c51febd8 sp 0x00000037c51feba0 [Optimized] _BufferingStreamSubscription@5048458._add@5048458+0x10c
+  pc 0x0000013ad3062cb9 fp 0x00000037c51fec28 sp 0x00000037c51febe8 [Optimized] _StreamController@5048458.add+0x1a9
+  pc 0x0000013acb81c129 fp 0x00000037c51fec68 sp 0x00000037c51fec38 [Unoptimized] new _RawSocket@16069316..<anonymous closure>+0xb9
+  pc 0x0000013acb993433 fp 0x00000037c51fecc0 sp 0x00000037c51fec78 [Unoptimized] _NativeSocket@16069316.issueReadEvent.issue+0x5d3
+  pc 0x0000013ad4707773 fp 0x00000037c51fed30 sp 0x00000037c51fecd0 [Optimized] _startMicrotaskLoop@5048458+0x133
+  pc 0x0000013ad3062903 fp 0x00000037c51fed58 sp 0x00000037c51fed40 [Optimized] _startMicrotaskLoop@5048458+0x33
+  pc 0x0000013ad3066300 fp 0x00000037c51fedb8 sp 0x00000037c51fed68 [Optimized] _RawReceivePort@1026248._handleMessage@1026248+0x510
+  pc 0x0000013acbe03140 fp 0x00000037c51feee0 sp 0x00000037c51fedc8 [Stub] Entry frame
