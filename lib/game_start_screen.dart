@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart' hide Card;
 
 import 'challenge/challenge_state.dart';
@@ -66,9 +68,24 @@ enum _Stage {
   challengeResolution,
 }
 
+/// Duration of the Trivia countdown timer in seconds.
+///
+/// The timer starts when the Trivia question becomes visible and expires
+/// automatically, treating a timeout as a wrong answer.
+const int kTriviaTimerSeconds = 10;
+
 class _GameStartScreenState extends State<GameStartScreen> {
   /// Whether the neutral handoff screen is showing for the next player.
   bool _showingHandoff = false;
+
+  // -------------------------------------------------------------------
+  // Trivia countdown timer (M21)
+  // -------------------------------------------------------------------
+
+  Timer? _triviaTimer;
+  int _triviaTimeRemaining = kTriviaTimerSeconds;
+  bool _triviaTimerExpired = false;
+  bool _lastTriviaStageActive = false;
 
   /// The authoritative state behind the driver (read-only from the UI's
   /// perspective; actions go through the driver).
@@ -118,8 +135,50 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   /// Saves the in-progress game (if any) and returns to the home screen.
   void _saveAndExit() {
+    _triviaTimer?.cancel();
     _persistGame();
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  @override
+  void dispose() {
+    _triviaTimer?.cancel();
+    super.dispose();
+  }
+
+  // -------------------------------------------------------------------
+  // Trivia countdown timer (M21)
+  // -------------------------------------------------------------------
+
+  /// Starts the trivia countdown timer. Safe to call multiple times —
+  /// cancels any existing timer first.
+  void _startTriviaTimer() {
+    _triviaTimer?.cancel();
+    _triviaTimeRemaining = kTriviaTimerSeconds;
+    _triviaTimerExpired = false;
+    _triviaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _playFeedback(FeedbackEvent.timerTick);
+      setState(() {
+        _triviaTimeRemaining--;
+        if (_triviaTimeRemaining <= 0) {
+          timer.cancel();
+          _triviaTimerExpired = true;
+          _triviaTimer = null;
+          // Time's up — treat as wrong answer.
+          _triviaAnswer(false);
+        }
+      });
+    });
+  }
+
+  /// Stops the trivia countdown timer.
+  void _stopTriviaTimer() {
+    _triviaTimer?.cancel();
+    _triviaTimer = null;
   }
 
   _Stage get _stage {
@@ -270,6 +329,8 @@ class _GameStartScreenState extends State<GameStartScreen> {
         widget.driver.drawTrivia();
       });
       _persistGame();
+      // Start the countdown timer now that the question is visible.
+      _startTriviaTimer();
     }
   }
 
@@ -298,6 +359,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
   }
 
   void _triviaAnswer(bool isCorrect) {
+    // Guard: prevent duplicate submissions after timeout or double-tap.
+    if (!gameChallengeTriviaActive) return;
+    _stopTriviaTimer();
     setState(() {
       widget.driver.recordTriviaAnswer(isCorrect);
       // Resolve the trivia challenge
@@ -314,6 +378,18 @@ class _GameStartScreenState extends State<GameStartScreen> {
     if (_game.gameComplete) {
       _playFeedback(FeedbackEvent.victory);
     }
+  }
+
+  /// Whether the game is in the active trivia challenge phase
+  /// (question presented, awaiting answer).
+  bool get gameChallengeTriviaActive {
+    final cs = _game.challengeState;
+    return _game.challengeActive &&
+        cs != null &&
+        cs.type == ChallengeType.trivia &&
+        cs.phase == ChallengePhase.inProgress &&
+        cs.triviaState != null &&
+        cs.triviaState!.isInProgress;
   }
 
   void _startRps() {
@@ -1710,6 +1786,20 @@ class _GameStartScreenState extends State<GameStartScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Start timer on first render of this trivia stage (handles save/restore).
+    if (!_lastTriviaStageActive &&
+        !_triviaTimerExpired &&
+        trivia.isInProgress &&
+        _triviaTimer == null) {
+      _lastTriviaStageActive = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startTriviaTimer();
+      });
+    }
+    if (!trivia.isInProgress) {
+      _lastTriviaStageActive = false;
+    }
+
     // Determine category color.
     final categoryColor = switch (trivia.question.category) {
       TriviaCategory.generalKnowledge => Colors.blue.shade400,
@@ -1748,7 +1838,14 @@ class _GameStartScreenState extends State<GameStartScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        // Countdown timer.
+        _TriviaCountdown(
+          secondsRemaining: _triviaTimeRemaining,
+          totalSeconds: kTriviaTimerSeconds,
+          expired: _triviaTimerExpired,
+        ),
+        const SizedBox(height: 12),
         // Category badge.
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1830,11 +1927,26 @@ class _GameStartScreenState extends State<GameStartScreen> {
         // Action buttons.
         if (trivia.phase == TriviaPhase.questionReady ||
             trivia.phase == TriviaPhase.awaitingAnswer) ...[
+          if (_triviaTimerExpired)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'TIME\'S UP!',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: Colors.red.shade400,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
           Row(
             children: [
               Expanded(
                 child: FilledButton(
-                  onPressed: () => _triviaAnswer(true),
+                  onPressed: _triviaTimerExpired
+                      ? null
+                      : () => _triviaAnswer(true),
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.green.shade600,
                     foregroundColor: Colors.white,
@@ -1849,7 +1961,9 @@ class _GameStartScreenState extends State<GameStartScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => _triviaAnswer(false),
+                  onPressed: _triviaTimerExpired
+                      ? null
+                      : () => _triviaAnswer(false),
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.red.shade600,
                     foregroundColor: Colors.white,
@@ -2050,6 +2164,72 @@ class _GameStartScreenState extends State<GameStartScreen> {
           onPressed: () => _resolveChallenge(result!),
           style: _goldButtonStyle(context),
           child: Text('Continue', style: _goldButtonLabelStyle(context)),
+        ),
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------------------
+// Trivia countdown timer widget (M21)
+// -------------------------------------------------------------------
+
+/// A circular countdown timer for the Trivia challenge.
+///
+/// Displays remaining seconds as a circular progress indicator with the
+/// countdown number in the center. Turns red when time is low.
+class _TriviaCountdown extends StatelessWidget {
+  const _TriviaCountdown({
+    required this.secondsRemaining,
+    required this.totalSeconds,
+    required this.expired,
+  });
+
+  /// Seconds remaining on the timer.
+  final int secondsRemaining;
+
+  /// Total timer duration (for progress calculation).
+  final int totalSeconds;
+
+  /// Whether the timer has expired.
+  final bool expired;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0.0;
+    final color = expired
+        ? Colors.red.shade400
+        : secondsRemaining <= 3
+        ? Colors.orange.shade400
+        : Colors.green.shade400;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 56,
+          height: 56,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Circular progress.
+              CircularProgressIndicator(
+                value: progress,
+                strokeWidth: 4,
+                backgroundColor: color.withValues(alpha: 0.2),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+              // Number.
+              Text(
+                '$secondsRemaining',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

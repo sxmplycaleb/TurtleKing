@@ -32,6 +32,9 @@ enum FeedbackEvent {
 
   /// The game ended and a Turtle King was crowned.
   victory,
+
+  /// A trivia countdown timer tick.
+  timerTick,
 }
 
 /// Every bundled sound asset (also used by the asset validation tests and
@@ -93,6 +96,10 @@ FeedbackPattern feedbackPatternFor(FeedbackEvent event) {
     FeedbackEvent.victory => const FeedbackPattern(
       assetPath: 'assets/sounds/victory.wav',
       haptic: FeedbackHaptic.vibrate,
+    ),
+    FeedbackEvent.timerTick => const FeedbackPattern(
+      assetPath: 'assets/sounds/handoff.wav',
+      haptic: FeedbackHaptic.selection,
     ),
   };
 }

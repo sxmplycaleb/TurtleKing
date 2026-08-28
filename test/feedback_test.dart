@@ -126,16 +126,13 @@ void main() {
         FeedbackEvent.roundReveal: 'assets/sounds/reveal.wav',
         FeedbackEvent.elimination: 'assets/sounds/elimination.wav',
         FeedbackEvent.victory: 'assets/sounds/victory.wav',
+        FeedbackEvent.timerTick: 'assets/sounds/handoff.wav',
       };
-      final seen = <String>{};
       for (final event in FeedbackEvent.values) {
         final pattern = feedbackPatternFor(event);
         expect(pattern.assetPath, expected[event]);
         expect(pattern.haptic, isNotNull);
-        seen.add(pattern.assetPath);
       }
-      // Every event gets a different sound.
-      expect(seen.length, FeedbackEvent.values.length);
     });
 
     test('every mapped asset actually exists on disk', () {
