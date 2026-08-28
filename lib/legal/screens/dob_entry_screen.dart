@@ -210,7 +210,7 @@ class _DobEntryScreenState extends State<DobEntryScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'Your age: $_calculatedAge years',
+                                'You are $_calculatedAge years old.',
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                 ),

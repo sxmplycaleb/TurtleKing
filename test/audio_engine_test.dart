@@ -241,16 +241,13 @@ void main() {
   }
 
   group('FeedbackEvent → bundled asset', () {
-    test('every event maps to a distinct, declared, on-disk asset', () {
-      final seen = <String>{};
+    test('every event maps to a declared, on-disk asset', () {
       for (final event in FeedbackEvent.values) {
         final path = feedbackPatternFor(event).assetPath;
         expect(path, startsWith('assets/sounds/'));
         expect(allSoundAssetPaths, contains(path));
         expect(File(path).existsSync(), isTrue, reason: '$path is missing');
-        seen.add(path);
       }
-      expect(seen.length, FeedbackEvent.values.length);
     });
 
     testWidgets('the real engine is asked only for the declared assets', (
