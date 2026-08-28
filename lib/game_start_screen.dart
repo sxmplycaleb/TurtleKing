@@ -124,11 +124,7 @@ class _GameStartScreenState extends State<GameStartScreen> {
 
   _Stage get _stage {
     if (_game.gameComplete) return _Stage.gameOver;
-    // Shot decision takes highest priority after round completes.
-    if (_game.shotDecisionPending) return _Stage.shotDecision;
-    if (_game.roundComplete) return _Stage.roundComplete;
-    if (_showingHandoff) return _Stage.handoff;
-    // Challenge flow takes priority over normal pouring turn.
+    // Challenge flow takes priority — it supersedes the shot decision.
     if (_game.challengeActive) {
       final cs = _game.challengeState!;
       if (cs.phase == ChallengePhase.selection) {
@@ -153,6 +149,11 @@ class _GameStartScreenState extends State<GameStartScreen> {
         return _Stage.challengeTrivia;
       }
     }
+    // Shot decision pending (after challenge resolves, advanceShotDecision
+    // may still owe shots to remaining players).
+    if (_game.shotDecisionPending) return _Stage.shotDecision;
+    if (_game.roundComplete) return _Stage.roundComplete;
+    if (_showingHandoff) return _Stage.handoff;
     if (_game.pouringStarted) return _Stage.pourTurn;
     if (_game.allPlayersViewed) return _Stage.handoff;
     if (_game.currentPlayerRevealed) return _Stage.revealed;

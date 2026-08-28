@@ -232,6 +232,44 @@ void main() {
       expect(smallGame.challengeActive, isFalse);
     });
 
+    test(
+      'refuseShot enters challenge while shotDecisionPending remains true',
+      () {
+        completeRoundToPendingShot(game);
+        final owing = game.shotDecisionPlayer!;
+        expect(game.shotDecisionPending, isTrue);
+        game.refuseShot();
+
+        // After refuseShot: challenge is active, shotDecisionPending is still
+        // true (will be cleared by _advanceShotDecision after challenge resolves),
+        // but shotDecisionPlayer is null.
+        expect(game.challengeActive, isTrue);
+        expect(game.shotDecisionPending, isTrue);
+        expect(game.shotDecisionPlayer, isNull);
+
+        // Challenge state has all required values.
+        final cs = game.challengeState!;
+        expect(cs.challengedPlayer.id, owing.id);
+        expect(cs.challenger, isNull); // Not yet selected
+        expect(cs.eligiblePlayers.length, game.activePlayerCount - 1);
+        expect(cs.eligiblePlayers.every((p) => p.id != owing.id), isTrue);
+      },
+    );
+
+    test('challenge flows correctly after refuseShot', () {
+      completeRoundToPendingShot(game);
+      game.refuseShot();
+      game.selectChallenger();
+
+      final cs = game.challengeState!;
+      expect(cs.challenger, isNotNull);
+      expect(cs.phase, ChallengePhase.typeSelection);
+
+      final challenger = cs.challenger!;
+      game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
+      expect(game.challengeState!.type, ChallengeType.rockPaperScissors);
+    });
+
     test('canRefuseShot is false with 3 players and true with 4', () {
       final threePlayers = GameState(
         players: [alice, bob, carol],

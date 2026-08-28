@@ -266,6 +266,15 @@ void main() {
         miaDriver.holdOut();
         await pumpUntil(() => leoDriver.view.isMyTurn, timeout: kSlow);
         leoDriver.holdOut();
+        await pumpUntil(() => game.shotDecisionPending, timeout: kSlow);
+        await pumpUntil(
+          () => miaDriver.view.shotDecisionPending,
+          timeout: kSlow,
+        );
+
+        // Host processes the pending shot decision.
+        game.takeShot();
+        host.broadcastHostAction();
         await pumpUntil(() => game.roundComplete, timeout: kSlow);
         await pumpUntil(() => miaDriver.view.roundComplete, timeout: kSlow);
 
