@@ -227,7 +227,7 @@ class _EventRow extends StatelessWidget {
       case GameEventType.handoff:
         return 'passed the phone';
       case GameEventType.pouringStarted:
-        return 'water pouring began';
+        return 'shot is being poured';
       case GameEventType.playerHeldOut:
         return 'held out';
       case GameEventType.playerCalledYamada:
@@ -286,6 +286,10 @@ class _EventRow extends StatelessWidget {
         return 'answered incorrectly';
       case GameEventType.triviaResolved:
         return 'Trivia resolved';
+      case GameEventType.shotTaken:
+        return 'took the shot';
+      case GameEventType.shotRefused:
+        return 'refused the shot — challenged another player';
     }
   }
 
@@ -330,6 +334,10 @@ class _EventRow extends StatelessWidget {
       case GameEventType.challengePenalty:
         return Icons.local_drink_outlined;
       case GameEventType.refusalDrink:
+        return Icons.block_outlined;
+      case GameEventType.shotTaken:
+        return Icons.local_drink_outlined;
+      case GameEventType.shotRefused:
         return Icons.block_outlined;
       case GameEventType.dareSelected:
       case GameEventType.dareCompleted:

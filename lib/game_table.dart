@@ -51,7 +51,7 @@ class _FeltTexturePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// A stylized water cup whose size reflects [CupSize].
+/// A stylized shot glass whose size reflects [CupSize].
 ///
 /// Purely presentational: the cup size is read from the authoritative
 /// [GameState.cupSize] and never stored or changed here.
@@ -61,7 +61,7 @@ class TurtleKingCup extends StatelessWidget {
   /// The authoritative cup size to draw.
   final CupSize size;
 
-  /// The base diameter of the cup graphic.
+  /// The base width of the shot glass graphic.
   final double diameter;
 
   @override
@@ -73,18 +73,18 @@ class TurtleKingCup extends StatelessWidget {
       CupSize.extraLarge => 1.44,
     };
     return Semantics(
-      label: '${size.label} cup',
+      label: '${size.label} shot glass',
       image: true,
       child: SizedBox(
         width: diameter * scale,
-        height: diameter * 1.25 * scale,
+        height: diameter * 0.82 * scale,
         child: CustomPaint(painter: _CupPainter(accent: style.accent)),
       ),
     );
   }
 }
 
-/// Draws a glass cup with an accent rim and a rising water fill.
+/// Draws a shot glass with a thick base, slight taper, and a drink fill.
 class _CupPainter extends CustomPainter {
   const _CupPainter({required this.accent});
 
@@ -95,65 +95,65 @@ class _CupPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // Cup body (trapezoid, wider at the rim).
+    // Shot glass body — nearly straight sides, very slightly wider at
+    // the top rim than at the base, giving the classic shot-glass profile.
     final body = Path()
-      ..moveTo(w * 0.20, h * 0.28)
-      ..lineTo(w * 0.80, h * 0.28)
-      ..lineTo(w * 0.72, h * 0.88)
-      ..quadraticBezierTo(w * 0.50, h * 0.94, w * 0.28, h * 0.88)
+      ..moveTo(w * 0.15, h * 0.06)
+      ..lineTo(w * 0.85, h * 0.06)
+      ..lineTo(w * 0.80, h * 0.82)
+      ..lineTo(w * 0.20, h * 0.82)
       ..close();
 
     // Glass highlight.
     final glass = Paint()
-      ..color = const Color(0xFFEAF4FB).withValues(alpha: 0.55)
+      ..color = const Color(0xFFEAF4FB).withValues(alpha: 0.50)
       ..style = PaintingStyle.fill;
     canvas.drawPath(body, glass);
 
-    // Water fill.
-    final water = Path()
-      ..moveTo(w * 0.225, h * 0.55)
-      ..lineTo(w * 0.775, h * 0.55)
-      ..lineTo(w * 0.72, h * 0.88)
-      ..quadraticBezierTo(w * 0.50, h * 0.94, w * 0.28, h * 0.88)
+    // Shot liquid fill (amber/golden — spirits-colored).
+    final liquid = Path()
+      ..moveTo(w * 0.19, h * 0.38)
+      ..lineTo(w * 0.81, h * 0.38)
+      ..lineTo(w * 0.80, h * 0.82)
+      ..lineTo(w * 0.20, h * 0.82)
       ..close();
-    final waterPaint = Paint()
-      ..color = const Color(0xFF4FA3D9).withValues(alpha: 0.85)
+    final liquidPaint = Paint()
+      ..color = const Color(0xFFE8B84B).withValues(alpha: 0.85)
       ..style = PaintingStyle.fill;
-    canvas.drawPath(water, waterPaint);
+    canvas.drawPath(liquid, liquidPaint);
 
-    // Water surface line.
+    // Liquid surface line.
     final surface = Paint()
-      ..color = const Color(0xFFD6F0FF).withValues(alpha: 0.9)
+      ..color = const Color(0xFFF5D98A).withValues(alpha: 0.9)
       ..strokeWidth = math.max(1.2, w * 0.02)
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
-      Offset(w * 0.225, h * 0.55),
-      Offset(w * 0.775, h * 0.55),
+      Offset(w * 0.19, h * 0.38),
+      Offset(w * 0.81, h * 0.38),
       surface,
     );
 
-    // Accent rim.
+    // Thick glass base (shot-glass signature).
+    final base = Path()
+      ..moveTo(w * 0.20, h * 0.82)
+      ..lineTo(w * 0.80, h * 0.82)
+      ..lineTo(w * 0.76, h * 0.94)
+      ..quadraticBezierTo(w * 0.50, h * 0.98, w * 0.24, h * 0.94)
+      ..close();
+    final basePaint = Paint()
+      ..color = const Color(0xFFEAF4FB).withValues(alpha: 0.65)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(base, basePaint);
+
+    // Accent rim at the top.
     final rim = Paint()
       ..color = accent
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.6, w * 0.05);
+      ..strokeWidth = math.max(1.6, w * 0.04);
     canvas.drawLine(
-      Offset(w * 0.20, h * 0.28),
-      Offset(w * 0.80, h * 0.28),
+      Offset(w * 0.15, h * 0.06),
+      Offset(w * 0.85, h * 0.06),
       rim,
-    );
-
-    // Handle on the right.
-    final handle = Paint()
-      ..color = const Color(0xFFEAF4FB).withValues(alpha: 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.6, w * 0.05);
-    canvas.drawArc(
-      Rect.fromLTWH(w * 0.72, h * 0.34, w * 0.22, h * 0.34),
-      -0.9,
-      1.9,
-      false,
-      handle,
     );
   }
 

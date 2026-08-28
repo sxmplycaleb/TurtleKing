@@ -330,6 +330,12 @@ class RemoteDriver implements RemoteGameController {
   void refuseDrink() => _request(GameAction.refuseDrink);
 
   @override
+  void takeShot() => _request(GameAction.takeShot);
+
+  @override
+  void refuseShot() => _request(GameAction.refuseShot);
+
+  @override
   void selectChallenger() => _request(GameAction.selectChallenger);
 
   @override

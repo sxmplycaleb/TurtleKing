@@ -50,8 +50,11 @@ void main() {
         game.revealCurrentPlayer();
         game.passToNextPlayer();
       }
-      while (!game.roundComplete) {
+      while (!game.roundComplete && !game.shotDecisionPending) {
         game.holdOut(game.pourCurrentPlayer);
+      }
+      while (game.shotDecisionPending) {
+        game.takeShot();
       }
       if (game.canStartNextRound) game.startNextRound();
     }
@@ -185,6 +188,10 @@ void main() {
       // Pouring: hold out to complete rounds until the game ends.
       while (!game.gameComplete) {
         await tapVisible('Hold out');
+        // M20: resolve pending shot decisions.
+        if (find.text('TAKE 1 SHOT').evaluate().isNotEmpty) {
+          await tapVisible('TAKE 1 SHOT');
+        }
         if (find.text('Continue').evaluate().isNotEmpty) {
           await tapVisible('Continue');
         }

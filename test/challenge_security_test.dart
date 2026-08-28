@@ -121,12 +121,21 @@ void main() {
       game = GameState(players: [alice, bob, carol, dave], random: Random(42));
     });
 
-    test('wrong player cannot choose challenge type', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
+    void completeRoundToPendingShot(GameState g) {
+      for (final _ in g.activePlayers) {
+        g.revealCurrentPlayer();
+        g.passToNextPlayer();
       }
-      game.refuseDrink(game.pourCurrentPlayer);
+      final count = g.activePlayerCount;
+      for (var i = 0; i < count; i++) {
+        g.holdOut(g.pourCurrentPlayer);
+      }
+      expect(g.shotDecisionPending, isTrue);
+    }
+
+    test('wrong player cannot choose challenge type', () {
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
 
@@ -139,11 +148,8 @@ void main() {
     });
 
     test('challenge cannot resolve twice', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -171,11 +177,8 @@ void main() {
     });
 
     test('penalty applied exactly once', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -188,11 +191,8 @@ void main() {
     });
 
     test('penalty does not trigger another challenge', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundToPendingShot(game);
+      game.refuseShot();
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -204,26 +204,63 @@ void main() {
     });
 
     test('eligible players always exclude challenged player', () {
-      for (final _ in game.activePlayers) {
-        game.revealCurrentPlayer();
-        game.passToNextPlayer();
-      }
-      final current = game.pourCurrentPlayer;
-      game.refuseDrink(current);
+      completeRoundToPendingShot(game);
+      final owing = game.shotDecisionPlayer!;
+      game.refuseShot();
 
       final eligible = game.eligiblePlayersForChallenge;
-      expect(eligible.every((p) => p.id != current.id), isTrue);
+      expect(eligible.every((p) => p.id != owing.id), isTrue);
     });
 
-    test('refuseDrink with fewer than 3 others does not start challenge', () {
+    test('refuseShot with fewer than 4 players is rejected', () {
       final smallGame = GameState(players: [alice, bob], random: Random(42));
       for (final _ in smallGame.activePlayers) {
         smallGame.revealCurrentPlayer();
         smallGame.passToNextPlayer();
       }
-      final initiated = smallGame.refuseDrink(smallGame.pourCurrentPlayer);
-      expect(initiated, isFalse);
+      for (var i = 0; i < smallGame.activePlayerCount; i++) {
+        smallGame.holdOut(smallGame.pourCurrentPlayer);
+      }
+      expect(smallGame.shotDecisionPending, isTrue);
+      expect(smallGame.canRefuseShot, isFalse);
+      expect(
+        () => smallGame.refuseShot(),
+        throwsA(isA<YamadaRoundException>()),
+      );
+      // State unchanged after rejection.
+      expect(smallGame.shotDecisionPending, isTrue);
       expect(smallGame.challengeActive, isFalse);
+    });
+
+    test('canRefuseShot is false with 3 players and true with 4', () {
+      final threePlayers = GameState(
+        players: [alice, bob, carol],
+        random: Random(42),
+      );
+      for (final _ in threePlayers.activePlayers) {
+        threePlayers.revealCurrentPlayer();
+        threePlayers.passToNextPlayer();
+      }
+      for (var i = 0; i < threePlayers.activePlayerCount; i++) {
+        threePlayers.holdOut(threePlayers.pourCurrentPlayer);
+      }
+      expect(threePlayers.shotDecisionPending, isTrue);
+      expect(threePlayers.canRefuseShot, isFalse);
+
+      // With 4 players, canRefuseShot should be true.
+      final fourPlayers = GameState(
+        players: [alice, bob, carol, dave],
+        random: Random(42),
+      );
+      for (final _ in fourPlayers.activePlayers) {
+        fourPlayers.revealCurrentPlayer();
+        fourPlayers.passToNextPlayer();
+      }
+      for (var i = 0; i < fourPlayers.activePlayerCount; i++) {
+        fourPlayers.holdOut(fourPlayers.pourCurrentPlayer);
+      }
+      expect(fourPlayers.shotDecisionPending, isTrue);
+      expect(fourPlayers.canRefuseShot, isTrue);
     });
   });
 

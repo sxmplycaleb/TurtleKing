@@ -32,6 +32,15 @@ GameState _pouredGame({Random? random}) {
   return game;
 }
 
+/// Completes the round via holdOut to create pending shot, then refuses.
+void _completeRoundAndRefuse(GameState game) {
+  for (var i = 0; i < game.activePlayerCount; i++) {
+    game.holdOut(game.pourCurrentPlayer);
+  }
+  expect(game.shotDecisionPending, isTrue);
+  game.refuseShot();
+}
+
 void main() {
   // -------------------------------------------------------------------
   // DareCard
@@ -305,7 +314,7 @@ void main() {
     });
 
     test('drawDare draws a card and records it in challenge state', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -317,7 +326,7 @@ void main() {
     });
 
     test('completeDare resolves with challenger penalty', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -330,7 +339,7 @@ void main() {
     });
 
     test('refuseDare resolves with challenged penalty', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       final challenged = game.challengeState!.challengedPlayer;
@@ -348,7 +357,7 @@ void main() {
     });
 
     test('drawDare throws when type is not dare', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -356,7 +365,7 @@ void main() {
     });
 
     test('drawDare throws when already drawn', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -369,7 +378,7 @@ void main() {
     });
 
     test('completeDare throws when no dare drawn', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -381,7 +390,7 @@ void main() {
     });
 
     test('refuseDare throws when no dare drawn', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -389,7 +398,7 @@ void main() {
     });
 
     test('penalty applied exactly once for dare completion', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -403,7 +412,7 @@ void main() {
     });
 
     test('penalty applied exactly once for dare refusal', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       final challenged = game.challengeState!.challengedPlayer;
@@ -417,7 +426,7 @@ void main() {
     });
 
     test('dare events are recorded in game history', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -430,7 +439,7 @@ void main() {
     });
 
     test('refused dare event is recorded', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -445,7 +454,7 @@ void main() {
 
     test('setDareDeck is required before dare actions', () {
       final freshGame = _pouredGame();
-      freshGame.refuseDrink(freshGame.pourCurrentPlayer);
+      _completeRoundAndRefuse(freshGame);
       freshGame.selectChallenger();
       final challenger = freshGame.challengeState!.challenger!;
       freshGame.chooseChallengeType(ChallengeType.dare, challenger);
@@ -453,7 +462,7 @@ void main() {
     });
 
     test('completeDare returns to normal game flow', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -465,7 +474,7 @@ void main() {
     });
 
     test('refuseDare returns to normal game flow', () {
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -484,7 +493,7 @@ void main() {
     test('completed dare cannot trigger another challenge', () {
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -500,7 +509,7 @@ void main() {
     test('refused dare cannot trigger another challenge', () {
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -622,7 +631,7 @@ void main() {
     GameState makeDareChallenge() {
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -721,7 +730,7 @@ void main() {
         game.passToNextPlayer();
       }
       // Refuse → dare challenge → complete → challenger gets 1 drink.
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -752,7 +761,7 @@ void main() {
         game.passToNextPlayer();
       }
       // Refuse → dare challenge → complete → challenger gets 1 drink → eliminated.
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -833,7 +842,7 @@ void main() {
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
       // Start an RPS challenge instead of dare.
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -847,7 +856,7 @@ void main() {
     test('GameState rejects dare actions with no dare drawn', () {
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);
@@ -860,7 +869,7 @@ void main() {
       // Verify session-side validation checks challenge type.
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -871,7 +880,7 @@ void main() {
     test('host session rejects double dare draw', () {
       final game = _pouredGame();
       game.setDareDeck(DareRepository.newDeck(random: Random(42)));
-      game.refuseDrink(game.pourCurrentPlayer);
+      _completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.dare, challenger);

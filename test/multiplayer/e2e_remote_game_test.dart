@@ -126,6 +126,14 @@ void main() {
       miaDriver.holdOut();
       await pumpUntil(() => leoDriver.view.isMyTurn, timeout: kSlow);
       leoDriver.holdOut();
+      // M20: resolve pending shot decisions so the round finalizes.
+      await pumpUntil(() => game.shotDecisionPending, timeout: kSlow);
+      final beforeComplete = host.stateSeq;
+      while (game.shotDecisionPending) {
+        game.takeShot();
+      }
+      host.broadcastHostAction();
+      await pumpUntil(() => host.stateSeq > beforeComplete, timeout: kSlow);
       await pumpUntil(
         () =>
             game.roundComplete &&
@@ -158,6 +166,8 @@ void main() {
       expect(rejoin.isAccepted, isTrue);
       expect(miaDriver2.selfPlayerId, miaSessionBefore);
       // The reconnected client receives the authoritative state.
+      // M20: re-broadcast to ensure the client gets the finalized round state.
+      host.broadcastHostAction();
       await pumpUntil(() => miaDriver2.view.roundComplete, timeout: kSlow);
       expect(miaDriver2.view.roundNumber, game.roundNumber);
 
@@ -246,8 +256,11 @@ void main() {
           // Complete the round: hold out until done.
           if (game.pouringStarted && !game.roundComplete) {
             final before = host.stateSeq;
-            while (!game.roundComplete) {
+            while (!game.roundComplete && !game.shotDecisionPending) {
               game.holdOut(game.pourCurrentPlayer);
+            }
+            while (game.shotDecisionPending) {
+              game.takeShot();
             }
             host.broadcastHostAction();
             await pumpUntil(() => host.stateSeq > before, timeout: kSlow);

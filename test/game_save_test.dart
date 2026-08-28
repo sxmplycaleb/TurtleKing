@@ -27,10 +27,14 @@ void main() {
     }
   }
 
-  /// Every active player holds out until the round completes.
+  /// Every active player holds out once, then resolves pending shots.
   void everyoneHoldsOut(GameState game) {
-    while (!game.roundComplete) {
+    final count = game.activePlayerCount;
+    for (var i = 0; i < count; i++) {
       game.holdOut(game.pourCurrentPlayer);
+    }
+    while (game.shotDecisionPending) {
+      game.takeShot();
     }
   }
 
@@ -76,6 +80,14 @@ void main() {
       [for (final event in b.events) event.type],
       [for (final event in a.events) event.type],
     );
+    expect(b.shotDecisionPending, a.shotDecisionPending);
+    if (a.shotDecisionPending) {
+      expect(b.shotDecisionPlayer?.id, a.shotDecisionPlayer?.id);
+      expect(
+        b.shotOwingPlayers.map((p) => p.id),
+        a.shotOwingPlayers.map((p) => p.id),
+      );
+    }
     expect(b.completedRounds, a.completedRounds);
     expect(
       [for (final result in b.roundResults) result.cupSize],
@@ -170,8 +182,11 @@ void main() {
       // Save mid-round, then continue playing.
       final restored = codec.decode(codec.encode(original));
       void continueScript(GameState game) {
-        while (!game.roundComplete) {
+        while (!game.roundComplete && !game.shotDecisionPending) {
           game.holdOut(game.pourCurrentPlayer);
+        }
+        while (game.shotDecisionPending) {
+          game.takeShot();
         }
         if (game.canStartNextRound) {
           game.startNextRound();

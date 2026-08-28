@@ -27,18 +27,16 @@ void everyoneHoldsOut(GameState game) {
   for (var i = 0; i < count; i++) {
     game.holdOut(game.pourCurrentPlayer);
   }
+  while (game.shotDecisionPending) {
+    game.takeShot();
+  }
   expect(game.roundComplete, isTrue);
 }
 
 /// Advances the game through enough rounds so that [target] player has
 /// accumulated at least [drinks] drinks.
 ///
-/// Round N gives the smallest hand (N) + 1 extra = (N+1) drinks.
-/// Round 1: 2 drinks to the smallest.
-/// Round 2: 3 drinks to the smallest.
-/// Round 3: 4 drinks to the smallest.
-/// etc.
-///
+/// M20: Each round gives the smallest hand exactly 1 shot.
 /// Because the smallest hand changes between rounds, this helper plays
 /// many rounds and checks after each one.
 void ensureDrinks(

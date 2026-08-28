@@ -720,6 +720,10 @@ class HostSession {
         owned = true;
       case GameAction.refuseDrink:
         owned = game.pourCurrentPlayer.id == client.playerId;
+      case GameAction.takeShot:
+        owned = game.shotDecisionPlayer?.id == client.playerId;
+      case GameAction.refuseShot:
+        owned = game.shotDecisionPlayer?.id == client.playerId;
       case GameAction.selectChallenger:
         // Only the host selects the challenger (authoritative random).
         owned = true;
@@ -791,6 +795,10 @@ class HostSession {
           game.startNextRound();
         case GameAction.refuseDrink:
           game.refuseDrink(game.pourCurrentPlayer);
+        case GameAction.takeShot:
+          game.takeShot();
+        case GameAction.refuseShot:
+          game.refuseShot();
         case GameAction.selectChallenger:
           if (!game.challengeActive) {
             rejection = 'no active challenge';

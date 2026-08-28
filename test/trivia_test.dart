@@ -31,6 +31,16 @@ void main() {
     }
   }
 
+  /// Completes viewing + round via holdOut to create pending shot, then refuses.
+  void completeRoundAndRefuse(GameState game) {
+    viewAll(game);
+    for (var i = 0; i < game.activePlayerCount; i++) {
+      game.holdOut(game.pourCurrentPlayer);
+    }
+    expect(game.shotDecisionPending, isTrue);
+    game.refuseShot();
+  }
+
   group('TriviaCard', () {
     test('construction with all fields', () {
       final card = TriviaCard(
@@ -457,9 +467,7 @@ void main() {
     test('startTrivia creates Trivia state in game', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -479,9 +487,7 @@ void main() {
     test('recordTriviaAnswer records answer', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -502,9 +508,7 @@ void main() {
     test('resolveTrivia applies penalty correctly', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -529,9 +533,7 @@ void main() {
     test('resolveTrivia applies penalty for wrong answer', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       final challenged = game.challengeState!.challengedPlayer;
@@ -557,9 +559,7 @@ void main() {
     test('resolveTrivia rejects if not answered', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -585,9 +585,7 @@ void main() {
     test('cannot start another challenge during Trivia', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -601,19 +599,14 @@ void main() {
 
       game.startTrivia(card);
 
-      // Try to start another challenge
-      expect(
-        () => game.refuseDrink(game.pourCurrentPlayer),
-        throwsA(isA<StateError>()),
-      );
+      // Try to start another challenge — should throw (no shot pending)
+      expect(() => game.refuseShot(), throwsA(isA<YamadaRoundException>()));
     });
 
     test('resolved Trivia cannot be resolved again', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -639,9 +632,7 @@ void main() {
     test('Trivia cannot trigger Dare', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -663,9 +654,7 @@ void main() {
     test('Trivia events are recorded', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -698,8 +687,11 @@ void main() {
       final game = GameState(players: players, random: Random(42));
       final driver = LocalDriver(game);
       viewAll(game);
-
-      driver.refuseDrink(game.pourCurrentPlayer);
+      for (var i = 0; i < game.activePlayerCount; i++) {
+        driver.holdOut(game.pourCurrentPlayer);
+      }
+      expect(game.shotDecisionPending, isTrue);
+      driver.refuseShot();
       driver.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       driver.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -721,8 +713,11 @@ void main() {
       final game = GameState(players: players, random: Random(42));
       final driver = LocalDriver(game);
       viewAll(game);
-
-      driver.refuseDrink(game.pourCurrentPlayer);
+      for (var i = 0; i < game.activePlayerCount; i++) {
+        driver.holdOut(game.pourCurrentPlayer);
+      }
+      expect(game.shotDecisionPending, isTrue);
+      driver.refuseShot();
       driver.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       driver.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -745,8 +740,11 @@ void main() {
       final game = GameState(players: players, random: Random(42));
       final driver = LocalDriver(game);
       viewAll(game);
-
-      driver.refuseDrink(game.pourCurrentPlayer);
+      for (var i = 0; i < game.activePlayerCount; i++) {
+        driver.holdOut(game.pourCurrentPlayer);
+      }
+      expect(game.shotDecisionPending, isTrue);
+      driver.refuseShot();
       driver.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       driver.chooseChallengeType(ChallengeType.trivia, challenger);
@@ -786,9 +784,7 @@ void main() {
     test('winner receives 0 shots', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       final challenged = game.challengeState!.challengedPlayer;
@@ -814,9 +810,7 @@ void main() {
     test('penalty applied exactly once', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.trivia, challenger);

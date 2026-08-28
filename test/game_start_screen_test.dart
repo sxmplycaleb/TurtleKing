@@ -148,7 +148,7 @@ void main() {
 
       await tester.tap(find.text('Continue'));
       await tester.pump();
-      expect(find.textContaining('Water is being poured'), findsOneWidget);
+      expect(find.textContaining('Your shot is being poured'), findsOneWidget);
       expect(find.textContaining('round 1'), findsOneWidget);
       expect(find.text('YAMADA!'), findsOneWidget);
       expect(find.text('Hold out'), findsOneWidget);
@@ -220,6 +220,14 @@ void main() {
         await tester.pump();
         await holdOut(tester);
 
+        // M20: shot decision screen appears before round completes.
+        expect(find.text('YOU OWE 1 SHOT'), findsOneWidget);
+        expect(find.text('TAKE 1 SHOT'), findsOneWidget);
+        // With 2 players, REFUSE TO DRINK is shown but disabled.
+        expect(find.text('REFUSE TO DRINK'), findsOneWidget);
+        expect(find.text('Requires at least 4 players'), findsOneWidget);
+        await tapVisible(tester, 'TAKE 1 SHOT');
+
         expect(find.text('Round 1 complete'), findsOneWidget);
         expect(
           find.textContaining('all cards are revealed together'),
@@ -228,7 +236,7 @@ void main() {
         // Both hands (2 cards each) are face-up at the reveal.
         expect(find.byType(CardFace), findsNWidgets(4));
         expect(find.textContaining('Smallest hand:'), findsOneWidget);
-        expect(find.textContaining('Next round: 2 shot(s)'), findsOneWidget);
+        expect(find.textContaining('loser owes 1 shot'), findsOneWidget);
         expect(find.text('Start Next Round'), findsOneWidget);
       },
     );
@@ -247,9 +255,11 @@ void main() {
       // Player 2 holds out.
       await holdOut(tester);
 
+      // M20: correct YAMADA → 0 shots, round completes directly.
+      // (With seed 42, the caller has the smallest hand.)
       expect(find.text('Round 1 complete'), findsOneWidget);
       expect(find.textContaining('YAMADA was called'), findsOneWidget);
-      expect(find.textContaining('Next round: 2 shot(s)'), findsOneWidget);
+      expect(find.textContaining('Correct YAMADA'), findsOneWidget);
       expect(find.text('Start Next Round'), findsOneWidget);
     });
 
@@ -266,6 +276,9 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pump();
       await holdOut(tester);
+
+      // M20: resolve pending shot decision.
+      await tapVisible(tester, 'TAKE 1 SHOT');
 
       await tapVisible(tester, 'Start Next Round');
 
@@ -293,8 +306,12 @@ void main() {
           await tester.pump();
           await holdOut(tester);
           await tester.pump();
+          // M20: resolve pending shot decision.
+          if (find.text('TAKE 1 SHOT').evaluate().isNotEmpty) {
+            await tapVisible(tester, 'TAKE 1 SHOT');
+          }
           if (game.gameComplete) break;
-          await tester.tap(find.text('Start Next Round'));
+          await tapVisible(tester, 'Start Next Round');
           await tester.pump();
         }
 
@@ -315,8 +332,12 @@ void main() {
         await tester.pump();
         await holdOut(tester);
         await tester.pump();
+        // M20: resolve pending shot decision.
+        if (find.text('TAKE 1 SHOT').evaluate().isNotEmpty) {
+          await tapVisible(tester, 'TAKE 1 SHOT');
+        }
         if (game.gameComplete) break;
-        await tester.tap(find.text('Start Next Round'));
+        await tapVisible(tester, 'Start Next Round');
         await tester.pump();
       }
 
@@ -340,8 +361,12 @@ void main() {
         await tester.pump();
         await holdOut(tester);
         await tester.pump();
+        // M20: resolve pending shot decision.
+        if (find.text('TAKE 1 SHOT').evaluate().isNotEmpty) {
+          await tapVisible(tester, 'TAKE 1 SHOT');
+        }
         if (game.gameComplete) break;
-        await tester.tap(find.text('Start Next Round'));
+        await tapVisible(tester, 'Start Next Round');
         await tester.pump();
       }
 

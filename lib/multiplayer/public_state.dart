@@ -299,6 +299,9 @@ class PublicStateView {
     required this.events,
     required this.finalResult,
     this.challengeState,
+    this.shotDecisionPending = false,
+    this.shotDecisionPlayerId,
+    this.shotOwingPlayerIds = const [],
   });
 
   /// Builds the projection from a [GameState] using **only public getters**.
@@ -316,6 +319,9 @@ class PublicStateView {
       canStartNextRound: game.canStartNextRound,
       gameComplete: game.gameComplete,
       completedRounds: game.completedRounds,
+      shotDecisionPending: game.shotDecisionPending,
+      shotDecisionPlayerId: game.shotDecisionPlayer?.id,
+      shotOwingPlayerIds: [for (final p in game.shotOwingPlayers) p.id],
       lifetimeDrinks: {for (final p in game.players) p.id: game.drinksOf(p)},
       roundDrinks: {for (final p in game.players) p.id: game.roundDrinksOf(p)},
       calledYamada: {
@@ -366,6 +372,15 @@ class PublicStateView {
   /// Challenge state (null when no challenge is active).
   final PublicChallengeState? challengeState;
 
+  /// M20: Whether a shot decision is pending after round completion.
+  final bool shotDecisionPending;
+
+  /// M20: The player id currently being asked to decide (take or refuse).
+  final String? shotDecisionPlayerId;
+
+  /// M20: The player ids who still owe a shot decision, in order.
+  final List<String> shotOwingPlayerIds;
+
   Map<String, Object?> toJson() => {
     'players': [for (final p in players) p.toJson()],
     'eliminationThreshold': eliminationThreshold,
@@ -390,6 +405,9 @@ class PublicStateView {
     // events are intentionally omitted from the wire payload: they grow
     // with every action and the remote client never renders them.
     'finalResult': finalResult?.toJson(),
+    'shotDecisionPending': shotDecisionPending,
+    'shotDecisionPlayerId': shotDecisionPlayerId,
+    'shotOwingPlayerIds': shotOwingPlayerIds,
   };
 
   /// Strictly rebuilds the view from a previously encoded payload.
@@ -498,6 +516,13 @@ class PublicStateView {
       challengeState: map['challengeState'] != null
           ? PublicChallengeState.fromJson(map['challengeState'])
           : null,
+      shotDecisionPending: map['shotDecisionPending'] as bool? ?? false,
+      shotDecisionPlayerId: map['shotDecisionPlayerId'] as String?,
+      shotOwingPlayerIds: [
+        if (map['shotOwingPlayerIds'] != null)
+          for (final id in (map['shotOwingPlayerIds'] as List<dynamic>))
+            id as String,
+      ],
     );
   }
 }

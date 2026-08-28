@@ -28,6 +28,16 @@ void main() {
     }
   }
 
+  /// Completes viewing + round via holdOut to create pending shot, then refuses.
+  void completeRoundAndRefuse(GameState game) {
+    viewAll(game);
+    for (var i = 0; i < game.activePlayerCount; i++) {
+      game.holdOut(game.pourCurrentPlayer);
+    }
+    expect(game.shotDecisionPending, isTrue);
+    game.refuseShot();
+  }
+
   group('RpsState', () {
     test('initial state is correct', () {
       final alice = Player(
@@ -293,9 +303,7 @@ void main() {
     test('startRps creates RPS state in game', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -308,9 +316,7 @@ void main() {
     test('match completes with 2-0', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -326,9 +332,7 @@ void main() {
     test('resolveRps applies penalty and returns to normal flow', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -348,9 +352,7 @@ void main() {
     test('resolveRps rejects if match not complete', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -368,9 +370,7 @@ void main() {
     test('cannot record round after match is complete', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -390,9 +390,7 @@ void main() {
     test('cannot record same round twice', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -411,9 +409,7 @@ void main() {
     test('1-1 after 2 rounds enters sudden death', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -429,9 +425,7 @@ void main() {
     test('1-1 after 3 rounds with round 3 draw enters sudden death', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -449,9 +443,7 @@ void main() {
     test('sudden death round 4 decisive result resolves', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -471,9 +463,7 @@ void main() {
     test('sudden death continues after round 4 draw', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -494,9 +484,7 @@ void main() {
     test('multiple consecutive sudden-death draws work', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -517,9 +505,7 @@ void main() {
     test('no manual loser selection needed', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -547,9 +533,7 @@ void main() {
     test('winner receives 0 shots', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -569,9 +553,7 @@ void main() {
     test('penalty applied exactly once', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -598,26 +580,20 @@ void main() {
     test('cannot start another challenge during RPS', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
       game.startRps();
 
-      expect(
-        () => game.refuseDrink(game.pourCurrentPlayer),
-        throwsA(isA<StateError>()),
-      );
+      // No shot pending during active challenge — refuseShot throws.
+      expect(() => game.refuseShot(), throwsA(isA<YamadaRoundException>()));
     });
 
     test('resolved RPS cannot be resolved again', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -637,9 +613,7 @@ void main() {
     test('RPS cannot trigger Dare', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -653,9 +627,7 @@ void main() {
     test('RPS events are recorded', () {
       final players = makePlayers(4);
       final game = GameState(players: players, random: Random(42));
-      viewAll(game);
-
-      game.refuseDrink(game.pourCurrentPlayer);
+      completeRoundAndRefuse(game);
       game.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       game.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -686,8 +658,11 @@ void main() {
       final game = GameState(players: players, random: Random(42));
       final driver = LocalDriver(game);
       viewAll(game);
-
-      driver.refuseDrink(game.pourCurrentPlayer);
+      for (var i = 0; i < game.activePlayerCount; i++) {
+        driver.holdOut(game.pourCurrentPlayer);
+      }
+      expect(game.shotDecisionPending, isTrue);
+      driver.refuseShot();
       driver.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       driver.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -702,8 +677,11 @@ void main() {
       final game = GameState(players: players, random: Random(42));
       final driver = LocalDriver(game);
       viewAll(game);
-
-      driver.refuseDrink(game.pourCurrentPlayer);
+      for (var i = 0; i < game.activePlayerCount; i++) {
+        driver.holdOut(game.pourCurrentPlayer);
+      }
+      expect(game.shotDecisionPending, isTrue);
+      driver.refuseShot();
       driver.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       driver.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
@@ -718,8 +696,11 @@ void main() {
       final game = GameState(players: players, random: Random(42));
       final driver = LocalDriver(game);
       viewAll(game);
-
-      driver.refuseDrink(game.pourCurrentPlayer);
+      for (var i = 0; i < game.activePlayerCount; i++) {
+        driver.holdOut(game.pourCurrentPlayer);
+      }
+      expect(game.shotDecisionPending, isTrue);
+      driver.refuseShot();
       driver.selectChallenger();
       final challenger = game.challengeState!.challenger!;
       driver.chooseChallengeType(ChallengeType.rockPaperScissors, challenger);
